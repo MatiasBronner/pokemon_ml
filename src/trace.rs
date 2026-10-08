@@ -31,6 +31,15 @@ pub fn note(f: impl FnOnce() -> String) {
     LOG.with(|l| l.borrow_mut().push(f()));
 }
 
+/// Label for the speed-tie shuffle `eachEvent` makes before running `ev`.
+pub(crate) fn each_label(ev: crate::data::Ev) -> &'static str {
+    match ev {
+        crate::data::Ev::Update => "update tie",
+        crate::data::Ev::BeforeTurn => "before-turn tie",
+        _ => "each-event tie",
+    }
+}
+
 /// Drains everything recorded since the last call.
 pub fn take() -> Vec<String> {
     #[cfg(feature = "trace")]

@@ -1,5 +1,6 @@
-// Generates src/tables.rs (type chart, species table, move table) and oracle/pool.json
-// from Pokémon Showdown's Champions data.
+// Generates src/tables.rs (type chart, species, moves, abilities, items, conditions and
+// their event-handler tables), oracle/pool.json and oracle/coverage.json from Pokémon
+// Showdown's Champions data.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -13,15 +14,37 @@ const TYPES = [
 for (const t of dex.types.names()) if (!TYPES.includes(t) && t !== 'Stellar') throw new Error('unknown type ' + t);
 
 const rs = s => JSON.stringify(s);
-const boostsLit = b => {
+// Showdown applies a stat-change table in the order its keys are written, and a
+// couple of moves (Shell Smash, Shift Gear) do not list them atk..evasion. Those
+// orders are collected here; index 0 is the canonical order.
+const boostOrders = [L.BOOST_IDS.map((_, i) => i).join(', ')];
+const boostOrder = b => {
+	if (!b) return 0;
+	const keys = Object.keys(b).map(k => L.BOOST_IDS.indexOf(k));
+	if (keys.every((k, i) => i === 0 || keys[i - 1] < k)) return 0;
+	const rest = L.BOOST_IDS.map((_, i) => i).filter(i => !keys.includes(i));
+	const lit = [...keys, ...rest].join(', ');
+	if (!boostOrders.includes(lit)) boostOrders.push(lit);
+	return boostOrders.indexOf(lit);
+};
+const boostsLit = (b, allowOrder) => {
 	if (!b) return 'None';
 	for (const k in b) if (!L.BOOST_IDS.includes(k)) throw new Error('bad boost ' + k);
+	if (!allowOrder && boostOrder(b) !== 0) throw new Error('boost keys out of canonical order: ' + Object.keys(b));
 	return `Some([${L.BOOST_IDS.map(k => b[k] || 0).join(', ')}])`;
 };
+const volName = id => id[0].toUpperCase() + id.slice(1);
+const volLit = v => (v ? `Some(VolKind::${volName(v)})` : 'None');
 const statusLit = s => (s ? 'Status::' + s[0].toUpperCase() + s.slice(1) : 'Status::None');
 const frac = f => (f ? `(${f[0]}, ${f[1]})` : '(0, 0)');
 const statIdx = s => (s ? L.STAT_IDS.indexOf(s) : 0);
-const FLAGS = { protect: 'F_PROTECT', powder: 'F_POWDER', defrost: 'F_DEFROST', contact: 'F_CONTACT', sound: 'F_SOUND', heal: 'F_HEAL' };
+const FLAGS = {
+	protect: 'F_PROTECT', powder: 'F_POWDER', defrost: 'F_DEFROST', contact: 'F_CONTACT', sound: 'F_SOUND', heal: 'F_HEAL',
+	punch: 'F_PUNCH', bite: 'F_BITE', bullet: 'F_BULLET', pulse: 'F_PULSE', slicing: 'F_SLICING', wind: 'F_WIND',
+	dance: 'F_DANCE', reflectable: 'F_REFLECTABLE', bypasssub: 'F_BYPASSSUB', mirror: 'F_MIRROR', snatch: 'F_SNATCH',
+	charge: 'F_CHARGE', recharge: 'F_RECHARGE', futuremove: 'F_FUTUREMOVE', metronome: 'F_METRONOME',
+	noparentalbond: 'F_NOPARENTALBOND', failcopycat: 'F_FAILCOPYCAT',
+};
 const TARGETS = {
 	normal: 'Normal', any: 'Any', adjacentFoe: 'AdjacentFoe', allAdjacentFoes: 'AllAdjacentFoes', allAdjacent: 'AllAdjacent',
 	self: 'User', adjacentAlly: 'AdjacentAlly', adjacentAllyOrSelf: 'AdjacentAllyOrSelf', allies: 'Allies',
@@ -39,8 +62,8 @@ for (const atk of TYPES) {
 	out += '    [' + TYPES.map(def => dex.types.get(def).damageTaken[atk] || 0).join(', ') + `], // ${atk}\n`;
 }
 out += '];\n\n';
-const IMM = ['brn', 'par', 'psn', 'slp', 'frz', 'powder'];
-out += '/// `STATUS_IMMUNE[kind][type]` for kind = brn, par, psn (also tox), slp, frz, powder.\n';
+const IMM = ['brn', 'par', 'psn', 'slp', 'frz', 'powder', 'trapped', 'prankster'];
+out += '/// `STATUS_IMMUNE[kind][type]` for kind = brn, par, psn (also tox), slp, frz, powder, trapped, prankster.\n';
 out += `pub static STATUS_IMMUNE: [[bool; ${TYPES.length}]; ${IMM.length}] = [\n`;
 for (const k of IMM) out += '    [' + TYPES.map(t => dex.types.get(t).damageTaken[k] === 3).join(', ') + `], // ${k}\n`;
 out += '];\n\n';
@@ -52,7 +75,8 @@ for (const s of species) {
 	const t = s.types.map(x => 'Type::' + x);
 	if (t.length === 1) t.push('Type::None');
 	const b = s.baseStats;
-	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, types: [${t.join(', ')}], base: [${L.STAT_IDS.map(k => b[k]).join(', ')}] },\n`;
+	const gender = s.gender ? `Some(Gender::${s.gender})` : 'None';
+	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, types: [${t.join(', ')}], base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender} },\n`;
 }
 out += '];\n\n';
 
@@ -74,7 +98,7 @@ for (const m of moves) {
 		if (m.secondaries && m.secondaries.length) {
 			secName = `SEC_${m.id.toUpperCase()}`;
 			const rows = m.secondaries.map(s => `Secondary { chance: ${s.chance === undefined ? 0 : s.chance}, status: ${statusLit(s.status)}, ` +
-				`boosts: ${boostsLit(s.boosts)}, flinch: ${s.volatileStatus === 'flinch'}, self_boosts: ${boostsLit(s.self && s.self.boosts)} }`);
+				`boosts: ${boostsLit(s.boosts)}, volatile: ${volLit(s.volatileStatus)}, self_boosts: ${boostsLit(s.self && s.self.boosts)} }`);
 			secDefs += `static ${secName}: [Secondary; ${rows.length}] = [${rows.join(', ')}];\n`;
 			secName = '&' + secName;
 		}
@@ -87,7 +111,8 @@ for (const m of moves) {
 	moveRows += `    MoveData { id: ${rs(m.id)}, name: ${rs(m.name)}, typ: ${type}, category: Category::${m.category}, ` +
 		`base_power: ${m.basePower}, accuracy: ${m.accuracy === true ? 0 : m.accuracy}, pp: ${pp}, priority: ${m.priority}, ` +
 		`target: Target::${target}, crit_ratio: ${m.critRatio || 0}, will_crit: ${!!m.willCrit}, flags: ${flags}, ` +
-		`boosts: ${supported ? boostsLit(m.boosts) : 'None'}, status: ${supported ? statusLit(m.status) : 'Status::None'}, ` +
+		`boosts: ${supported ? boostsLit(m.boosts, true) : 'None'}, boost_order: ${supported ? boostOrder(m.boosts) : 0}, status: ${supported ? statusLit(m.status) : 'Status::None'}, ` +
+		`volatile: ${supported ? volLit(m.volatileStatus) : 'None'}, ` +
 		`self_boosts: ${boostsLit(self)}, self_chance: ${selfChance}, secondaries: ${secName}, ` +
 		`drain: ${frac(supported && m.drain)}, recoil: ${frac(supported && m.recoil)}, heal: ${frac(supported && m.heal)}, multihit: ${multihit}, ` +
 		`off_stat: ${statIdx(m.overrideOffensiveStat)}, def_stat: ${statIdx(m.overrideDefensiveStat)}, ` +
@@ -95,8 +120,92 @@ for (const m of moves) {
 		`ignore_evasion: ${!!m.ignoreEvasion}, thaws_target: ${!!m.thawsTarget}, ignore_immunity: ${m.ignoreImmunity === true}, ` +
 		`special: Special::${L.SPECIAL[m.id] || 'None'}, supported: ${supported} },\n`;
 }
+out += '/// Orders in which a stat-change table is applied; `MoveData::boost_order` indexes this.\n';
+out += `pub static BOOST_ORDERS: [[u8; 7]; ${boostOrders.length}] = [${boostOrders.map(o => `[${o}]`).join(', ')}];\n\n`;
 out += secDefs + '\n';
-out += `pub static MOVES: [MoveData; ${moves.length}] = [\n${moveRows}];\n`;
+out += `pub static MOVES: [MoveData; ${moves.length}] = [\n${moveRows}];\n\n`;
+
+// ---- event handlers of conditions, abilities and items ----------------------------
+let cbDefs = '';
+/** Emits the callback table of one effect; returns [slice expression, events bit set literal]. */
+function cbTable(name, effect, what) {
+	const cbs = L.callbacks(effect);
+	const unknown = cbs.filter(c => c.unknown).map(c => c.key);
+	if (unknown.length) throw new Error(`${what} ${effect.id}: no Ev variant for ${unknown.join(', ')} (add it to src/data.rs)`);
+	if (!cbs.length) return ['&[]', '0'];
+	let mask = 0n;
+	const rows = cbs.map(c => {
+		mask |= 1n << BigInt(L.EVENTS.indexOf(c.ev));
+		const prio = c.priority * 10;
+		if (!Number.isInteger(prio) || !Number.isInteger(c.order) || !Number.isInteger(c.subOrder)) throw new Error(`${effect.id}.${c.key}: odd ordering values`);
+		return `CbInfo { ev: Ev::${c.ev}, pre: Pre::${c.pre}, order: ${c.order}, priority: ${prio}, sub_order: ${c.subOrder}, kind: CbKind::${c.kind} }`;
+	});
+	cbDefs += `static ${name}: [CbInfo; ${rows.length}] = [\n${rows.map(r => '    ' + r + ',\n').join('')}];\n`;
+	return ['&' + name, `0x${mask.toString(16)}`];
+}
+
+// Volatile conditions
+let volRows = '';
+for (const id of L.VOLATILES) {
+	const c = dex.conditions.get(id);
+	if (!c.exists) throw new Error('unknown condition ' + id);
+	if (c.durationCallback) throw new Error(`${id}: durationCallback is not modelled`);
+	const [cbs, mask] = cbTable(`CB_VOL_${id.toUpperCase()}`, c, 'condition');
+	volRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, cbs: ${cbs}, events: ${mask} },\n`;
+}
+let statusRows = `    CondData { id: "", duration: 0, cbs: &[], events: 0 },\n`;
+for (const id of L.STATUSES) {
+	const c = dex.conditions.get(id);
+	const [cbs, mask] = cbTable(`CB_STATUS_${id.toUpperCase()}`, c, 'status');
+	statusRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, cbs: ${cbs}, events: ${mask} },\n`;
+}
+
+// Abilities
+const AFLAGS = {
+	breakable: 'AF_BREAKABLE', cantsuppress: 'AF_CANTSUPPRESS', notransform: 'AF_NOTRANSFORM', failskillswap: 'AF_FAILSKILLSWAP',
+	failroleplay: 'AF_FAILROLEPLAY', noreceiver: 'AF_NORECEIVER', noentrain: 'AF_NOENTRAIN', notrace: 'AF_NOTRACE',
+};
+const abilities = L.tableAbilities();
+let abRows = '', abConsts = '';
+abilities.forEach((a, i) => {
+	const supported = L.SUPPORTED_ABILITIES.has(a.id);
+	for (const f in a.flags) if (!AFLAGS[f]) throw new Error(`ability ${a.id}: unknown flag ${f}`);
+	const flags = Object.keys(a.flags).map(f => AFLAGS[f]).join(' | ') || '0';
+	const [cbs, mask] = supported ? cbTable(`CB_AB_${a.id.toUpperCase()}`, a, 'ability') : ['&[]', '0'];
+	abConsts += `    pub const ${a.id.toUpperCase()}: u16 = ${i};\n`;
+	abRows += `    AbilityData { id: ${rs(a.id)}, name: ${rs(a.name)}, flags: ${flags}, supported: ${supported}, cbs: ${cbs}, events: ${mask} },\n`;
+});
+for (const id of L.SUPPORTED_ABILITIES) if (!abilities.some(a => a.id === id)) throw new Error('supported ability not in table: ' + id);
+
+// Items
+const items = L.tableItems();
+let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0 },\n`;
+let itConsts = '    pub const NONE: u16 = 0;\n';
+items.forEach((item, i) => {
+	const supported = L.SUPPORTED_ITEMS.has(item.id);
+	const fl = [];
+	if (item.isBerry) fl.push('IF_BERRY');
+	if (item.isGem) fl.push('IF_GEM');
+	if (item.isChoice) fl.push('IF_CHOICE');
+	if (item.ignoreKlutz) fl.push('IF_IGNORE_KLUTZ');
+	const [cbs, mask] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item') : ['&[]', '0'];
+	itConsts += `    pub const ${item.id.toUpperCase()}: u16 = ${i + 1};\n`;
+	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask} },\n`;
+});
+for (const id of L.SUPPORTED_ITEMS) if (id && !items.some(a => a.id === id)) throw new Error('supported item not in table: ' + id);
+
+out += '/// Volatile conditions the engine models, in the order of `VOL_CONDS`.\n';
+out += '#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n#[repr(u8)]\npub enum VolKind {\n';
+out += L.VOLATILES.map(id => `    ${volName(id)},\n`).join('');
+out += '}\n\nimpl VolKind {\n    pub fn id(self) -> &\'static str {\n        VOL_CONDS[self as usize].id\n    }\n}\n\n';
+out += cbDefs + '\n';
+out += `pub static VOL_CONDS: [CondData; ${L.VOLATILES.length}] = [\n${volRows}];\n\n`;
+out += '/// Indexed by `Status as usize`.\n';
+out += `pub static STATUS_CONDS: [CondData; ${L.STATUSES.length + 1}] = [\n${statusRows}];\n\n`;
+out += `/// Ability indices into \`ABILITIES\`.\npub mod ab {\n${abConsts}}\n\n`;
+out += `pub static ABILITIES: [AbilityData; ${abilities.length}] = [\n${abRows}];\n\n`;
+out += `/// Item indices into \`ITEMS\`.\npub mod it {\n${itConsts}}\n\n`;
+out += `pub static ITEMS: [ItemData; ${items.length + 1}] = [\n${itRows}];\n`;
 fs.writeFileSync(path.join(__dirname, '..', 'src', 'tables.rs'), out);
 
 // ---- pool for the fuzzer --------------------------------------------------------

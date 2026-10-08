@@ -6,16 +6,8 @@
 use serde::Deserialize;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
-use vgc_engine::data::{move_id, nature, species_id};
+use vgc_engine::replay::SetJson;
 use vgc_engine::{ACTIVE, Battle, Choice, PokemonSet};
-
-#[derive(Deserialize)]
-struct SetJson {
-    species: String,
-    moves: Vec<String>,
-    nature: String,
-    sp: [u8; 6],
-}
 
 #[derive(Deserialize)]
 struct Case {
@@ -49,16 +41,7 @@ fn main() {
     let mut teams: Vec<[Vec<PokemonSet>; 2]> = Vec::new();
     for line in BufReader::new(file).lines().take(500) {
         let c: Case = serde_json::from_str(&line.unwrap()).unwrap();
-        let conv = |t: &Vec<SetJson>| -> Vec<PokemonSet> {
-            t.iter()
-                .map(|s| PokemonSet {
-                    species: species_id(&s.species).unwrap(),
-                    moves: s.moves.iter().map(|m| move_id(m).unwrap()).collect(),
-                    nature: nature(&s.nature).unwrap(),
-                    stat_points: s.sp,
-                })
-                .collect()
-        };
+        let conv = |t: &Vec<SetJson>| -> Vec<PokemonSet> { t.iter().map(|s| s.to_set().unwrap()).collect() };
         teams.push([conv(&c.teams[0]), conv(&c.teams[1])]);
     }
     let mut xs = Xs(0x9E37_79B9_7F4A_7C15);

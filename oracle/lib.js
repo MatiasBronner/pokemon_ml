@@ -28,6 +28,8 @@ const EXTRA_OK = new Set(['boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTar
 const TARGETS_OK = new Set([
 	'normal', 'any', 'adjacentFoe', 'allAdjacentFoes', 'allAdjacent', 'self', 'adjacentAlly', 'adjacentAllyOrSelf', 'allies',
 ]);
+// Volatiles a secondary effect may inflict.
+const SECONDARY_VOLATILES = ['flinch'];
 const BAD_FLAGS = ['charge', 'recharge', 'futuremove', 'cantusetwice', 'mustpressure', 'pledgecombo'];
 // Moves with script callbacks that the Rust engine implements by hand.
 const SPECIAL = { protect: 'Protect', detect: 'Protect', struggle: 'Struggle' };
@@ -39,7 +41,7 @@ function hitEffectReasons(e, where, why) {
 		if (k === 'status') {
 			if (!STATUSES.includes(e.status)) why.push(`${where}.status=${e.status}`);
 		} else if (k === 'volatileStatus') {
-			if (e.volatileStatus !== 'flinch') why.push(`${where}.volatile=${e.volatileStatus}`);
+			if (!SECONDARY_VOLATILES.includes(e.volatileStatus)) why.push(`${where}.volatile=${e.volatileStatus}`);
 		} else if (k === 'self') {
 			for (const sk in e.self) if (sk !== 'boosts') why.push(`${where}.self.${sk}`);
 		} else {
@@ -113,7 +115,101 @@ function mulberry32(a) {
 	};
 }
 
+// ---- abilities, items and conditions ------------------------------------------
+
+// Volatile conditions the Rust engine implements, in `VolKind` order.
+const VOLATILES = ['protect', 'stall', 'flinch'];
+
+// Abilities and items whose every callback has a hand-written body in the Rust
+// engine (src/abilities.rs, src/items.rs). Everything else is rejected by
+// `Battle::new`. DEFERRED_* records why something is not here yet.
+const SUPPORTED_ABILITIES = new Set(['noability']);
+const SUPPORTED_ITEMS = new Set(['']);
+const DEFERRED_ABILITIES = {};
+const DEFERRED_ITEMS = {};
+
+/** Event names, in the order of the Rust `Ev` enum (src/data.rs is the single source). */
+const EVENTS = (() => {
+	const src = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'data.rs'), 'utf8');
+	const body = src.match(/pub enum Ev \{([\s\S]*?)\n\}/)[1];
+	return body.split('\n').map(l => l.replace(/\/\/.*$/, '').trim().replace(/,$/, '')).filter(Boolean);
+})();
+const PREFIXES = ['Ally', 'Foe', 'Any', 'Source'];
+const META = /(Priority|Order|SubOrder)$/;
+
+/**
+ * The event callbacks of an ability, item or condition, with the ordering
+ * metadata `Battle#resolvePriority` would give them.
+ */
+function callbacks(effect) {
+	const out = [];
+	const subOrderDefault = () => {
+		if (effect.effectType === 'Condition') return 2;
+		if (effect.effectType === 'Ability') {
+			if (effect.name === 'Poison Touch' || effect.name === 'Perish Body') return 6;
+			if (effect.name === 'Stall') return 9;
+			return 7;
+		}
+		if (effect.effectType === 'Item') return 8;
+		return 0;
+	};
+	const meta = key => ({
+		order: effect[key + 'Order'] || 0,
+		priority: effect[key + 'Priority'] || 0,
+		subOrder: effect[key + 'SubOrder'] || subOrderDefault(),
+	});
+	for (const key of Object.keys(effect)) {
+		if (!key.startsWith('on') || effect[key] === undefined) continue;
+		// `onFractionalPriority` and `onModifyPriority` are callbacks; `onXPriority` numbers are not.
+		if (typeof effect[key] !== 'function' && META.test(key)) continue;
+		const rest = key.slice(2);
+		let ev = null, pre = 'On';
+		for (const p of PREFIXES) {
+			if (rest.startsWith(p) && EVENTS.includes(rest.slice(p.length))) { ev = rest.slice(p.length); pre = p; break; }
+		}
+		if (!ev && EVENTS.includes(rest)) ev = rest;
+		if (!ev) { out.push({ key, unknown: true }); continue; }
+		out.push({ key, ev, pre, kind: 'Fn', constant: typeof effect[key] === 'function' ? undefined : effect[key], ...meta(key) });
+	}
+	const has = key => effect[key] !== undefined;
+	if (['Ability', 'Item'].includes(effect.effectType) && has('onStart') && !has('onSwitchIn') && !has('onAnySwitchIn')) {
+		out.push({ key: 'onSwitchIn', ev: 'SwitchIn', pre: 'On', kind: 'StartAlias', ...meta('onSwitchIn') });
+	}
+	if ((effect.duration || effect.durationCallback) && !has('onResidual')) {
+		out.push({ key: 'onResidual', ev: 'Residual', pre: 'On', kind: 'DurationOnly', ...meta('onResidual') });
+	}
+	return out;
+}
+
+/** Every ability the generated Rust table contains, in table order. */
+function tableAbilities() {
+	const ids = new Set(dex.abilities.all().filter(a => a.exists && !a.isNonstandard).map(a => a.id));
+	for (const s of dex.species.all()) {
+		if (!s.exists || s.isNonstandard) continue;
+		for (const k in s.abilities) ids.add(PS.toID(s.abilities[k]));
+	}
+	ids.add('noability');
+	return [...ids].sort().map(id => dex.abilities.get(id));
+}
+
+/** Abilities some Champions species (Megas included) can have. */
+function legalAbilities() {
+	const ids = new Set();
+	for (const s of dex.species.all()) {
+		if (!s.exists || s.isNonstandard) continue;
+		for (const k in s.abilities) ids.add(PS.toID(s.abilities[k]));
+	}
+	return [...ids].sort();
+}
+
+/** Every held item the generated Rust table contains, in table order (index 0 is "no item"). */
+function tableItems() {
+	return dex.items.all().filter(i => i.exists && !i.isNonstandard).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
 module.exports = {
-	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, SPECIAL,
+	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, SPECIAL, VOLATILES, EVENTS,
+	SUPPORTED_ABILITIES, SUPPORTED_ITEMS, DEFERRED_ABILITIES, DEFERRED_ITEMS,
 	unsupportedReasons, legalSpecies, learnableMoves, tableMoves, tableSpecies, mulberry32,
+	callbacks, tableAbilities, legalAbilities, tableItems,
 };

@@ -2,7 +2,8 @@
 //! and reports the first place this engine disagrees. Used by the `difftest`
 //! binary and by the fixture test in `tests/`.
 
-use crate::data::SPECIES;
+use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, Type, VolKind};
+use crate::state::Trapped;
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -12,12 +13,32 @@ pub struct SetJson {
     pub moves: Vec<String>,
     pub nature: String,
     pub sp: [u8; 6],
+    /// Ability id; absent means no ability.
+    #[serde(default)]
+    pub ability: Option<String>,
+    /// Item id; absent or empty means no item.
+    #[serde(default)]
+    pub item: Option<String>,
+    /// "M", "F" or "N"; absent means genderless, which is what the recorder
+    /// used before genders were recorded.
+    #[serde(default)]
+    pub gender: Option<String>,
 }
 
 impl SetJson {
     pub fn to_set(&self) -> Result<PokemonSet, String> {
         let moves: Vec<&str> = self.moves.iter().map(String::as_str).collect();
-        PokemonSet::from_names(&self.species, &moves, &self.nature, self.sp).map_err(|e| e.to_string())
+        let mut set =
+            PokemonSet::from_names(&self.species, &moves, &self.nature, self.sp).map_err(|e| e.to_string())?;
+        if let Some(a) = &self.ability {
+            set = set.ability(a).map_err(|e| e.to_string())?;
+        }
+        if let Some(i) = &self.item {
+            set = set.item(i).map_err(|e| e.to_string())?;
+        }
+        let g = self.gender.as_deref().unwrap_or("N");
+        set = set.gender(Gender::parse(g).ok_or_else(|| format!("unknown gender {g}"))?);
+        Ok(set)
     }
 }
 
@@ -38,6 +59,30 @@ pub struct MonSnap {
     pub switch_flag: bool,
     pub speed: i32,
     pub vol: Vec<String>,
+    // Recorded since abilities and items were modelled; absent in older files.
+    #[serde(default)]
+    pub ability: Option<String>,
+    #[serde(default)]
+    pub item: Option<String>,
+    #[serde(default)]
+    pub last_item: Option<String>,
+    #[serde(default)]
+    pub used_item: Option<bool>,
+    #[serde(default)]
+    pub ate_berry: Option<bool>,
+    #[serde(default)]
+    pub types: Option<Vec<String>>,
+    /// 0 free, 1 trapped, 2 trapped by something not yet revealed.
+    #[serde(default)]
+    pub trapped: Option<u8>,
+    #[serde(default)]
+    pub disabled: Option<Vec<bool>>,
+    #[serde(default)]
+    pub ability_order: Option<u32>,
+    #[serde(default)]
+    pub item_order: Option<u32>,
+    #[serde(default)]
+    pub active_turns: Option<u16>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -55,6 +100,9 @@ pub struct Snap {
     pub winner: Option<i8>,
     pub request: String,
     pub rng: [u16; 4],
+    /// Showdown's `effectOrder` counter (absent in older files).
+    #[serde(default)]
+    pub effect_order: Option<u32>,
     pub sides: [SideSnap; 2],
     /// Showdown's RNG draws during the step (only recorded with `--trace`).
     #[serde(default)]
@@ -109,8 +157,35 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         fainted: m.fainted,
         switch_flag: m.switch_flag,
         speed: m.speed,
-        vol: m.volatiles.as_slice().iter().map(|v| format!("{}:{}:{}", v.kind.id(), v.duration, v.counter)).collect(),
+        vol: m.volatiles.as_slice().iter().map(vol_snap).collect(),
+        ability: Some(ABILITIES[m.ability as usize].id.to_string()),
+        item: Some(ITEMS[m.item as usize].id.to_string()),
+        last_item: Some(ITEMS[m.last_item as usize].id.to_string()),
+        used_item: Some(m.used_item_this_turn),
+        ate_berry: Some(m.ate_berry),
+        types: Some(m.types.iter().filter(|&&t| t != Type::None).map(|t| format!("{t:?}")).collect()),
+        trapped: Some(match m.trapped {
+            Trapped::No => 0,
+            Trapped::Yes => 1,
+            Trapped::Hidden => 2,
+        }),
+        disabled: Some(m.moves[..m.n_moves as usize].iter().map(|s| s.disabled).collect()),
+        ability_order: Some(m.ability_st.order),
+        item_order: Some(m.item_st.order),
+        active_turns: Some(m.active_turns),
     }
+}
+
+/// A volatile as `id:turns left:detail`, where the detail is whatever state
+/// the volatile carries (the recorder writes the same thing).
+fn vol_snap(v: &crate::state::Volatile) -> String {
+    let detail = match v.kind {
+        VolKind::Stall => v.data.to_string(),
+        #[allow(unreachable_patterns)]
+        _ if v.data > 0 && VolKind::id(v.kind) == "choicelock" => MOVES[v.data as usize - 1].id.to_string(),
+        _ => "0".to_string(),
+    };
+    format!("{}:{}:{}", v.kind.id(), v.duration, detail)
 }
 
 /// Every field where the engine disagrees with Showdown's snapshot.
@@ -134,6 +209,9 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
     };
     check!("request", request, want.request.as_str());
     check!("rng seed", b.rng.words(), want.rng);
+    if let Some(eo) = want.effect_order {
+        check!("effect order counter", b.effect_order, eo);
+    }
     for side in 0..2 {
         let ws = &want.sides[side];
         check!(format!("p{} pokemon left", side + 1), b.sides[side].pokemon_left, ws.left);
@@ -143,9 +221,6 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
         }
         for (pos, w) in ws.mons.iter().enumerate() {
             let g = mon_snap(b, side, pos);
-            if &g == w {
-                continue;
-            }
             let who = format!("p{} position {} ({})", side + 1, pos + 1, w.species);
             check!(format!("{who} team index"), g.idx, w.idx);
             check!(format!("{who} species"), &g.species, &w.species);
@@ -162,6 +237,27 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
             check!(format!("{who} switch flag"), g.switch_flag, w.switch_flag);
             check!(format!("{who} cached speed"), g.speed, w.speed);
             check!(format!("{who} volatiles"), &g.vol, &w.vol);
+            // Fields older recordings do not carry are only compared when present.
+            macro_rules! check_opt {
+                ($name:expr, $field:ident) => {
+                    if w.$field.is_some() {
+                        check!(format!("{who} {}", $name), &g.$field, &w.$field);
+                    }
+                };
+            }
+            check_opt!("ability", ability);
+            check_opt!("item", item);
+            check_opt!("last item", last_item);
+            check_opt!("used item this turn", used_item);
+            check_opt!("ate berry", ate_berry);
+            check_opt!("types", types);
+            check_opt!("disabled moves", disabled);
+            check_opt!("active turns", active_turns);
+            if w.active {
+                check_opt!("trapped", trapped);
+                check_opt!("ability effect order", ability_order);
+                check_opt!("item effect order", item_order);
+            }
         }
     }
     out

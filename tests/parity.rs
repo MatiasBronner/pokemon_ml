@@ -1,0 +1,84 @@
+//! Checks the engine against battles recorded from Pokémon Showdown. The
+//! fixture is a small sample; `scripts/fuzz.sh` runs the same check on
+//! thousands of freshly generated battles.
+
+use vgc_engine::replay::{Case, Outcome, check_case};
+use vgc_engine::{ACTIVE, Battle, Choice, PokemonSet};
+
+fn fixture() -> Vec<Case> {
+    let text = include_str!("fixtures/showdown_cases.jsonl");
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("malformed fixture line"))
+        .collect()
+}
+
+#[test]
+fn recorded_battles_match_showdown() {
+    let cases = fixture();
+    assert!(cases.len() >= 10);
+    let mut decisions = 0;
+    for c in &cases {
+        match check_case(c) {
+            Outcome::Pass(n) => decisions += n,
+            Outcome::Unsupported(what) => panic!("case {} uses unsupported {what}", c.id),
+            Outcome::Fail(report) => panic!("case {} diverged from Showdown:\n{}", c.id, report.join("\n")),
+        }
+    }
+    assert!(decisions > 100);
+}
+
+/// `joint_ok` (used to validate submitted choices) and `joint_choices` (used
+/// to enumerate them) are written separately; they must describe the same set.
+#[test]
+fn choice_validation_agrees_with_enumeration() {
+    let mut universe = vec![Choice::Pass];
+    for slot in 0..5 {
+        for target in -3..=3 {
+            universe.push(Choice::Move { slot, target });
+        }
+    }
+    for to in 0..7 {
+        universe.push(Choice::Switch { to });
+    }
+    for c in fixture().iter().take(6) {
+        let sets: Vec<Vec<PokemonSet>> =
+            c.teams.iter().map(|t| t.iter().map(|s| s.to_set().unwrap()).collect()).collect();
+        let mut b = Battle::new([&sets[0], &sets[1]], c.seed).unwrap();
+        for step in &c.steps {
+            for side in 0..2 {
+                let listed = b.joint_choices(side);
+                assert!(!listed.is_empty(), "a side always has at least one legal joint choice");
+                for &x in &universe {
+                    for &y in &universe {
+                        let pair: [Choice; ACTIVE] = [x, y];
+                        assert_eq!(
+                            b.joint_ok(side, &pair),
+                            listed.contains(&pair),
+                            "case {} turn {} side {side} {pair:?}",
+                            c.id,
+                            b.turn
+                        );
+                    }
+                }
+            }
+            let p1 = Choice::parse_side(&step.choices[0]).unwrap();
+            let p2 = Choice::parse_side(&step.choices[1]).unwrap();
+            b.choose([p1, p2]).unwrap();
+        }
+    }
+}
+
+#[test]
+fn illegal_choices_are_rejected_without_changing_state() {
+    let c = &fixture()[0];
+    let sets: Vec<Vec<PokemonSet>> = c.teams.iter().map(|t| t.iter().map(|s| s.to_set().unwrap()).collect()).collect();
+    let mut b = Battle::new([&sets[0], &sets[1]], c.seed).unwrap();
+    let before = b.rng;
+    // Both slots switching to the same benched Pokémon.
+    let bad = [Choice::Switch { to: 2 }, Choice::Switch { to: 2 }];
+    let ok = b.joint_choices(1)[0];
+    assert!(b.choose([bad, ok]).is_err());
+    assert_eq!(b.rng, before);
+    assert_eq!(b.turn, 1);
+}

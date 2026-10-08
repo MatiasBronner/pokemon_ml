@@ -1,0 +1,6 @@
+/target
+/oracle/pokemon-showdown
+/oracle/node_modules
+/oracle/last_fuzz_stats.json
+*.jsonl
+!/tests/fixtures/*.jsonl

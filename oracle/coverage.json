@@ -1,0 +1,1442 @@
+{
+ "learnable_moves": 510,
+ "supported_learnable_moves": 231,
+ "supported": [
+  "accelerock",
+  "acidarmor",
+  "acidspray",
+  "aerialace",
+  "agility",
+  "aircutter",
+  "airslash",
+  "amnesia",
+  "ancientpower",
+  "appleacid",
+  "aquacutter",
+  "aquajet",
+  "aquastep",
+  "aquatail",
+  "armorcannon",
+  "aromaticmist",
+  "aurasphere",
+  "babydolleyes",
+  "bite",
+  "bitterblade",
+  "bittermalice",
+  "blazekick",
+  "bodypress",
+  "bodyslam",
+  "bonerush",
+  "boomburst",
+  "bravebird",
+  "breakingswipe",
+  "brutalswing",
+  "bugbuzz",
+  "bulkup",
+  "bulldoze",
+  "bulletpunch",
+  "bulletseed",
+  "calmmind",
+  "chargebeam",
+  "charm",
+  "chillingwater",
+  "closecombat",
+  "coaching",
+  "coil",
+  "cosmicpower",
+  "cottonguard",
+  "cottonspore",
+  "crabhammer",
+  "crosschop",
+  "crosspoison",
+  "crunch",
+  "crushclaw",
+  "darkestlariat",
+  "darkpulse",
+  "dazzlinggleam",
+  "decorate",
+  "detect",
+  "discharge",
+  "doubleedge",
+  "doublehit",
+  "doubleteam",
+  "dracometeor",
+  "dragonclaw",
+  "dragondance",
+  "dragonpulse",
+  "dragonrush",
+  "drainingkiss",
+  "drainpunch",
+  "drillpeck",
+  "drillrun",
+  "drumbeating",
+  "dualwingbeat",
+  "earthpower",
+  "earthquake",
+  "eerieimpulse",
+  "electroweb",
+  "energyball",
+  "extrasensory",
+  "extremespeed",
+  "faketears",
+  "featherdance",
+  "fierydance",
+  "fireblast",
+  "firefang",
+  "firelash",
+  "firepunch",
+  "flamecharge",
+  "flamethrower",
+  "flareblitz",
+  "flashcannon",
+  "flowertrick",
+  "focusblast",
+  "foulplay",
+  "frostbreath",
+  "gigadrain",
+  "glare",
+  "gunkshot",
+  "hammerarm",
+  "headlongrush",
+  "headsmash",
+  "heatwave",
+  "highhorsepower",
+  "hornleech",
+  "howl",
+  "hydropump",
+  "hypervoice",
+  "hypnosis",
+  "icebeam",
+  "icefang",
+  "icehammer",
+  "icepunch",
+  "iceshard",
+  "iciclecrash",
+  "iciclespear",
+  "icywind",
+  "inferno",
+  "irondefense",
+  "ironhead",
+  "irontail",
+  "jetpunch",
+  "kowtowcleave",
+  "lavaplume",
+  "leafblade",
+  "leafstorm",
+  "leechlife",
+  "lifedew",
+  "liquidation",
+  "lowsweep",
+  "luminacrash",
+  "lunge",
+  "machpunch",
+  "makeitrain",
+  "matchagotcha",
+  "megahorn",
+  "megakick",
+  "metalsound",
+  "meteormash",
+  "milkdrink",
+  "moonblast",
+  "mountaingale",
+  "muddywater",
+  "mudshot",
+  "mudslap",
+  "mysticalfire",
+  "nastyplot",
+  "nightdaze",
+  "nightslash",
+  "nobleroar",
+  "nuzzle",
+  "overdrive",
+  "overheat",
+  "paraboliccharge",
+  "petalblizzard",
+  "pinmissile",
+  "playrough",
+  "poisonfang",
+  "poisonjab",
+  "poisonpowder",
+  "pounce",
+  "powergem",
+  "powerwhip",
+  "protect",
+  "psychic",
+  "psychocut",
+  "psyshieldbash",
+  "psyshock",
+  "pyroball",
+  "quickattack",
+  "quiverdance",
+  "razorshell",
+  "recover",
+  "rockblast",
+  "rockpolish",
+  "rockslide",
+  "rocktomb",
+  "sacredsword",
+  "scald",
+  "scaryface",
+  "scorchingsands",
+  "screech",
+  "seedbomb",
+  "shadowball",
+  "shadowclaw",
+  "shadowpunch",
+  "shadowsneak",
+  "shellsmash",
+  "shelter",
+  "shiftgear",
+  "sing",
+  "skittersmack",
+  "slackoff",
+  "slash",
+  "sleeppowder",
+  "sludgebomb",
+  "sludgewave",
+  "smartstrike",
+  "snarl",
+  "spicyextract",
+  "spiritbreak",
+  "steelwing",
+  "stoneedge",
+  "stormthrow",
+  "stringshot",
+  "strugglebug",
+  "stunspore",
+  "superpower",
+  "surf",
+  "sweetscent",
+  "swordsdance",
+  "tailslap",
+  "tearfullook",
+  "thunderbolt",
+  "thunderfang",
+  "thunderpunch",
+  "thunderwave",
+  "tickle",
+  "torchsong",
+  "toxic",
+  "toxicthread",
+  "trailblaze",
+  "triplearrows",
+  "tropkick",
+  "twinbeam",
+  "vacuumwave",
+  "volttackle",
+  "waterfall",
+  "wavecrash",
+  "wildcharge",
+  "willowisp",
+  "woodhammer",
+  "xscissor",
+  "zapcannon",
+  "zenheadbutt",
+  "zingzap"
+ ],
+ "unsupported": {
+  "acrobatics": [
+   "fn:basePowerCallback"
+  ],
+  "acupressure": [
+   "fn:onHit"
+  ],
+  "afteryou": [
+   "fn:onHit"
+  ],
+  "alluringvoice": [
+   "sec.onHit"
+  ],
+  "allyswitch": [
+   "fn:onPrepareHit",
+   "fn:onHit",
+   "key:condition"
+  ],
+  "aquaring": [
+   "key:condition",
+   "volatile:aquaring"
+  ],
+  "assurance": [
+   "fn:basePowerCallback"
+  ],
+  "attract": [
+   "key:condition",
+   "fn:onTryImmunity",
+   "volatile:attract"
+  ],
+  "aurawheel": [
+   "fn:onTry",
+   "fn:onModifyType"
+  ],
+  "auroraveil": [
+   "key:sideCondition",
+   "fn:onTry",
+   "key:condition",
+   "target:allySide"
+  ],
+  "avalanche": [
+   "fn:basePowerCallback"
+  ],
+  "axekick": [
+   "key:hasCrashDamage",
+   "fn:onMoveFail",
+   "sec.volatile=confusion"
+  ],
+  "banefulbunker": [
+   "key:stallingMove",
+   "fn:onPrepareHit",
+   "fn:onHit",
+   "key:condition",
+   "volatile:banefulbunker"
+  ],
+  "barbbarrage": [
+   "fn:onBasePower"
+  ],
+  "batonpass": [
+   "fn:onHit",
+   "selfSwitch",
+   "self.onHit"
+  ],
+  "beakblast": [
+   "fn:priorityChargeCallback",
+   "key:condition",
+   "fn:onAfterMove"
+  ],
+  "beatup": [
+   "fn:basePowerCallback",
+   "fn:onModifyMove"
+  ],
+  "belch": [
+   "key:onDisableMove",
+   "fn:onTry"
+  ],
+  "bellydrum": [
+   "fn:onHit"
+  ],
+  "bind": [
+   "volatile:partiallytrapped"
+  ],
+  "blastburn": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "blizzard": [
+   "fn:onModifyMove"
+  ],
+  "block": [
+   "fn:onHit"
+  ],
+  "bounce": [
+   "fn:onTryMove",
+   "key:condition",
+   "flag:charge"
+  ],
+  "brickbreak": [
+   "fn:onTryHit"
+  ],
+  "bugbite": [
+   "fn:onHit"
+  ],
+  "burningjealousy": [
+   "sec.onHit"
+  ],
+  "burnup": [
+   "fn:onTryMove",
+   "self.onHit"
+  ],
+  "ceaselessedge": [
+   "fn:onAfterHit",
+   "fn:onAfterSubDamage"
+  ],
+  "charge": [
+   "key:condition",
+   "volatile:charge"
+  ],
+  "chillyreception": [
+   "fn:priorityChargeCallback",
+   "key:condition",
+   "target:all",
+   "weather",
+   "selfSwitch"
+  ],
+  "circlethrow": [
+   "key:forceSwitch"
+  ],
+  "clangingscales": [
+   "key:selfBoost"
+  ],
+  "clangoroussoul": [
+   "fn:onTry",
+   "fn:onTryHit",
+   "fn:onHit"
+  ],
+  "clearsmog": [
+   "fn:onHit"
+  ],
+  "comeuppance": [
+   "fn:damageCallback",
+   "fn:onTry",
+   "fn:onModifyTarget",
+   "target:scripted"
+  ],
+  "confuseray": [
+   "volatile:confusion"
+  ],
+  "copycat": [
+   "fn:onHit",
+   "key:callsMove"
+  ],
+  "corrosivegas": [
+   "fn:onHit"
+  ],
+  "counter": [
+   "fn:damageCallback",
+   "fn:beforeTurnCallback",
+   "fn:onTry",
+   "key:condition",
+   "target:scripted"
+  ],
+  "courtchange": [
+   "fn:onHitField",
+   "target:all"
+  ],
+  "covet": [
+   "fn:onAfterHit"
+  ],
+  "curse": [
+   "fn:onModifyMove",
+   "fn:onTryHit",
+   "fn:onHit",
+   "key:condition"
+  ],
+  "defog": [
+   "fn:onHit"
+  ],
+  "destinybond": [
+   "fn:onPrepareHit",
+   "key:condition",
+   "volatile:destinybond"
+  ],
+  "dig": [
+   "fn:onTryMove",
+   "key:condition",
+   "flag:charge"
+  ],
+  "direclaw": [
+   "sec.onHit"
+  ],
+  "disable": [
+   "fn:onTryHit",
+   "key:condition",
+   "volatile:disable"
+  ],
+  "dive": [
+   "fn:onTryMove",
+   "key:condition",
+   "flag:charge"
+  ],
+  "doubleshock": [
+   "fn:onTryMove",
+   "self.onHit"
+  ],
+  "dragoncheer": [
+   "key:condition",
+   "volatile:dragoncheer"
+  ],
+  "dragondarts": [
+   "key:smartTarget"
+  ],
+  "dragontail": [
+   "key:forceSwitch"
+  ],
+  "dynamicpunch": [
+   "sec.volatile=confusion"
+  ],
+  "eeriespell": [
+   "sec.onHit"
+  ],
+  "electricterrain": [
+   "key:terrain",
+   "key:condition",
+   "target:all"
+  ],
+  "electrify": [
+   "fn:onTryHit",
+   "key:condition",
+   "volatile:electrify"
+  ],
+  "electroball": [
+   "fn:basePowerCallback"
+  ],
+  "electroshot": [
+   "fn:onTryMove",
+   "flag:charge"
+  ],
+  "encore": [
+   "key:condition",
+   "volatile:encore"
+  ],
+  "endeavor": [
+   "fn:damageCallback",
+   "fn:onTryImmunity"
+  ],
+  "endure": [
+   "key:stallingMove",
+   "fn:onPrepareHit",
+   "fn:onHit",
+   "key:condition",
+   "volatile:endure"
+  ],
+  "entrainment": [
+   "fn:onTryHit",
+   "fn:onHit"
+  ],
+  "eruption": [
+   "fn:basePowerCallback"
+  ],
+  "expandingforce": [
+   "fn:onBasePower",
+   "fn:onModifyMove"
+  ],
+  "explosion": [
+   "key:selfdestruct"
+  ],
+  "facade": [
+   "fn:onBasePower"
+  ],
+  "fairylock": [
+   "key:pseudoWeather",
+   "key:condition",
+   "target:all"
+  ],
+  "fakeout": [
+   "fn:onTry",
+   "fn:onDisableMove"
+  ],
+  "feint": [
+   "key:breaksProtect"
+  ],
+  "fellstinger": [
+   "fn:onAfterMoveSecondarySelf"
+  ],
+  "ficklebeam": [
+   "fn:onBasePower"
+  ],
+  "finalgambit": [
+   "fn:damageCallback",
+   "key:selfdestruct"
+  ],
+  "firespin": [
+   "volatile:partiallytrapped"
+  ],
+  "firstimpression": [
+   "fn:onTry",
+   "fn:onDisableMove"
+  ],
+  "fissure": [
+   "key:ohko"
+  ],
+  "flail": [
+   "fn:basePowerCallback"
+  ],
+  "flatter": [
+   "volatile:confusion"
+  ],
+  "fling": [
+   "fn:onPrepareHit",
+   "key:condition"
+  ],
+  "flipturn": [
+   "selfSwitch"
+  ],
+  "fly": [
+   "fn:onTryMove",
+   "key:condition",
+   "flag:charge"
+  ],
+  "flyingpress": [
+   "fn:onEffectiveness"
+  ],
+  "focusenergy": [
+   "key:condition",
+   "volatile:focusenergy"
+  ],
+  "focuspunch": [
+   "fn:priorityChargeCallback",
+   "fn:beforeMoveCallback",
+   "key:condition"
+  ],
+  "followme": [
+   "fn:onTry",
+   "key:condition",
+   "volatile:followme"
+  ],
+  "forestscurse": [
+   "fn:onHit"
+  ],
+  "freezedry": [
+   "fn:onEffectiveness"
+  ],
+  "frenzyplant": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "futuresight": [
+   "fn:onTry",
+   "ignoreImmunity",
+   "flag:futuremove"
+  ],
+  "gastroacid": [
+   "fn:onTryHit",
+   "key:condition",
+   "volatile:gastroacid"
+  ],
+  "gigaimpact": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "gigatonhammer": [
+   "flag:cantusetwice"
+  ],
+  "glaiverush": [
+   "key:condition",
+   "self.volatileStatus"
+  ],
+  "grassknot": [
+   "fn:basePowerCallback",
+   "fn:onTryHit"
+  ],
+  "grassyglide": [
+   "fn:onModifyPriority"
+  ],
+  "grassyterrain": [
+   "key:terrain",
+   "key:condition",
+   "target:all"
+  ],
+  "gravapple": [
+   "fn:onBasePower"
+  ],
+  "gravity": [
+   "key:pseudoWeather",
+   "key:condition",
+   "target:all"
+  ],
+  "growth": [
+   "fn:onModifyMove"
+  ],
+  "guardsplit": [
+   "fn:onHit"
+  ],
+  "guardswap": [
+   "fn:onHit"
+  ],
+  "guillotine": [
+   "key:ohko"
+  ],
+  "gyroball": [
+   "fn:basePowerCallback"
+  ],
+  "hardpress": [
+   "fn:basePowerCallback"
+  ],
+  "haze": [
+   "fn:onHitField",
+   "target:all"
+  ],
+  "healbell": [
+   "fn:onHit",
+   "target:allyTeam"
+  ],
+  "healingwish": [
+   "fn:onTryHit",
+   "key:selfdestruct",
+   "key:slotCondition",
+   "key:condition"
+  ],
+  "healpulse": [
+   "fn:onHit"
+  ],
+  "heatcrash": [
+   "fn:basePowerCallback",
+   "fn:onTryHit"
+  ],
+  "heavyslam": [
+   "fn:basePowerCallback",
+   "fn:onTryHit"
+  ],
+  "helpinghand": [
+   "fn:onTryHit",
+   "key:condition",
+   "volatile:helpinghand"
+  ],
+  "hex": [
+   "fn:basePowerCallback"
+  ],
+  "highjumpkick": [
+   "key:hasCrashDamage",
+   "fn:onMoveFail"
+  ],
+  "horndrill": [
+   "key:ohko"
+  ],
+  "hurricane": [
+   "fn:onModifyMove",
+   "sec.volatile=confusion"
+  ],
+  "hydrocannon": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "hyperbeam": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "icespinner": [
+   "fn:onAfterHit",
+   "fn:onAfterSubDamage"
+  ],
+  "imprison": [
+   "key:condition",
+   "volatile:imprison",
+   "flag:mustpressure"
+  ],
+  "infernalparade": [
+   "fn:basePowerCallback"
+  ],
+  "infestation": [
+   "volatile:partiallytrapped"
+  ],
+  "ingrain": [
+   "key:condition",
+   "volatile:ingrain"
+  ],
+  "instruct": [
+   "fn:onHit"
+  ],
+  "jawlock": [
+   "fn:onHit"
+  ],
+  "kingsshield": [
+   "key:stallingMove",
+   "fn:onPrepareHit",
+   "fn:onHit",
+   "key:condition",
+   "volatile:kingsshield"
+  ],
+  "knockoff": [
+   "fn:onBasePower",
+   "fn:onAfterHit"
+  ],
+  "lashout": [
+   "fn:onBasePower"
+  ],
+  "lastresort": [
+   "fn:onTry"
+  ],
+  "lastrespects": [
+   "fn:basePowerCallback"
+  ],
+  "leechseed": [
+   "key:condition",
+   "fn:onTryImmunity",
+   "volatile:leechseed"
+  ],
+  "lightofruin": [
+   "key:tags"
+  ],
+  "lightscreen": [
+   "key:sideCondition",
+   "key:condition",
+   "target:allySide"
+  ],
+  "lockon": [
+   "fn:onTryHit",
+   "fn:onHit",
+   "key:condition"
+  ],
+  "lowkick": [
+   "fn:basePowerCallback",
+   "fn:onTryHit"
+  ],
+  "magicpowder": [
+   "fn:onHit"
+  ],
+  "magicroom": [
+   "key:pseudoWeather",
+   "key:condition",
+   "target:all"
+  ],
+  "magneticflux": [
+   "fn:onHitSide",
+   "target:allySide"
+  ],
+  "magnetrise": [
+   "fn:onTry",
+   "key:condition",
+   "volatile:magnetrise"
+  ],
+  "meanlook": [
+   "fn:onHit"
+  ],
+  "memento": [
+   "key:selfdestruct"
+  ],
+  "metalburst": [
+   "fn:damageCallback",
+   "fn:onTry",
+   "fn:onModifyTarget",
+   "target:scripted"
+  ],
+  "meteorassault": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "meteorbeam": [
+   "fn:onTryMove",
+   "flag:charge"
+  ],
+  "minimize": [
+   "key:condition",
+   "volatile:minimize"
+  ],
+  "mirrorcoat": [
+   "fn:damageCallback",
+   "fn:beforeTurnCallback",
+   "fn:onTry",
+   "key:condition",
+   "target:scripted"
+  ],
+  "mistyexplosion": [
+   "key:selfdestruct",
+   "fn:onBasePower"
+  ],
+  "mistyterrain": [
+   "key:terrain",
+   "key:condition",
+   "target:all"
+  ],
+  "moonlight": [
+   "fn:onHit"
+  ],
+  "morningsun": [
+   "fn:onHit"
+  ],
+  "mortalspin": [
+   "fn:onAfterHit",
+   "fn:onAfterSubDamage"
+  ],
+  "nightshade": [
+   "damage:level"
+  ],
+  "noretreat": [
+   "fn:onTry",
+   "key:condition",
+   "volatile:noretreat"
+  ],
+  "octolock": [
+   "fn:onTryImmunity",
+   "key:condition",
+   "volatile:octolock"
+  ],
+  "outrage": [
+   "target:randomNormal",
+   "self.volatileStatus"
+  ],
+  "painsplit": [
+   "fn:onHit"
+  ],
+  "partingshot": [
+   "fn:onHit",
+   "selfSwitch"
+  ],
+  "payback": [
+   "fn:basePowerCallback"
+  ],
+  "perishsong": [
+   "fn:onHitField",
+   "key:condition",
+   "target:all"
+  ],
+  "petaldance": [
+   "target:randomNormal",
+   "self.volatileStatus"
+  ],
+  "phantomforce": [
+   "key:breaksProtect",
+   "fn:onTryMove",
+   "key:condition",
+   "flag:charge"
+  ],
+  "pluck": [
+   "fn:onHit"
+  ],
+  "pollenpuff": [
+   "fn:onTryHit",
+   "fn:onTryMove",
+   "fn:onHit"
+  ],
+  "poltergeist": [
+   "fn:onTry",
+   "fn:onTryHit"
+  ],
+  "populationbomb": [
+   "key:multiaccuracy"
+  ],
+  "powersplit": [
+   "fn:onHit"
+  ],
+  "powerswap": [
+   "fn:onHit"
+  ],
+  "powertrick": [
+   "key:condition",
+   "volatile:powertrick"
+  ],
+  "powertrip": [
+   "fn:basePowerCallback"
+  ],
+  "psychicfangs": [
+   "fn:onTryHit"
+  ],
+  "psychicnoise": [
+   "sec.volatile=healblock"
+  ],
+  "psychicterrain": [
+   "key:terrain",
+   "key:condition",
+   "target:all"
+  ],
+  "psychup": [
+   "fn:onHit"
+  ],
+  "quash": [
+   "fn:onHit"
+  ],
+  "quickguard": [
+   "key:sideCondition",
+   "fn:onTry",
+   "fn:onHitSide",
+   "key:condition",
+   "target:allySide"
+  ],
+  "ragefist": [
+   "fn:basePowerCallback"
+  ],
+  "ragepowder": [
+   "fn:onTry",
+   "key:condition",
+   "volatile:ragepowder"
+  ],
+  "ragingbull": [
+   "fn:onTryHit",
+   "fn:onModifyType"
+  ],
+  "ragingfury": [
+   "target:randomNormal",
+   "self.volatileStatus"
+  ],
+  "raindance": [
+   "target:all",
+   "weather"
+  ],
+  "rapidspin": [
+   "fn:onAfterHit",
+   "fn:onAfterSubDamage"
+  ],
+  "recycle": [
+   "fn:onHit"
+  ],
+  "reflect": [
+   "key:sideCondition",
+   "key:condition",
+   "target:allySide"
+  ],
+  "reflecttype": [
+   "fn:onHit"
+  ],
+  "rest": [
+   "fn:onTry",
+   "fn:onHit"
+  ],
+  "reversal": [
+   "fn:basePowerCallback"
+  ],
+  "revivalblessing": [
+   "fn:onTryHit",
+   "key:slotCondition",
+   "key:condition",
+   "selfSwitch"
+  ],
+  "risingvoltage": [
+   "fn:basePowerCallback"
+  ],
+  "roar": [
+   "key:forceSwitch"
+  ],
+  "rockwrecker": [
+   "flag:recharge",
+   "self.volatileStatus"
+  ],
+  "roleplay": [
+   "fn:onTryHit",
+   "fn:onHit"
+  ],
+  "roost": [
+   "key:condition",
+   "self.volatileStatus"
+  ],
+  "round": [
+   "fn:basePowerCallback",
+   "fn:onTry"
+  ],
+  "safeguard": [
+   "key:sideCondition",
+   "key:condition",
+   "target:allySide"
+  ],
+  "saltcure": [
+   "key:condition",
+   "sec.volatile=saltcure"
+  ],
+  "sandstorm": [
+   "target:all",
+   "weather"
+  ],
+  "sandtomb": [
+   "volatile:partiallytrapped"
+  ],
+  "scaleshot": [
+   "key:selfBoost"
+  ],
+  "seismictoss": [
+   "damage:level"
+  ],
+  "selfdestruct": [
+   "key:selfdestruct"
+  ],
+  "shedtail": [
+   "fn:onTryHit",
+   "fn:onHit",
+   "volatile:substitute",
+   "selfSwitch",
+   "self.onHit"
+  ],
+  "sheercold": [
+   "key:ohko"
+  ],
+  "shellsidearm": [
+   "fn:onPrepareHit",
+   "fn:onModifyMove",
+   "fn:onHit",
+   "fn:onAfterSubDamage"
+  ],
+  "simplebeam": [
+   "fn:onTryHit",
+   "fn:onHit"
+  ],
+  "skillswap": [
+   "fn:onHit"
+  ],
+  "skyattack": [
+   "fn:onTryMove",
+   "flag:charge"
+  ],
+  "sleeptalk": [
+   "key:sleepUsable",
+   "fn:onTry",
+   "fn:onHit",
+   "key:callsMove"
+  ],
+  "smackdown": [
+   "key:condition",
+   "volatile:smackdown"
+  ],
+  "snaptrap": [
+   "volatile:partiallytrapped"
+  ],
+  "snipeshot": [
+   "key:tracksTarget"
+  ],
+  "snore": [
+   "key:sleepUsable",
+   "fn:onTry"
+  ],
+  "snowscape": [
+   "target:all",
+   "weather"
+  ],
+  "soak": [
+   "fn:onHit"
+  ],
+  "solarbeam": [
+   "fn:onTryMove",
+   "fn:onBasePower",
+   "flag:charge"
+  ],
+  "solarblade": [
+   "fn:onTryMove",
+   "fn:onBasePower",
+   "flag:charge"
+  ],
+  "sparklingaria": [
+   "fn:onAfterMove",
+   "sec.volatile=sparklingaria"
+  ],
+  "speedswap": [
+   "fn:onHit"
+  ],
+  "spikes": [
+   "key:sideCondition",
+   "key:condition",
+   "target:foeSide",
+   "flag:mustpressure"
+  ],
+  "spikyshield": [
+   "key:stallingMove",
+   "fn:onPrepareHit",
+   "fn:onHit",
+   "key:condition",
+   "volatile:spikyshield"
+  ],
+  "spiritshackle": [
+   "sec.onHit"
+  ],
+  "spite": [
+   "fn:onHit"
+  ],
+  "spitup": [
+   "fn:basePowerCallback",
+   "fn:onTry",
+   "fn:onAfterMove"
+  ],
+  "stealthrock": [
+   "key:sideCondition",
+   "key:condition",
+   "target:foeSide",
+   "flag:mustpressure"
+  ],
+  "steelbeam": [
+   "key:mindBlownRecoil",
+   "fn:onMoveFail"
+  ],
+  "steelroller": [
+   "fn:onTry",
+   "fn:onHit",
+   "fn:onAfterSubDamage"
+  ],
+  "stickyweb": [
+   "key:sideCondition",
+   "key:condition",
+   "target:foeSide"
+  ],
+  "stockpile": [
+   "fn:onTry",
+   "key:condition",
+   "volatile:stockpile"
+  ],
+  "stompingtantrum": [
+   "fn:basePowerCallback"
+  ],
+  "stoneaxe": [
+   "fn:onAfterHit",
+   "fn:onAfterSubDamage"
+  ],
+  "storedpower": [
+   "fn:basePowerCallback"
+  ],
+  "strengthsap": [
+   "fn:onHit"
+  ],
+  "stuffcheeks": [
+   "key:onDisableMove",
+   "fn:onTry",
+   "fn:onHit"
+  ],
+  "substitute": [
+   "fn:onTryHit",
+   "fn:onHit",
+   "key:condition",
+   "volatile:substitute"
+  ],
+  "suckerpunch": [
+   "fn:onTry"
+  ],
+  "sunnyday": [
+   "target:all",
+   "weather"
+  ],
+  "supercellslam": [
+   "key:hasCrashDamage",
+   "fn:onMoveFail"
+  ],
+  "superfang": [
+   "fn:damageCallback"
+  ],
+  "swagger": [
+   "volatile:confusion"
+  ],
+  "swallow": [
+   "fn:onTry",
+   "fn:onHit"
+  ],
+  "sweetkiss": [
+   "volatile:confusion"
+  ],
+  "switcheroo": [
+   "fn:onTryImmunity",
+   "fn:onHit"
+  ],
+  "synthesis": [
+   "fn:onHit"
+  ],
+  "syrupbomb": [
+   "key:condition",
+   "sec.volatile=syrupbomb"
+  ],
+  "tailwind": [
+   "key:sideCondition",
+   "key:condition",
+   "target:allySide"
+  ],
+  "taunt": [
+   "key:condition",
+   "volatile:taunt"
+  ],
+  "teatime": [
+   "fn:onHitField",
+   "target:all"
+  ],
+  "teeterdance": [
+   "volatile:confusion"
+  ],
+  "temperflare": [
+   "fn:basePowerCallback"
+  ],
+  "terrainpulse": [
+   "fn:onModifyType",
+   "fn:onModifyMove"
+  ],
+  "thief": [
+   "fn:onAfterHit"
+  ],
+  "thrash": [
+   "target:randomNormal",
+   "self.volatileStatus"
+  ],
+  "throatchop": [
+   "key:condition",
+   "sec.onHit"
+  ],
+  "thunder": [
+   "fn:onModifyMove"
+  ],
+  "tidyup": [
+   "fn:onHit"
+  ],
+  "topsyturvy": [
+   "fn:onHit"
+  ],
+  "torment": [
+   "key:condition",
+   "volatile:torment"
+  ],
+  "toxicspikes": [
+   "key:sideCondition",
+   "key:condition",
+   "target:foeSide",
+   "flag:mustpressure"
+  ],
+  "transform": [
+   "fn:onHit"
+  ],
+  "triattack": [
+   "sec.onHit"
+  ],
+  "trick": [
+   "fn:onTryImmunity",
+   "fn:onHit"
+  ],
+  "trickortreat": [
+   "fn:onHit"
+  ],
+  "trickroom": [
+   "key:pseudoWeather",
+   "key:condition",
+   "target:all"
+  ],
+  "tripleaxel": [
+   "fn:basePowerCallback",
+   "key:multiaccuracy"
+  ],
+  "upperhand": [
+   "fn:onTry"
+  ],
+  "uproar": [
+   "fn:onTryHit",
+   "key:condition",
+   "target:randomNormal",
+   "self.volatileStatus"
+  ],
+  "uturn": [
+   "selfSwitch"
+  ],
+  "venoshock": [
+   "fn:onBasePower"
+  ],
+  "voltswitch": [
+   "selfSwitch"
+  ],
+  "waterpulse": [
+   "sec.volatile=confusion"
+  ],
+  "watershuriken": [
+   "fn:basePowerCallback"
+  ],
+  "waterspout": [
+   "fn:basePowerCallback"
+  ],
+  "weatherball": [
+   "fn:onModifyType",
+   "fn:onModifyMove"
+  ],
+  "whirlpool": [
+   "volatile:partiallytrapped"
+  ],
+  "whirlwind": [
+   "key:forceSwitch"
+  ],
+  "wideguard": [
+   "key:sideCondition",
+   "fn:onTry",
+   "fn:onHitSide",
+   "key:condition",
+   "target:allySide"
+  ],
+  "wish": [
+   "key:slotCondition",
+   "key:condition"
+  ],
+  "wonderroom": [
+   "key:pseudoWeather",
+   "key:condition",
+   "target:all"
+  ],
+  "worryseed": [
+   "fn:onTryImmunity",
+   "fn:onTryHit",
+   "fn:onHit"
+  ],
+  "wrap": [
+   "volatile:partiallytrapped"
+  ],
+  "yawn": [
+   "fn:onTryHit",
+   "key:condition",
+   "volatile:yawn"
+  ]
+ },
+ "blocking_reasons": {
+  "key:condition": 75,
+  "fn:onHit": 63,
+  "fn:onTry": 30,
+  "fn:basePowerCallback": 29,
+  "fn:onTryHit": 26,
+  "target:all": 18,
+  "self.volatileStatus": 14,
+  "fn:onTryMove": 13,
+  "fn:onBasePower": 11,
+  "key:sideCondition": 11,
+  "fn:onModifyMove": 10,
+  "flag:charge": 10,
+  "fn:onPrepareHit": 8,
+  "fn:onAfterHit": 8,
+  "target:allySide": 8,
+  "selfSwitch": 8,
+  "flag:recharge": 7,
+  "fn:onTryImmunity": 7,
+  "fn:damageCallback": 7,
+  "volatile:partiallytrapped": 7,
+  "fn:onAfterSubDamage": 7,
+  "sec.onHit": 7,
+  "key:selfdestruct": 6,
+  "target:randomNormal": 5,
+  "weather": 5,
+  "volatile:confusion": 5,
+  "key:pseudoWeather": 5,
+  "key:stallingMove": 4,
+  "key:terrain": 4,
+  "key:forceSwitch": 4,
+  "fn:onModifyType": 4,
+  "target:scripted": 4,
+  "sec.volatile=confusion": 4,
+  "fn:onHitField": 4,
+  "self.onHit": 4,
+  "target:foeSide": 4,
+  "flag:mustpressure": 4,
+  "key:ohko": 4,
+  "fn:onMoveFail": 4,
+  "fn:priorityChargeCallback": 3,
+  "fn:onAfterMove": 3,
+  "key:slotCondition": 3,
+  "fn:onHitSide": 3,
+  "key:hasCrashDamage": 3,
+  "key:sleepUsable": 2,
+  "key:callsMove": 2,
+  "volatile:substitute": 2,
+  "fn:beforeTurnCallback": 2,
+  "key:selfBoost": 2,
+  "fn:onDisableMove": 2,
+  "key:onDisableMove": 2,
+  "key:breaksProtect": 2,
+  "damage:level": 2,
+  "fn:onEffectiveness": 2,
+  "key:multiaccuracy": 2,
+  "fn:onModifyTarget": 2,
+  "volatile:endure": 1,
+  "fn:onModifyPriority": 1,
+  "volatile:helpinghand": 1,
+  "volatile:ingrain": 1,
+  "volatile:leechseed": 1,
+  "volatile:dragoncheer": 1,
+  "fn:beforeMoveCallback": 1,
+  "volatile:aquaring": 1,
+  "volatile:smackdown": 1,
+  "volatile:yawn": 1,
+  "volatile:attract": 1,
+  "fn:onAfterMoveSecondarySelf": 1,
+  "volatile:focusenergy": 1,
+  "volatile:gastroacid": 1,
+  "volatile:stockpile": 1,
+  "volatile:charge": 1,
+  "volatile:encore": 1,
+  "sec.volatile=healblock": 1,
+  "volatile:followme": 1,
+  "ignoreImmunity": 1,
+  "flag:futuremove": 1,
+  "volatile:imprison": 1,
+  "volatile:disable": 1,
+  "volatile:taunt": 1,
+  "volatile:destinybond": 1,
+  "volatile:minimize": 1,
+  "volatile:torment": 1,
+  "volatile:ragepowder": 1,
+  "volatile:magnetrise": 1,
+  "volatile:powertrick": 1,
+  "key:mindBlownRecoil": 1,
+  "target:allyTeam": 1,
+  "volatile:spikyshield": 1,
+  "key:tags": 1,
+  "volatile:kingsshield": 1,
+  "volatile:electrify": 1,
+  "sec.volatile=sparklingaria": 1,
+  "volatile:banefulbunker": 1,
+  "key:tracksTarget": 1,
+  "volatile:octolock": 1,
+  "volatile:noretreat": 1,
+  "key:smartTarget": 1,
+  "sec.volatile=saltcure": 1,
+  "flag:cantusetwice": 1,
+  "sec.volatile=syrupbomb": 1
+ }
+}

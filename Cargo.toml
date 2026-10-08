@@ -1,0 +1,15 @@
+[package]
+name = "vgc_engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+
+[features]
+# Record every RNG draw and action so a divergence from Showdown can be pinpointed.
+trace = []
+
+[profile.release]
+debug = 1

@@ -198,6 +198,54 @@ What the validator does not do, where Showdown's does:
 - **Picking four of the six.** `Battle::new` takes the Pokémon picked; team
   preview is not modelled.
 
+## Teams from tournaments
+
+Training needs teams people actually play. `scripts/scrape_teams.py` collects
+the team sheets of a tournament from its Victory Road page, and `teampool`
+turns them into a pool of teams the engine can play:
+
+```sh
+python3 scripts/scrape_teams.py https://victoryroad.pro/2027-frankfurt/     # -> teams/raw/2027-frankfurt.json
+cargo run --release --bin teampool -- teams/raw/2027-frankfurt.json --play 1000   # -> teams/2027-frankfurt.json
+```
+
+The scraper reads the results tables, follows each row's team-sheet link
+(to vrpastes.com) and saves where the team placed, who played it and the text
+of its sheet. It fetches one page a second and keeps what it has fetched, so
+it can be stopped and run again. `teampool` reads each sheet
+(`teams::read_sheet`), checks the team against the regulation, writes the
+legal ones out and says which it left out and why; `--section` and `--top`
+narrow it to a division or to the best-placed, and `--play` plays battles
+between teams of the pool as a check that every one runs.
+
+```rust
+use vgc_engine::teams::Pool;
+
+let pool = Pool::from_json(&std::fs::read_to_string("teams/2027-frankfurt.json")?)?;
+let (ours, theirs) = (pool.teams[0].sets()?, pool.teams[7].sets()?);
+let battle = Battle::with_rosters([&ours, &theirs], [&[0, 1, 2, 3], &[0, 2, 4, 5]], true, seed)?;
+```
+
+Two things to know about what comes out:
+
+- **The stat points are guesses.** An open team sheet gives species, item,
+  ability, moves and nature, and never how the 66 stat points are spent.
+  `teams::guess_spread` spends them by rule of thumb from the nature and the
+  moves (32 in each of two stats, 2 in a third: attack and Speed for a Jolly
+  Garchomp, HP and Special Defense for a Careful Incineroar). Every team it
+  did this to is marked `spreads_guessed`. Real spreads are finer, and
+  finding better ones is a job for later; a paste that does give stat points
+  is taken at its word.
+- **The scraper has not been run against the live sites from where it was
+  written**, which had no route to them. It is written not to depend on how
+  the paste site lays out a sheet: it gathers every short line of text the
+  page carries, in its markup and in its scripts, and `read_sheet` picks the
+  team out by the names it knows. `scripts/check_scraper.py` checks that on a
+  made-up tournament whose sheets are laid out five different ways. If the
+  site delivers its sheets only after the page has loaded, the scraper will
+  report teams left out for having no sheet, and will need to be taught where
+  they come from; the pages it fetched are kept in `teams/raw/cache` to look at.
+
 ## What each side has been shown
 
 The engine knows every move, item and ability on both sides. A player does
@@ -735,6 +783,7 @@ src/movecbs.rs     script callbacks of moves (onTry, onHit, basePowerCallback, .
 src/choice.rs      Battle::new, legal choices, submitting choices
 src/position.rs    a position as data: Battle::to_state, Battle::from_state, JSON
 src/format.rs      a regulation as data: Format, the team validator, random legal teams
+src/teams.rs       teams from outside: reading team sheets, guessing stat points, a pool of teams
 src/shown.rs       what the battle has shown of each Pokémon: Battle::shown
 src/observer.rs    the same, read from Showdown's log
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
@@ -742,7 +791,7 @@ src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
-src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs
+src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs
 oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
 oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
@@ -750,13 +799,16 @@ oracle/gen_format.js Showdown's team validator -> formats/<id>.json
 oracle/gen_teams.js  random teams with Showdown's verdict on each
 formats/             what each regulation allows (generated)
 scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, check-teams.sh, mutation_test.py,
-                     perish_trap.json (battles written out for gen_cases.js --script)
+                     perish_trap.json (battles written out for gen_cases.js --script),
+                     scrape_teams.py (a tournament's team sheets), check_scraper.py
+teams/               pools of teams (teampool's output); teams/raw/ is what the scraper fetched
 tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
 tests/position.rs  positions written by hand: defaults, timers, switches in the middle of a turn
 tests/format.rs    legal and illegal teams, a second regulation, fixtures of teams judged by Showdown
 tests/shown.rs     what each side has been shown, as examples; a fixture of battles recorded with their logs
 tests/perish_trap.rs  the perish trap, step by step, on battles played out in Showdown from a script
+tests/teams.rs     team sheets read, stat points guessed, a pool saved, loaded and played
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a

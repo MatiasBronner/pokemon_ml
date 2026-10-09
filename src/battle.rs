@@ -84,6 +84,8 @@ pub enum Error {
     Unsupported(String),
     BadTeam(String),
     BadChoice(String),
+    /// A position description that does not make sense (see `position`).
+    BadState(String),
 }
 
 impl std::fmt::Display for Error {
@@ -92,6 +94,7 @@ impl std::fmt::Display for Error {
             Error::Unsupported(s) => write!(f, "unsupported: {s}"),
             Error::BadTeam(s) => write!(f, "bad team: {s}"),
             Error::BadChoice(s) => write!(f, "bad choice: {s}"),
+            Error::BadState(s) => write!(f, "bad position: {s}"),
         }
     }
 }
@@ -2789,27 +2792,7 @@ impl Battle {
                     }
                 }
                 self.mon_mut(r).n_damaged_by = kept as u8;
-                self.run_event(Ev::DisableMove, Some(r), None, Eff::None, Res::Undef);
-                // Moves that disable themselves (Fake Out after the first turn).
-                for k in 0..self.mon(r).n_moves as usize {
-                    let id = self.mon(r).moves[k].id;
-                    if MOVES[id as usize].events & Ev::DisableMove.bit() != 0 {
-                        let saved = self.am_len;
-                        let mi = self.new_am(id);
-                        self.single_event(Ev::DisableMove, Eff::Move(mi), None, Some(r), None, Eff::None, Res::Undef);
-                        self.am_len = saved;
-                    }
-                    // Gigaton Hammer cannot be chosen twice in a row.
-                    if MOVES[id as usize].flags & F_CANTUSETWICE != 0 && self.mon(r).last_move == id {
-                        self.mon_mut(r).moves[k].disabled = true;
-                        self.mon_mut(r).moves[k].hidden = false;
-                    }
-                }
-                self.mon_mut(r).trapped = Trapped::No;
-                self.run_event(Ev::TrapPokemon, Some(r), None, Eff::None, Res::Undef);
-                if self.type_allows(r, 6) {
-                    self.run_event(Ev::MaybeTrapPokemon, Some(r), None, Eff::None, Res::Undef);
-                }
+                self.request_prep(r);
                 if self.mon(r).fainted {
                     continue;
                 }
@@ -2823,8 +2806,40 @@ impl Battle {
             self.win(None);
             return;
         }
-        // `Pokemon#getMoveRequestData`, as the move request is put together:
-        // a Pokémon locked into a move cannot switch either.
+        self.request_locks();
+        self.request = Request::Move;
+    }
+
+    /// What the end of a turn works out for the coming move request about one
+    /// active Pokémon: which of its moves are disabled (the flags must have been
+    /// cleared first) and whether it is trapped.
+    pub(crate) fn request_prep(&mut self, r: MonRef) {
+        self.run_event(Ev::DisableMove, Some(r), None, Eff::None, Res::Undef);
+        // Moves that disable themselves (Fake Out after the first turn).
+        for k in 0..self.mon(r).n_moves as usize {
+            let id = self.mon(r).moves[k].id;
+            if MOVES[id as usize].events & Ev::DisableMove.bit() != 0 {
+                let saved = self.am_len;
+                let mi = self.new_am(id);
+                self.single_event(Ev::DisableMove, Eff::Move(mi), None, Some(r), None, Eff::None, Res::Undef);
+                self.am_len = saved;
+            }
+            // Gigaton Hammer cannot be chosen twice in a row.
+            if MOVES[id as usize].flags & F_CANTUSETWICE != 0 && self.mon(r).last_move == id {
+                self.mon_mut(r).moves[k].disabled = true;
+                self.mon_mut(r).moves[k].hidden = false;
+            }
+        }
+        self.mon_mut(r).trapped = Trapped::No;
+        self.run_event(Ev::TrapPokemon, Some(r), None, Eff::None, Res::Undef);
+        if self.type_allows(r, 6) {
+            self.run_event(Ev::MaybeTrapPokemon, Some(r), None, Eff::None, Res::Undef);
+        }
+    }
+
+    /// `Pokemon#getMoveRequestData`, as the move request is put together:
+    /// a Pokémon locked into a move cannot switch either.
+    pub(crate) fn request_locks(&mut self) {
         for side in 0..2 {
             if self.sides[side].pokemon_left == 0 {
                 continue;
@@ -2841,7 +2856,6 @@ impl Battle {
                 }
             }
         }
-        self.request = Request::Move;
     }
 
     // ------------------------------------------------------- active move slots

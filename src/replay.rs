@@ -3,6 +3,7 @@
 //! binary and by the fixture test in `tests/`.
 
 use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather};
+use crate::position::BattleState;
 use crate::state::{Cond, NO_SPECIES, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
@@ -571,8 +572,148 @@ fn trace_report(snap: &Snap, out: &mut Vec<String>) {
     out.extend(snap.log.iter().filter(|l| !noise(l)).map(|l| format!("  {l}")));
 }
 
+/// What else to do at every decision while replaying.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Rebuild {
+    /// Nothing: just replay.
+    No,
+    /// Write the position down, build a battle back from it, require the two
+    /// to be the same position, and carry on with the rebuilt one.
+    Exact,
+    /// Also build a battle from the position stripped of the simulator's
+    /// bookkeeping, as if it had been written by hand, and require what
+    /// `from_state` works out to be what the engine had.
+    ByHand,
+}
+
+/// A position with everything removed that a battle built from a hand-written
+/// description may legitimately have differently: the random numbers, the
+/// order effects started in and the cached speeds.
+fn loose(st: &BattleState, at_move_request: bool) -> BattleState {
+    let mut s = st.clone();
+    s.seed = [0; 4];
+    s.rng_calls = 0;
+    s.effect_order = 0;
+    s.speed_order.clear();
+    let strip = |c: &mut crate::position::CondState| {
+        c.order = 0;
+        // (Whether a field condition's handlers have ever run: it changes how
+        // Showdown sorts them among ties, and cannot be known from outside.)
+        c.targeted = false;
+    };
+    s.weather.iter_mut().for_each(strip);
+    s.terrain.iter_mut().for_each(strip);
+    s.pseudo_weather.iter_mut().for_each(strip);
+    for side in &mut s.sides {
+        side.conditions.iter_mut().for_each(strip);
+        side.slot_conditions.iter_mut().flatten().for_each(strip);
+        for (place, m) in side.pokemon.iter_mut().enumerate() {
+            m.speed = 0;
+            m.status_extra.order = 0;
+            m.ability_extra.order = 0;
+            m.item_extra.order = 0;
+            m.volatiles.iter_mut().for_each(strip);
+            // (Leftover flags on moves it cannot use while transformed.)
+            for mv in &mut m.base_moves {
+                mv.disabled = false;
+                mv.hidden = false;
+            }
+            if !at_move_request || place >= crate::ACTIVE || m.fainted {
+                // Only a move request works these out; in between they are leftovers.
+                m.trapped = Trapped::No;
+                m.locked_move.clear();
+                for mv in &mut m.moves {
+                    mv.disabled = false;
+                    mv.hidden = false;
+                }
+            }
+        }
+    }
+    if s.ended {
+        // (Nothing is going to continue.)
+        s.mid_turn = None;
+    }
+    // The queue as a set: ties in it are settled by the random numbers.
+    if st.ended {
+        s.pending.clear();
+    }
+    for a in &mut s.pending {
+        a.resolved = None;
+    }
+    s.pending.sort_by_key(|a| (a.kind.clone(), a.pokemon.map(|m| (m.side, m.pokemon)), a.move_id.clone()));
+    s
+}
+
+/// The first place two positions differ, as JSON paths.
+fn json_diff(path: &str, a: &serde_json::Value, b: &serde_json::Value, out: &mut Vec<String>) {
+    use serde_json::Value;
+    if a == b || out.len() >= 6 {
+        return;
+    }
+    match (a, b) {
+        (Value::Object(x), Value::Object(y)) => {
+            let mut keys: Vec<&String> = x.keys().chain(y.keys()).collect();
+            keys.sort();
+            keys.dedup();
+            for k in keys {
+                json_diff(
+                    &format!("{path}.{k}"),
+                    x.get(k).unwrap_or(&Value::Null),
+                    y.get(k).unwrap_or(&Value::Null),
+                    out,
+                );
+            }
+        }
+        (Value::Array(x), Value::Array(y)) if x.len() == y.len() => {
+            for (i, (p, q)) in x.iter().zip(y).enumerate() {
+                json_diff(&format!("{path}[{i}]"), p, q, out);
+            }
+        }
+        _ => out.push(format!("{path}: engine {a}, rebuilt {b}")),
+    }
+}
+
+/// The rebuild checks at one decision. On success the battle to carry on with.
+fn rebuild(b: &Battle, mode: Rebuild) -> Result<Battle, Vec<String>> {
+    let st = b.to_state();
+    let text = st.to_json();
+    match BattleState::from_json(&text) {
+        Ok(back) if back == st => {}
+        Ok(_) => return Err(vec!["the position changes when written as JSON and read back".into()]),
+        Err(e) => return Err(vec![format!("the position's own JSON does not read back: {e}")]),
+    }
+    let exact = Battle::from_state(&st).map_err(|e| vec![format!("from_state refused an exported position: {e}")])?;
+    if let Some(d) = b.position_diff(&exact) {
+        return Err(vec!["a battle rebuilt from the exported position differs:".into(), d]);
+    }
+    if mode == Rebuild::ByHand {
+        let by_hand = Battle::from_state(&st.without_bookkeeping()).map_err(|e| {
+            vec![
+                format!("from_state refused the position without bookkeeping: {e}"),
+                format!("pending: {}", serde_json::to_string(&st.pending).unwrap_or_default()),
+            ]
+        })?;
+        let at_move = b.request == Request::Move;
+        let (want, got) = (loose(&st, at_move), loose(&by_hand.to_state(), at_move));
+        if want != got {
+            let mut out = vec!["a battle built from the position without bookkeeping differs:".to_string()];
+            let (x, y) = (serde_json::to_value(&want).unwrap(), serde_json::to_value(&got).unwrap());
+            json_diff("", &x, &y, &mut out);
+            return Err(out);
+        }
+        // (Working the bookkeeping out draws random numbers of its own; they are not the battle's.)
+        trace::take();
+    }
+    Ok(exact)
+}
+
 /// Replays one recorded battle and compares state after every decision.
 pub fn check_case(c: &Case) -> Outcome {
+    check_case_with(c, Rebuild::No)
+}
+
+/// [`check_case`], optionally rebuilding the battle from its exported position at every decision.
+pub fn check_case_with(c: &Case, mode: Rebuild) -> Outcome {
     let sets: Result<Vec<Vec<PokemonSet>>, String> =
         c.teams.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
     let sets = match sets {
@@ -603,6 +744,15 @@ pub fn check_case(c: &Case) -> Outcome {
         let header = |what: &str| {
             format!("{what} at decision {i} (turn {turn}), choices p1 [{}] p2 [{}]", step.choices[0], step.choices[1])
         };
+        if mode != Rebuild::No {
+            match rebuild(&b, mode) {
+                Ok(rebuilt) => b = rebuilt,
+                Err(mut out) => {
+                    out.insert(0, header("rebuilding the position failed"));
+                    return Outcome::Fail(out);
+                }
+            }
+        }
         let dl = diff_legal(&b, &step.legal);
         if !dl.is_empty() {
             let mut out = vec![header("legal choices differ")];
@@ -625,6 +775,13 @@ pub fn check_case(c: &Case) -> Outcome {
         if let Some(lines) = draws_differ(&step.after) {
             let mut out = vec![header("same state, different RNG draws")];
             out.extend(lines);
+            return Outcome::Fail(out);
+        }
+    }
+    if mode != Rebuild::No {
+        // The final position too (usually a finished battle).
+        if let Err(mut out) = rebuild(&b, mode) {
+            out.insert(0, "rebuilding the final position failed".to_string());
             return Outcome::Fail(out);
         }
     }

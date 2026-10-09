@@ -13,6 +13,7 @@ mod events;
 mod items;
 mod movecbs;
 mod moves;
+pub mod position;
 pub mod replay;
 #[rustfmt::skip]
 mod tables;

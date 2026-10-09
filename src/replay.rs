@@ -99,6 +99,33 @@ pub struct MonSnap {
     pub move_actions: Option<u8>,
     #[serde(default)]
     pub newly_switched: Option<bool>,
+    /// `hurtThisTurn` (0 if unhurt), `timesAttacked`, the two stat-change flags
+    /// as "raised/lowered" letters, and what this turn's `attackedBy` entries
+    /// amount to: "sources that did damage : slot and damage of the last foe to hit".
+    #[serde(default)]
+    pub hurt: Option<u16>,
+    #[serde(default)]
+    pub times_attacked: Option<u16>,
+    #[serde(default)]
+    pub stat_flags: Option<String>,
+    #[serde(default)]
+    pub attacked_by: Option<String>,
+    /// The last hit from a foe still on the field, from this turn or an earlier one ("*").
+    #[serde(default)]
+    pub last_damaged: Option<String>,
+    /// The ids of the moves it has now (another Pokémon's while it is transformed).
+    #[serde(default)]
+    pub moves: Option<String>,
+    #[serde(default)]
+    pub transformed: Option<bool>,
+    /// Team index of the Pokémon an Illusion shows; -1 for none.
+    #[serde(default)]
+    pub illusion: Option<i8>,
+    #[serde(default)]
+    pub locked: Option<String>,
+    /// The type added by Forest's Curse or Trick-or-Treat; empty if none.
+    #[serde(default)]
+    pub added_type: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -135,6 +162,9 @@ pub struct Snap {
     /// Showdown's `effectOrder` counter (absent in older files).
     #[serde(default)]
     pub effect_order: Option<u32>,
+    /// `battle.lastMove` (absent in older files); empty before the first move.
+    #[serde(default)]
+    pub battle_last_move: Option<String>,
     #[serde(default)]
     pub field: Option<FieldSnap>,
     pub sides: [SideSnap; 2],
@@ -197,7 +227,7 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         last_item: Some(ITEMS[m.last_item as usize].id.to_string()),
         used_item: Some(m.used_item_this_turn),
         ate_berry: Some(m.ate_berry),
-        types: Some(m.types.iter().filter(|&&t| t != Type::None).map(|t| format!("{t:?}")).collect()),
+        types: Some(m.types.iter().filter(|&&t| t != Type::None).map(|&t| type_name(t)).collect()),
         trapped: Some(match m.trapped {
             Trapped::No => 0,
             Trapped::Yes => 1,
@@ -221,7 +251,42 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         }),
         move_actions: Some(m.active_move_actions),
         newly_switched: Some(m.newly_switched),
+        hurt: Some(m.hurt_this_turn),
+        times_attacked: Some(m.times_attacked),
+        stat_flags: Some(format!(
+            "{}{}",
+            if m.stats_raised_this_turn { 'r' } else { '-' },
+            if m.stats_lowered_this_turn { 'l' } else { '-' }
+        )),
+        attacked_by: Some(format!(
+            "{}:{}",
+            m.hit_by_this_turn,
+            match m.last_damaged_by() {
+                Some(a) if a.this_turn => format!("{}/{}", slot_index(a.slot), a.damage),
+                _ => String::new(),
+            }
+        )),
+        last_damaged: Some(match m.last_damaged_by() {
+            Some(a) => format!("{}/{}{}", slot_index(a.slot), a.damage, if a.this_turn { "" } else { "*" }),
+            None => String::new(),
+        }),
+        moves: Some(
+            m.moves[..m.n_moves as usize].iter().map(|s| MOVES[s.id as usize].id).collect::<Vec<_>>().join(","),
+        ),
+        transformed: Some(m.transformed),
+        illusion: Some(m.illusion as i8 - 1),
+        added_type: Some(if m.added_type == Type::None { String::new() } else { type_name(m.added_type) }),
+        locked: Some(if m.locked_move == crate::state::NO_MOVE {
+            String::new()
+        } else {
+            MOVES[m.locked_move as usize].id.to_string()
+        }),
     }
+}
+
+/// A type as Showdown spells it.
+fn type_name(t: Type) -> String {
+    if t == Type::Typeless { "???".to_string() } else { format!("{t:?}") }
 }
 
 fn result_code(r: Res) -> char {
@@ -243,11 +308,21 @@ fn side_detail(c: &Cond<SideCond>) -> String {
     }
 }
 
+/// A field slot as the recording prints it: -1 for "not on the field".
+fn slot_index(slot: u8) -> i32 {
+    if slot == crate::state::NO_SLOT { -1 } else { slot as i32 }
+}
+
 /// The state a slot condition carries.
 fn slot_detail(c: &Cond<SlotCond>) -> String {
     match c.kind {
         // HP to restore / turn counter value when the wish was made.
         SlotCond::Wish => format!("{}/{}", c.data, c.st.a),
+        // The turn counter value it lands at / who sent it (side, team index).
+        SlotCond::Futuremove => {
+            format!("{}/{}", c.st.a, c.source.map_or(String::new(), |s| format!("{}{}", s.side, s.idx)))
+        }
+        _ => "0".to_string(),
     }
 }
 
@@ -255,15 +330,29 @@ fn slot_detail(c: &Cond<SlotCond>) -> String {
 /// the volatile carries (the recorder writes the same thing).
 fn vol_snap(v: &crate::state::Volatile) -> String {
     let detail = match v.kind {
-        VolKind::Stall => v.data.to_string(),
+        VolKind::Stall | VolKind::Allyswitch => v.data.to_string(),
         VolKind::Confusion => v.data.to_string(),
         VolKind::Choicelock | VolKind::Encore | VolKind::Disable if v.data > 0 => {
             MOVES[v.data as usize - 1].id.to_string()
         }
-        VolKind::Helpinghand | VolKind::Substitute => v.data.to_string(),
+        VolKind::Helpinghand => v.data.to_string(),
+        // Kept in half points; printed the way JavaScript prints the number.
+        VolKind::Substitute => format!("{}{}", v.data / 2, if v.data % 2 == 1 { ".5" } else { "" }),
         VolKind::Dragoncheer | VolKind::Partiallytrapped => v.data.to_string(),
         VolKind::Stockpile => format!("{}/{}/{}", v.data, v.st.a, v.st.b),
         VolKind::Leechseed => v.source_slot.to_string(),
+        VolKind::Lockedmove if v.data > 0 => format!("{}/{}", MOVES[v.data as usize - 1].id, v.st.a),
+        VolKind::Twoturnmove if v.data > 0 => MOVES[v.data as usize - 1].id.to_string(),
+        VolKind::Fly
+        | VolKind::Dig
+        | VolKind::Dive
+        | VolKind::Bounce
+        | VolKind::Phantomforce
+        | VolKind::Solarbeam
+        | VolKind::Solarblade
+        | VolKind::Skyattack
+        | VolKind::Meteorbeam
+        | VolKind::Electroshot => v.st.a.to_string(),
         VolKind::Metronome => {
             let last = if v.data > 0 { MOVES[v.data as usize - 1].id } else { "-" };
             format!("{last}/{}", v.st.a)
@@ -296,6 +385,10 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
     check!("rng seed", b.rng.words(), want.rng);
     if let Some(eo) = want.effect_order {
         check!("effect order counter", b.effect_order, eo);
+    }
+    if let Some(lm) = &want.battle_last_move {
+        let ours = if b.last_move == crate::state::NO_MOVE { "" } else { MOVES[b.last_move as usize].id };
+        check!("the battle's last move", ours, lm.as_str());
     }
     if let Some(wf) = &want.field {
         let f = &b.field;
@@ -370,11 +463,20 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
             check_opt!("active turns", active_turns);
             check_opt!("base species", base_species);
             check_opt!("can mega evolve", can_mega);
+            check_opt!("illusion", illusion);
             if w.active {
                 check_opt!("move results", move_result);
                 check_opt!("last move", last_move);
                 check_opt!("move actions since switching in", move_actions);
                 check_opt!("newly switched", newly_switched);
+                check_opt!("hurt this turn", hurt);
+                check_opt!("times attacked", times_attacked);
+                check_opt!("stats raised/lowered this turn", stat_flags);
+                check_opt!("attacked by", attacked_by);
+                check_opt!("last damaged by", last_damaged);
+                check_opt!("moves", moves);
+                check_opt!("transformed", transformed);
+                check_opt!("added type", added_type);
                 check_opt!("trapped", trapped);
                 check_opt!("ability effect order", ability_order);
                 check_opt!("item effect order", item_order);

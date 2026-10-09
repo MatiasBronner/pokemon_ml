@@ -6,14 +6,13 @@ simulator underneath a self-play bot: copyable fixed-size state, no allocation
 on the common paths of the turn loop, and a harness that proves each mechanic
 matches Showdown before anything is trained on it.
 
-**Status: not yet a full simulator.** Modelled so far: the turn loop, damage,
-status conditions, switching, Mega Evolution, weather, terrain, Trick Room,
-Tailwind, screens and entry hazards, Fake Out, redirection, Protect and its
-relatives, Substitute, Taunt, Encore and the other volatile conditions; 341 of
-the 510 moves Champions Pokémon can learn, 213 of the 225 abilities and 83 of
-the 85 held items. Pivoting moves (U-turn), forced switches (Roar) and
-two-turn moves are still missing, so many real tournament teams cannot be
-played yet. See [What is and is not modelled](#what-is-and-is-not-modelled).
+**Status: every move, ability and held item a Champions Pokémon can have is
+modelled**: all 510 moves in the Champions learnsets, 225 abilities, 85 held
+items and 82 Mega Evolutions, each checked against Showdown as described
+below. Any team that is legal in the format can be played. What the engine
+does not do yet is start from the middle of a battle, which a bot needs in
+order to search from a live game; see
+[What is and is not modelled](#what-is-and-is-not-modelled).
 
 ## Quick start
 
@@ -35,7 +34,9 @@ let p1 = [
 let mut battle = Battle::new([&p1, &p2], [1, 2, 3, 4])?;   // seed: Showdown's four 16-bit words
 
 while !battle.ended {
-    // battle.request says what is being asked: Request::Move or Request::Switch.
+    // battle.request says what is being asked: Request::Move at the start of a
+    // turn, Request::Switch when someone has to be replaced. The latter can come
+    // in the middle of a turn (after U-turn or Eject Button) as well as at its end.
     let c1 = pick(battle.joint_choices(0));   // every legal pair of slot choices for side 0
     let c2 = pick(battle.joint_choices(1));
     battle.choose([c1, c2])?;
@@ -44,12 +45,13 @@ println!("{:?}", battle.winner);              // Some(0), Some(1) or None for a 
 ```
 
 `Battle` is `Copy`: cloning a position for search is a plain memory copy
-(about 6.3 kB). Choices use Showdown's conventions (`Choice::to_showdown`
+(about 8 kB). Choices use Showdown's conventions (`Choice::to_showdown`
 prints `move 2 1`, `move 1 2 mega`, `switch 3`, `pass`), so they can be sent
 to a Showdown server unchanged. A Pokémon holding its Mega Stone is offered
 every move a second time with `mega: true`; a side can Mega Evolve once.
-`Battle::new` returns `Error::Unsupported` naming the first move, ability or
-item it does not model, rather than guessing.
+`Battle::new` returns `Error::Unsupported`, naming the culprit, for anything
+that does not exist in Champions (Tinted Lens, a forme of a
+species the game lacks) rather than guessing how it would behave.
 
 A set built with `from_names` has no ability and no item until you add them,
 and takes the species' fixed gender or male. The engine does not check that a
@@ -76,29 +78,32 @@ Results for the code in this repository, against Showdown commit `ad7ca5d`
 
 | Check | Battles | Decisions | Diverged |
 |---|---|---|---|
-| Everything modelled now | 16,900 | 364,631 | 0 |
+| Everything modelled now | 45,400 | 1,071,459 | 0 |
+| Recorded before two-turn moves, pivoting, forced switches and forme changes existed | 16,900 | 364,631 | 0 |
 | Recorded before Fake Out, Substitute and the volatile conditions existed | 19,300 | 385,071 | 0 |
 | Recorded before weather and the other field effects existed | 5,500 | 101,656 | 0 |
 | Recorded before Mega Evolution | 21,000 | 393,381 | 0 |
 | Items but no abilities | 5,000 | 93,086 | 0 |
 | Neither (how the engine's first version was checked) | 15,200 | 270,196 | 0 |
-| Comparing every individual RNG draw as well | 2,400 | 47,870 | 0 |
-| 1,000-turn limit (both sides only ever switch) | 24 | 24,000 | 0 |
+| Comparing every individual RNG draw as well | 5,750 | 133,075 | 0 |
+| 1,000-turn limit (both sides switch whenever they can) | 32 | 30,679 | 0 |
 
 Each row compares state, RNG seed and legal choices after every decision.
-State includes every Pokémon's volatile conditions with what they remember
-(a substitute's HP, the move an Encore holds it to), the weather, terrain,
-pseudo-weathers and each side's conditions with their remaining turns. The
+State includes every Pokémon's species, stats, moves and PP (which change
+under Transform), its volatile conditions with what they remember (a
+substitute's HP, the move an Encore holds it to), the per-turn bookkeeping
+Showdown keeps (who hit it last and for how much, whether it has moved), the
+weather, terrain, pseudo-weathers and each side's conditions with their
+remaining turns. The
 older rows are battles recorded at earlier stages and replayed with the
 current code.
 
 How the battles are made up:
 
-- Teams are drawn from the 292 bringable species with at least four modelled
-  moves. Each battle puts one modelled move, one modelled ability and one
-  modelled item on a lead, cycling through all of them, so every one gets its
-  share.
-- Abilities are the species' own half the time and any modelled ability
+- Teams are drawn from all 293 species that can be brought. Each battle puts
+  one move, one ability and one item on a lead, cycling through all of them,
+  so every one gets its share.
+- Abilities are the species' own half the time and any ability at all
   otherwise, which exercises abilities on bodies and movesets their real
   owners lack. About 80% of Pokémon hold an item.
 - A species with a Mega Stone holds it half the time, and Mega Evolves at its
@@ -114,8 +119,8 @@ How the battles are made up:
 - Some effects only matter in combinations that random teams almost never
   produce: Aurora Veil on a side that also has Reflect up, or a Mega Stone
   being stolen. `gen_cases.js --moves`, `--species`, `--abilities` and
-  `--items` build batches around such a combination; about 5,000 of the
-  battles in the first two rows are of this kind.
+  `--items` build batches around such a combination; about 25,000 of the
+  battles in the first three rows are of this kind.
 
 Two further checks:
 
@@ -123,7 +128,7 @@ Two further checks:
   state rather than from the request Showdown sends the player, because the
   request deliberately hides some things (a Shadow Tag trap not yet revealed).
   `gen_cases.js --check-legal` confirms that list against Showdown's own
-  validation by submitting every conceivable choice: 1,800 battles, 38,396
+  validation by submitting every conceivable choice: 3,000 battles, 68,337
   decisions, no disagreement. (One oddity this turned up: when a foe's
   Imprison has sealed every move of a side's last active Pokémon, Showdown
   still lists the moves, and wants the forced Struggle spelled as a use of
@@ -131,22 +136,32 @@ Two further checks:
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
-  replays recorded battles. Of 315 injected bugs, 312 were caught. Two of the
-  other three cannot make a difference yet: one only matters for abilities
-  that are not modelled, the other for a self-inflicted status no modelled
-  move causes. The third (Electrify leaving Struggle's type alone) needs a
-  Pokémon to be electrified on a turn it is forced to Struggle, which no
-  recorded battle contains; a unit test covers it instead. Some of the bugs
-  slip past the general batches and are only caught by battles built around
-  the effect in question (six of the first 206 did), which is what the
-  targeted batches above are for.
+  replays recorded battles. All 413 hand-written bugs are caught. A second
+  mode switches off one callback at a time (one ability's reaction to one
+  event, one move's script); of the 171 callbacks added for the last batch of
+  mechanics, 167 are caught and the other four do nothing that can be
+  observed in Champions (the script lists them with the reason, along with
+  eight hand-written bugs dropped for the same reason). The 447 older
+  callbacks have had the hand-written bugs aimed at them but not yet this
+  sweep. Not every bug is caught by random battles: 11 of the last 265 got
+  past 41,000 recorded battles and were only caught by a batch built around
+  the effect, such as Sleep Talk on a Pokémon that also knows Rest and
+  Meteor Beam, or Dragon Darts into a Protect beside a Berserk Pokémon at
+  just over half HP. `scripts/targeted.sh` records all such batches.
 
 What this does **not** establish: agreement with the cartridge games where
-they differ from Showdown, or anything about mechanics outside the modelled
-set. Coverage of rare interactions is also uneven: every modelled ability and
-item was brought into hundreds of battles, but a rare interaction, such as
-Corrosion actually mattering (a Poison- or Steel-type being poisoned), comes
-up only a few times in several thousand.
+they differ from Showdown. And coverage of rare interactions is uneven. Every
+move, ability and item was brought into hundreds of battles, but an effect
+that singles out one particular move or ability only shows when the two meet.
+Five such cases were wrong at some point while this was being written and got
+past thousands of random battles: Reckless boosting High Jump Kick, Sheer
+Force boosting Electro Shot, Cud Chew ignoring a berry eaten with Bug Bite,
+Magician not stealing after Fling, and a frozen Pokémon that has lost its
+Fire type getting no thaw from Burn Up. They were found by reading Showdown's
+source for every place that names a newly modelled move, and by batches
+built around the pairing. Both are now routine for anything added, and the
+mutation tests above say which pairings the recorded battles cover; but it is
+the kind of error most likely to remain.
 
 ### Running it yourself
 
@@ -154,6 +169,15 @@ up only a few times in several thousand.
 scripts/setup-oracle.sh            # clone and build the pinned Showdown commit (needs Node 22+)
 scripts/fuzz.sh 2000               # 2,000 fresh battles, random seed
 TRACE=1 scripts/fuzz.sh 300 42     # also compare every RNG draw
+```
+
+The mutation test needs recorded battles to replay: the batches built around
+particular effects, and a few thousand general ones.
+
+```sh
+scripts/targeted.sh corpus                                              # 41 batches, about 11,000 battles
+node oracle/gen_cases.js --n 3000 --seed 9500 --out corpus/general.jsonl
+scripts/mutation_test.py corpus/*.jsonl --handlers                      # slow: a rebuild per injected bug
 ```
 
 When a battle diverges, `difftest` prints the fields that differ. Re-record
@@ -189,77 +213,96 @@ on a Pokémon, on one of a side's positions, on a side, or on the whole field.
   listed in the tables but missing a body panics with its name, and the
   generator refuses any callback for an event the engine does not know.
 
-To add an effect: put its id in the supported list in `oracle/lib.js`, run
-`node oracle/gen_data.js`, write the bodies, and fuzz.
+When Showdown's Champions data gains an effect: run `node oracle/gen_data.js`.
+It marks as unsupported any move that uses a property or event the engine has
+not seen (and says which); for the rest, write the bodies of the callbacks
+that now panic, and fuzz.
 
 ## What is and is not modelled
 
-Modelled, and verified as above:
+Modelled, and verified as above: everything that can happen in a battle
+between two legal Champions teams.
 
 - Champions stat formula, natures, level 50, Champions PP values
 - Action order: priority, speed, speed ties, switches before moves, dynamic
-  re-sorting after each action, fractional priority (Quick Claw, Stall)
+  re-sorting after each action, fractional priority (Quick Claw, Stall),
+  moves that reorder the queue (After You, Quash, Round, Instruct)
 - Targeting in doubles: chosen targets, spread moves and their 0.75 modifier,
-  retargeting when a foe has fainted, moves aimed at an ally, redirection by
-  Lightning Rod
+  retargeting when a foe has fainted, moves aimed at an ally, redirection
+  (Follow Me, Rage Powder, Lightning Rod), Dragon Darts, Ally Switch
 - Damage: critical hits, damage rolls, STAB, type chart and immunities, burn,
   and every modifier event abilities and items hook into
-- Accuracy and evasion stages, stat stages
 - Burn, paralysis, poison, toxic, sleep and freeze with the Champions rules
   (1-in-8 full paralysis, sleep for 2 or 3 turns, freeze for at most 3)
-- Confusion, flinching, Protect with its consecutive-use counter
-- **Fake Out**, First Impression, **Follow Me / Rage Powder**, **Helping
-  Hand**, **Wide Guard / Quick Guard**, Feint, Endure, Baneful Bunker, King's
-  Shield, Spiky Shield
-- **Substitute**, with everything that does and does not get past one
-- **Taunt, Encore, Disable**, Torment, Imprison, Attract, Heal Block, Yawn,
-  Leech Seed, Perish Song, Destiny Bond, the binding moves (Wrap, Fire Spin,
-  ...), the trapping moves (Mean Look, Jaw Lock, ...), Gastro Acid, Stockpile
-  and about twenty more lingering conditions
-- **Weather** (rain, sun, sandstorm, snow) and **terrain** (Electric, Grassy,
-  Misty, Psychic), with the rocks, the Terrain Extender and the seeds
-- **Trick Room**, Gravity, Magic Room, Wonder Room, Fairy Lock
-- **Tailwind, Reflect, Light Screen, Aurora Veil, Safeguard**, the entry
-  hazards (Stealth Rock, Spikes, Toxic Spikes, Sticky Web) and the moves that
+- **All 510 moves** in the Champions learnsets. By kind:
+  - Protect and its relatives, Fake Out, Helping Hand, Wide Guard, Quick
+    Guard, Feint, Endure
+  - Substitute, Taunt, Encore, Disable, Torment, Imprison, Yawn, Leech Seed,
+    Perish Song, Destiny Bond, Curse, the binding and trapping moves and the
+    other lingering conditions
+  - Two-turn moves (Fly, Solar Beam, Electro Shot), recharge moves, rampages
+    (Outrage), Focus Punch, Counter, Mirror Coat, Metal Burst
+  - **Pivoting** (U-turn, Volt Switch, Parting Shot, Chilly Reception, Baton
+    Pass, Shed Tail) and **forced switches** (Roar, Whirlwind, Dragon Tail)
+  - Moves whose power depends on the battle (Gyro Ball, Eruption, Acrobatics,
+    Stored Power, Last Respects, ...)
+  - Moves that tamper with items, abilities and types (Knock Off, Trick,
+    Fling, Skill Swap, Entrainment, Gastro Acid, Soak, ...)
+  - Moves that call other moves (Copycat, Sleep Talk), Future Sight, Healing
+    Wish, Revival Blessing, Transform
+- **Weather and terrain**, Trick Room, Gravity, Magic Room, Wonder Room,
+  Tailwind, the screens, Safeguard, the entry hazards and the moves that
   clear them, Wish
-- Secondary effects, self stat changes, draining, recoil, healing, multi-hit
-  moves, stat-override moves (Body Press, Foul Play, Psyshock)
-- Switching, fainting, replacements, PP, Struggle, trapping, disabled moves,
-  win and tie conditions, the 1,000-turn limit
-- **213 abilities**, including Intimidate and everything that answers it,
-  the weather and terrain setters and everything that feeds on them, the
-  absorbing and contact abilities, Mold Breaker, Prankster, Magic Bounce,
-  Parental Bond, Trace, Protean, Unaware, Sheer Force, Shadow Tag
+- **All 225 abilities**, including the ones that switch a Pokémon out
+  mid-turn (Emergency Exit), change its forme (Stance Change, Disguise, Zero
+  to Hero, Hunger Switch), or disguise it (Illusion, Imposter)
 - **Mega Evolution**: all 82 Megas
-- **83 held items**: everything except Eject Button and Red Card. Items
-  Showdown marks as unavailable in Champions (Choice Band, Choice Specs,
-  Assault Vest among them) are left out; Choice Scarf is the only Choice item
+- **All 85 held items**, Eject Button and Red Card included. Items Showdown
+  marks as unavailable in Champions (Choice Band, Choice Specs, Assault Vest
+  among them) are left out; Choice Scarf is the only Choice item
+- Switching, fainting, replacements in the middle of a turn and at its end,
+  PP, Struggle, trapping, disabled moves, win and tie conditions, the
+  1,000-turn limit
 
-Not modelled yet:
+Not modelled:
 
-- Pivoting moves (U-turn, Parting Shot), forced switches (Roar)
-- Two-turn moves (Fly, Solar Beam), recharge moves (Hyper Beam), rampages
-  (Outrage), Counter and Focus Punch
-- Moves whose power depends on the state of the battle (Acrobatics, Gyro
-  Ball, Eruption, ...), moves that tamper with items (Knock Off, Trick) and
-  about a hundred other moves with a script of their own
-- Team preview itself: the engine starts from the four Pokémon picked
-- **12 abilities**: 9 that change forme (Stance Change, Disguise, ...),
-  Illusion and Imposter, and Emergency Exit, which needs switching mid-turn
-- **2 items**: Eject Button and Red Card
+- **Starting from the middle of a battle.** `Battle::new` builds turn 1 from
+  two teams. Setting up an arbitrary position (HP, boosts, conditions with
+  their timers, what has been revealed) is the next piece of work.
+- Team preview: the engine starts from the four Pokémon each side picked, in
+  the order picked.
+- Anything Champions does not have: Terastallization, Z-moves, Dynamax, and
+  the species, moves, abilities and items outside the format. A few abilities
+  are legal to put on a Pokémon but belong to species or mechanics the game
+  lacks (Ice Face, Gulp Missile, Shields Down, Battle Bond, Tera Shell, the
+  four Embody Aspects); they do nothing, exactly as in Showdown.
+  `oracle/coverage.json` lists these under `dormant_parts`.
+- The battle log. The engine tracks state, not messages, so abilities that
+  only announce something (Frisk, Anticipation) have no visible effect;
+  Forewarn still makes its random draw.
 
-`oracle/coverage.json` has the full lists with the mechanic each one waits
-for. It also lists the *dormant parts* of modelled effects: Damp blocks
-self-destructing moves, which do not exist yet; Sticky Hold would stop Knock
-Off. These effects are exact for every battle the engine accepts, but each
-has to be revisited when the missing mechanic arrives, and the list says
-which. (That list earns its keep: each new mechanic so far has woken up
-branches of older effects, such as Armor Tail, Screen Cleaner, Mental Herb
-and the resist berries, and the list said where to look.)
+### Showdown behaviour worth knowing about
 
-For moves, `coverage.json` lists every unmodelled one and the Showdown feature
-blocking it. The largest groups are moves with their own lingering condition,
-moves with a scripted `onHit` or `onTry`, and variable base power.
+The engine reproduces Showdown, not the cartridge. A few places where
+Showdown's behaviour is surprising, all confirmed against its source and
+reproduced here:
+
+- A move that is vetoed while being set up (a sound move chosen before Throat
+  Chop landed, a flying move under Gravity) still draws one random target
+  before it fails.
+- Metal Burst and Comeuppance return 1.5 times the damage taken without
+  rounding, so a substitute can be left with half a hit point. The engine
+  stores substitute HP in halves for this reason.
+- Curse chosen by a Pokémon that is not a Ghost targets the user from the
+  moment it is chosen, even if the Pokémon becomes a Ghost before moving.
+- A forced switch (Roar) draws a random number to pick the replacement even
+  when only one Pokémon can come in.
+- With Revival Blessing and a forced replacement pending on the same side,
+  Showdown counts available switches in slot order, so "revive with the left
+  slot, replace the right" can be rejected where the mirror image is
+  accepted. `legal_choices` applies the same rule.
+- A Pokémon revived into its own active slot comes back through a switch
+  queued at the end of the turn's remaining actions.
 
 ## Layout
 
@@ -278,18 +321,18 @@ src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
 src/bin/difftest.rs, src/bin/bench.rs
-oracle/lib.js        which moves, abilities and items are modelled
+oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
 oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
-scripts/             setup-oracle.sh, fuzz.sh, mutation_test.py
+scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, mutation_test.py
 tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
 function-by-function port of Showdown's `sim/` (comments name the function
-mirrored). After changing what is supported (`oracle/lib.js`) or updating
-Showdown, run `node oracle/gen_data.js` to regenerate the tables.
+mirrored). After updating Showdown, run `node oracle/gen_data.js` to
+regenerate the tables.
 
 ## Speed
 
@@ -299,35 +342,32 @@ Xeon:
 
 | Teams | Battles/s | Decisions/s |
 |---|---|---|
-| No abilities or items | about 9,400 | about 165,000 |
-| Random abilities and items | about 5,500 | about 105,000 |
-| The same with weather, terrain and the other field effects in play | about 5,000 | about 100,000 |
-| The same with Substitute, Encore and the other volatile conditions in play | about 4,500 | about 97,000 |
+| No abilities or items | about 7,100 | about 127,000 |
+| Random abilities and items | about 4,300 | about 82,000 |
+| The same with weather, terrain and the other field effects in play | about 4,200 | about 84,000 |
+| The same with Substitute, Encore and the other volatile conditions in play | about 3,600 | about 79,000 |
+| The same with every move in play (two-turn moves, pivoting, forme changes) | about 3,500 | about 80,000 |
 
-The event system roughly halved the speed of the first version, which ran
-about 20,000 battles per second with nothing to dispatch. Nothing has been
-tuned beyond skipping events that nobody in the battle listens to; caching
-each Pokémon's listener set is the likely next step when speed starts to
-matter.
+Nothing has been tuned beyond skipping events that nobody in the battle
+listens to, and it shows: the last batch of mechanics cost 15 to 30% on the
+same teams (the first row was about 10,000 before it), from a larger state
+and more bookkeeping per action rather than from any one hot spot, and the
+event system had already halved the speed of the first version, which ran
+about 20,000 battles per second with nothing to dispatch. Caching each
+Pokémon's listener set and slimming the per-move scratch state are the
+likely first steps when speed starts to matter.
 
-## Suggested order for what comes next
+## What comes next
 
-1. **Two-turn moves, recharging and rampages**, and the moves with a script
-   of their own (power that depends on the battle, item and ability
-   tampering).
-2. **Pivoting and forced switches**, with Emergency Exit, Eject Button and
-   Red Card.
-3. The forme-changing abilities, Illusion and Transform.
-4. **Building a `Battle` from an arbitrary mid-battle state**, which a bot
-   needs to search from a live game, and sampling hidden information into it.
-5. Python bindings and batched stepping for training.
-
-Each step can be driven by the same loop: widen the supported set in
-`oracle/lib.js`, regenerate, run `scripts/fuzz.sh`, and fix what diverges.
-
-## Provenance
-
-The tables in `src/tables.rs` and the behaviour of the simulator are derived
-from [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) (MIT
-licence). Showdown is the reference for correctness here, not the cartridge
-games; Smogon's own research into Champions mechanics is still in progress.
+1. **Building a `Battle` from an arbitrary mid-battle state**, which a bot
+   needs to search from a live game, and sampling hidden information (the
+   opponent's unrevealed moves, items, abilities and bench) into it.
+2. **Python bindings and batched stepping** for training.
+3. **Speed.** The per-Pokémon listener cache described above, then
+   profiling.
+4. The switch-off-one-callback mutation sweep over the 447 callbacks written
+   before that mode existed, and a batch for whatever it finds uncovered.
+5. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
+   moving the pin, `node oracle/gen_data.js` regenerates the tables, a
+   missing callback body panics with its name, and `scripts/fuzz.sh` finds
+   behaviour changes.

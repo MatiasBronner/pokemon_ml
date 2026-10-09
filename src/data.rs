@@ -198,6 +198,8 @@ pub struct MoveData {
     pub accuracy: u8,
     /// Maximum PP in a Champions battle.
     pub pp: u8,
+    /// The move's PP before any boost (what a copy made by Transform is capped against).
+    pub base_pp: u8,
     pub priority: i8,
     pub target: Target,
     pub crit_ratio: u8,
@@ -239,6 +241,32 @@ pub struct MoveData {
     pub stalling_move: bool,
     /// Removes Protect and its relatives from the target before hitting (Feint).
     pub breaks_protect: bool,
+    /// Damage that ignores the usual formula.
+    pub fixed_damage: FixedDamage,
+    pub selfdestruct: SelfDestruct,
+    /// Stat changes for the user once the whole move has gone through (Scale Shot).
+    pub self_boost: Option<Boosts>,
+    pub self_boost_order: u8,
+    /// Costs the user half its HP, hit or miss (Steel Beam).
+    pub mind_blown_recoil: bool,
+    /// Goes for the Pokémon it was aimed at, wherever that has moved and whoever calls for attention.
+    pub tracks_target: bool,
+    /// Dragon Darts: one hit for each of two adjacent targets, or both hits for the one it can reach.
+    pub smart_target: bool,
+    /// Uses another move in its place (Copycat, Sleep Talk); effects that follow a Pokémon's moves look past it.
+    pub calls_move: bool,
+    /// Hurts the user when it misses (High Jump Kick); Reckless counts it as a recoil move.
+    pub has_crash_damage: bool,
+    /// Sheer Force boosts the move as it stands, taking nothing away (Electro Shot).
+    pub sheer_force_boost: bool,
+    pub self_switch: SelfSwitch,
+    /// Drags the target out for a random teammate (Roar, Dragon Tail).
+    pub force_switch: bool,
+    /// Can be used while asleep.
+    pub sleep_usable: bool,
+    /// Each hit after the first checks accuracy again (Population Bomb).
+    pub multiaccuracy: bool,
+    pub ohko: Ohko,
     /// Struggle's recoil: a quarter of the user's max HP, not blockable.
     pub struggle_recoil: bool,
     /// Bit set of the events this move has a script callback of its own for
@@ -264,6 +292,9 @@ pub struct SpeciesData {
     pub ability0: u16,
     /// Weight in hectograms.
     pub weight_hg: u16,
+    /// Not a Pokémon that can be in a Champions battle at all: a forme of a
+    /// species the game does not have (Eiscue without its ice face).
+    pub illegal: bool,
 }
 
 // --------------------------------------------------------------------- events
@@ -490,6 +521,58 @@ pub struct ItemData {
     pub mega: &'static [(u16, u16)],
     /// Stat changes the holder gets when the item is used up.
     pub boosts: Option<Boosts>,
+    pub fling: Fling,
+}
+
+/// `item.fling`: what the item does when thrown with Fling.
+#[derive(Clone, Copy, Debug)]
+pub struct Fling {
+    /// Fling's base power with this item; 0 for an item that cannot be thrown.
+    pub power: u8,
+    /// A status the item gives whatever it hits (Light Ball, Poison Barb).
+    pub status: Status,
+    /// King's Rock: the target flinches.
+    pub flinch: bool,
+    /// The item does something of its own to the target (the herbs).
+    pub effect: bool,
+}
+
+/// `move.selfSwitch`: the user switches out after the move.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SelfSwitch {
+    No,
+    Yes,
+    /// Baton Pass: stat stages and most volatile conditions go to the replacement.
+    CopyVolatile,
+    /// Shed Tail: only the substitute does.
+    ShedTail,
+}
+
+/// `move.damage`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FixedDamage {
+    No,
+    /// The user's level (Night Shade, Seismic Toss).
+    Level,
+}
+
+/// `move.ohko`: a one-hit knockout.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Ohko {
+    No,
+    Yes,
+    /// Sheer Cold: Ice types are immune, and it is less accurate from anything else.
+    Ice,
+}
+
+/// `move.selfdestruct`: the user faints.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SelfDestruct {
+    No,
+    /// Before the move hits, whatever happens (Explosion).
+    Always,
+    /// Only if the move worked (Memento, Final Gambit).
+    IfHit,
 }
 
 /// A status, a volatile, or a condition on a side, a position or the field.

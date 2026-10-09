@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Records and replays the batches built around particular effects: combinations
+# that random teams almost never produce, each of which either found a bug or
+# is needed to catch an injected one (see scripts/mutation_test.py).
+#
+#   scripts/targeted.sh [dir]              record every batch into dir (default: a temp dir) and replay it
+#   ONLY=darts scripts/targeted.sh [dir]   only the batches whose name contains "darts"
+#   JOBS=4 scripts/targeted.sh [dir]       record that many batches at a time (default 2)
+#
+# Keep the directory to hand the batches to the mutation test:
+#   scripts/targeted.sh corpus && scripts/mutation_test.py corpus/*.jsonl
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -f oracle/pokemon-showdown/dist/sim/index.js ]; then
+  echo "Showdown is not built yet; run scripts/setup-oracle.sh first." >&2
+  exit 1
+fi
+OUT="${1:-}"
+if [ -z "$OUT" ]; then
+  OUT="$(mktemp -d)"
+  trap 'rm -rf "$OUT"' EXIT
+fi
+mkdir -p "$OUT"
+cargo build --quiet --release --bin difftest
+
+# name | battles | seed | gen_cases.js arguments
+batches() {
+  cat <<'EOF'
+substitute|500|6800|--moves substitute,bulletseed,rockblast,icywind,fakeout,nuzzle,gigadrain,doubleedge,hypervoice,dragoncheer,focusenergy --abilities parentalbond,sheerforce,skilllink,roughskin,static,infiltrator,intimidate,noability --items lifeorb,rockyhelmet,airballoon,occaberry,chilanberry,shellbell,kingsrock
+move-locks|500|6801|--moves gastroacid,encore,disable,taunt,imprison,torment,fakeout,helpinghand,followme,ragepowder --items mentalherb,quickclaw,choicescarf,sitrusberry --mega-rate 1 --check-legal
+trapping|500|6802|--moves perishsong,destinybond,leechseed,ingrain,meanlook,block,jawlock,spiritshackle,yawn,octolock,wrap,firespin,stockpile,spitup,swallow,charge --abilities liquidooze,magicguard,soundproof,shadowtag,insomnia,sweetveil,electromorphosis,noability --items bigroot,bindingband,shedshell,leftovers
+screens|300|6810|--moves auroraveil,reflect,lightscreen,brickbreak,psychicfangs,snowscape --abilities snowwarning,infiltrator,noability --items lightclay
+hazard-removal|300|6811|--moves rapidspin,mortalspin,spikes,stealthrock,toxicspikes,leechseed,wrap --abilities sheerforce,noability
+unaware|300|6812|--moves doubleteam,minimize,swordsdance,irondefense,calmmind --abilities unaware,noability
+leek|300|6813|--species farfetchd --items leek --moves focusenergy,leafblade,nightslash
+stolen-mega-stone|300|6814|--species floetteeternal,florges --items floettite --moves trick,knockoff,thief,covet,switcheroo
+sparkling-aria|300|6815|--species primarina --moves sparklingaria,willowisp,scald,protect --abilities sheerforce,noability
+reckless|300|6816|--abilities reckless,noability --moves highjumpkick,doubleedge,bravebird,flareblitz,protect
+sheer-force-electro-shot|300|6817|--species archaludon --abilities sheerforce,noability --moves electroshot,meteorbeam,raindance --items kingsrock
+vetoed-moves|300|6818|--moves throatchop,hypervoice,roar,partingshot,perishsong,snarl --abilities magicbounce,soundproof,noability
+ally-moves|150|9801|--moves pollenpuff,shellsidearm,beatup,curse,metalburst,comeuppance,substitute,psychicnoise,trickortreat,soak,doubleedge,followme
+dragon-darts|150|9802|--moves dragondarts,protect,followme,ragepowder,substitute,detect,spikyshield,phantomforce,fly --species dragapult,clefable,sylveon,gardevoir,azumarill,skarmory,corviknight
+queue-order|150|9803|--moves afteryou,quash,round,instruct,copycat,sleeptalk,rest,sleeppowder,yawn,counter,mirrorcoat,hypervoice
+called-moves|150|9804|--moves copycat,metalburst,fly,hyperbeam,outrage,explosion,rest,sleeptalk,substitute,protect,followme,dragondarts,bulletseed,snore,round --abilities pressure,moldbreaker,protean,prankster,magicbounce,noability --items metronome,choicescarf,quickclaw,chestoberry,leppaberry
+future-sight|150|9805|--moves futuresight,protect,substitute,fly,wish,copycat,metalburst,psychic,explosion
+fling|150|9806|--moves fling,protect,substitute,taunt,encore,swordsdance,knockoff,recycle --items kingsrock,lightball,poisonbarb,mentalherb,whiteherb,sitrusberry,lumberry,leppaberry,occaberry,leek,normalgem,lifeorb,rockyhelmet
+ally-switch|150|9807|--moves allyswitch,futuresight,wish,leechseed,followme,fakeout,earthquake,helpinghand,pollenpuff,healpulse,instruct,afteryou,dragondarts,snipeshot,curse,substitute
+pivoting|150|9808|--moves uturn,voltswitch,flipturn,partingshot,chillyreception,protect,substitute,stealthrock,spikes,fakeout
+forced-switches|150|9809|--moves roar,whirlwind,dragontail,circlethrow,protect,substitute,stealthrock,spikes,toxicspikes,stickyweb,ingrain,uturn --abilities suctioncups,guarddog,magicbounce,moldbreaker,intimidate,regenerator,naturalcure,noability,soundproof
+switch-items|150|9810|--moves uturn,voltswitch,dragontail,doubleedge,highjumpkick,fakeout,earthquake,rockslide,bulletseed,stealthrock,dragondarts,knockoff --abilities emergencyexit,roughskin,pickpocket,magician,sheerforce,noability --items ejectbutton,redcard,lifeorb,rockyhelmet,shellbell,sitrusberry
+baton-pass|150|9811|--moves batonpass,shedtail,swordsdance,substitute,leechseed,confuseray,perishsong,powertrick,gastroacid,ingrain,aquaring,focusenergy,meanlook,curse,stockpile,magnetrise
+healing-wish|150|9812|--moves healingwish,allyswitch,uturn,willowisp,toxic,thunderwave,protect,wish,batonpass,spikes
+revival-blessing|150|9813|--moves revivalblessing,explosion,healingwish,uturn,doubleedge,closecombat,protect,stealthrock --species pawmot
+formes|150|9814|--species aegislash,morpeko,mimikyu,palafin,greninja --abilities stancechange,hungerswitch,disguise,zerotohero,battlebond,iceface,gulpmissile,shieldsdown,terashell,moldbreaker,noability --moves kingsshield,aurawheel,uturn,flipturn,shadowsneak,surf,snowscape,confuseray,substitute,swordsdance,roar
+illusion-transform|150|9815|--species zoroark,zoroarkhisui,ditto --abilities illusion,imposter,intimidate,noability,psychicsurge,drizzle,regenerator --moves transform,substitute,uturn,roost,dragoncheer,focusenergy,swordsdance,powertrick,trickortreat,soak,gastroacid,worryseed,skillswap
+two-turn-moves|150|9816|--moves outrage,thrash,petaldance,hyperbeam,gigaimpact,fly,dig,dive,bounce,solarbeam,meteorbeam,electroshot,uproar,focuspunch,beakblast,counter,mirrorcoat --abilities sheerforce,forewarn,anticipation,noability
+item-tampering|150|9817|--moves knockoff,thief,covet,trick,switcheroo,bugbite,pluck,recycle,poltergeist,belch,stuffcheeks,teatime,skillswap,entrainment,roleplay,simplebeam,worryseed --abilities cudchew,magician,pickpocket,stickyhold,unburden,noability --items sitrusberry,lumberry,leppaberry,kingsrock,mentalherb
+drag-out-recheck|300|9901|--moves dragontail,circlethrow,protect --abilities wanderingspirit,suctioncups,noability
+grav-apple|200|9902|--moves gravapple,gravity,protect --species flapple,clefable,gardevoir
+pollen-puff-heal-block|300|9903|--moves pollenpuff,psychicnoise
+darts-into-immunity|400|9904|--moves dragondarts,protect,detect --species dragapult,clefable,sylveon,gardevoir,azumarill,garchomp,tyranitar --abilities berserk,emergencyexit,noability
+sleep-talk-charging|300|9905|--moves rest,sleeptalk,solarbeam,fly,dig,bounce,protect
+baton-pass-copy|300|9906|--moves gastroacid,batonpass,powertrick,protect --species medicham,arbok,snorlax,serperior,clefable,ninetales,vaporeon,jolteon,aegislash,mimikyu --abilities stancechange,disguise,intimidate,noability
+clangorous-soul-maxed|500|9907|--species kommoo,clefable,gardevoir,audino --moves clangoroussoul,rest,healpulse,protect --abilities simple,noability --items leftovers,sitrusberry,chestoberry
+disguise-resist-berry|300|9908|--species mimikyu,gengar,aegislash,scizor --abilities disguise,noability --moves shadowball,shadowsneak,ironhead,flashcannon,shadowclaw,bulletpunch,protect --items kasibberry,babiriberry
+transform-into-formes|300|9909|--species ditto,mimikyu,morpeko,aegislash,palafin --abilities imposter,disguise,hungerswitch,stancechange,zerotohero --moves transform,shadowsneak,aurawheel,kingsshield,protect,flipturn,playrough,shadowclaw,ironhead
+darts-into-protect|800|9910|--species dragapult,snorlax,slowbro,hippowdon --abilities berserk,emergencyexit --moves dragondarts,protect
+sleep-talk-meteor-beam|300|9912|--moves-per 4 --species archaludon,garganacl,glimmora,aggron,tyrantrum --moves rest,sleeptalk,electroshot,meteorbeam
+electrified-struggle|600|9914|--moves-per 4 --species heliolisk,garchomp,hippowdon,excadrill --moves electrify,taunt,swordsdance,calmmind,nastyplot,bulkup,irondefense,amnesia
+EOF
+}
+
+record() {
+  IFS='|' read -r name n seed args <<<"$1"
+  # shellcheck disable=SC2086
+  node oracle/gen_cases.js --n "$n" --seed "$seed" $args --out "$2/$name.jsonl" >"$2/$name.gen.log" 2>&1 ||
+    { echo "$name: recording failed: $(grep -m 1 '^Error' "$2/$name.gen.log" || tail -n 1 "$2/$name.gen.log")" >&2; exit 255; }
+}
+export -f record
+
+batches | grep -- "${ONLY:-}" | xargs -d '\n' -P "${JOBS:-2}" -I{} bash -c 'record "$1" "$2"' _ {} "$OUT"
+
+status=0
+while IFS='|' read -r name _; do
+  line="$(./target/release/difftest "$OUT/$name.jsonl" --quiet | tail -n 1)" || status=1
+  printf '%-26s %s\n' "$name" "$line"
+done < <(batches | grep -- "${ONLY:-}")
+exit $status

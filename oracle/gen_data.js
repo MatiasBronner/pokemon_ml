@@ -45,6 +45,13 @@ const fieldLit = (v, cls, enumName) => (v ? condLit(v, cls, enumName).slice(5, -
 const statusLit = s => (s ? 'Status::' + s[0].toUpperCase() + s.slice(1) : 'Status::None');
 const frac = f => (f ? `(${f[0]}, ${f[1]})` : '(0, 0)');
 const statIdx = s => (s ? L.STAT_IDS.indexOf(s) : 0);
+const selfSwitchLit = v => {
+	if (!v) return 'No';
+	if (v === true) return 'Yes';
+	if (v === 'copyvolatile') return 'CopyVolatile';
+	if (v === 'shedtail') return 'ShedTail';
+	throw new Error('selfSwitch: ' + v);
+};
 const FLAGS = {
 	protect: 'F_PROTECT', powder: 'F_POWDER', defrost: 'F_DEFROST', contact: 'F_CONTACT', sound: 'F_SOUND', heal: 'F_HEAL',
 	punch: 'F_PUNCH', bite: 'F_BITE', bullet: 'F_BULLET', pulse: 'F_PULSE', slicing: 'F_SLICING', wind: 'F_WIND',
@@ -100,7 +107,7 @@ for (const s of species) {
 	const b = s.baseStats;
 	const gender = s.gender ? `Some(Gender::${s.gender})` : 'None';
 	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, base_species: ${rs(L.PS.toID(s.baseSpecies))}, types: [${t.join(', ')}], ` +
-		`base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender}, ability0: ${abilityIndex(s.abilities['0'])}, weight_hg: ${s.weighthg} },\n`;
+		`base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender}, ability0: ${abilityIndex(s.abilities['0'])}, weight_hg: ${s.weighthg}, illegal: ${s.tier === 'Illegal'} },\n`;
 }
 out += '];\n\n';
 
@@ -147,7 +154,7 @@ moves.forEach((m, index) => {
 	if (!target) throw new Error(`unknown target ${m.target} for ${m.id}`);
 	mvConsts += `    pub const ${m.id.toUpperCase()}: u16 = ${index};\n`;
 	moveRows += `    MoveData { id: ${rs(m.id)}, name: ${rs(m.name)}, typ: ${type}, category: Category::${m.category}, ` +
-		`base_power: ${m.basePower}, accuracy: ${m.accuracy === true ? 0 : m.accuracy}, pp: ${pp}, priority: ${m.priority}, ` +
+		`base_power: ${m.basePower}, accuracy: ${m.accuracy === true ? 0 : m.accuracy}, pp: ${pp}, base_pp: ${m.pp}, priority: ${m.priority}, ` +
 		`target: Target::${target}, crit_ratio: ${m.critRatio || 0}, will_crit: ${!!m.willCrit}, flags: ${flags}, ` +
 		`boosts: ${boostsLit(d.boosts, true)}, boost_order: ${boostOrder(d.boosts)}, status: ${statusLit(d.status)}, ` +
 		`volatile: ${volLit(d.volatileStatus)}, self_volatile: ${volLit(d.self && d.self.volatileStatus)}, ` +
@@ -160,6 +167,12 @@ moves.forEach((m, index) => {
 		`off_from_target: ${m.overrideOffensivePokemon === 'target'}, ignore_defensive: ${!!m.ignoreDefensive}, ` +
 		`ignore_evasion: ${!!m.ignoreEvasion}, thaws_target: ${!!m.thawsTarget}, ignore_immunity: ${m.ignoreImmunity === true}, ` +
 		`stalling_move: ${!!m.stallingMove}, struggle_recoil: ${!!m.struggleRecoil}, breaks_protect: ${!!m.breaksProtect}, ` +
+		`fixed_damage: ${d.damage === 'level' ? 'FixedDamage::Level' : 'FixedDamage::No'}, ` +
+		`selfdestruct: ${d.selfdestruct === 'always' ? 'SelfDestruct::Always' : d.selfdestruct === 'ifHit' ? 'SelfDestruct::IfHit' : 'SelfDestruct::No'}, ` +
+		`self_boost: ${boostsLit(d.selfBoost && d.selfBoost.boosts, true)}, self_boost_order: ${boostOrder(d.selfBoost && d.selfBoost.boosts)}, ` +
+		`mind_blown_recoil: ${!!d.mindBlownRecoil}, ` +
+		`tracks_target: ${!!m.tracksTarget}, smart_target: ${!!m.smartTarget}, calls_move: ${!!m.callsMove}, has_crash_damage: ${!!m.hasCrashDamage}, sheer_force_boost: ${!!m.hasSheerForceBoost}, self_switch: SelfSwitch::${selfSwitchLit(m.selfSwitch)}, force_switch: ${!!m.forceSwitch}, sleep_usable: ${!!m.sleepUsable}, multiaccuracy: ${!!d.multiaccuracy}, ` +
+		`ohko: ${d.ohko === true ? 'Ohko::Yes' : d.ohko === 'Ice' ? 'Ohko::Ice' : d.ohko ? (() => { throw new Error('ohko ' + d.ohko); })() : 'Ohko::No'}, ` +
 		`events: ${supported ? evMask(L.moveCallbacks(m)) : '0'}, supported: ${supported} },\n`;
 });
 for (const id of L.HAND_MOVES) if (!moves.some(m => m.id === id)) throw new Error('hand-written move not in table: ' + id);
@@ -223,7 +236,17 @@ for (const id of L.SUPPORTED_ABILITIES) if (!abilities.some(a => a.id === id)) t
 
 // Items
 const items = L.tableItems();
-let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[], boosts: None },\n`;
+const NO_FLING = 'Fling { power: 0, status: Status::None, flinch: false, effect: false }';
+/** What an item does when thrown with Fling. Berries are eaten by the target instead. */
+function flingLit(item) {
+	const f = item.fling;
+	if (!f) return NO_FLING;
+	for (const k in f) if (!['basePower', 'status', 'volatileStatus', 'effect'].includes(k)) throw new Error(`item ${item.id}: fling.${k}`);
+	if (f.volatileStatus && f.volatileStatus !== 'flinch') throw new Error(`item ${item.id}: fling volatile ${f.volatileStatus}`);
+	if (f.effect && !['mentalherb', 'whiteherb'].includes(item.id)) throw new Error(`item ${item.id}: fling effect has no body`);
+	return `Fling { power: ${f.basePower}, status: ${statusLit(f.status)}, flinch: ${!!f.volatileStatus}, effect: ${!!f.effect} }`;
+}
+let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[], boosts: None, fling: ${NO_FLING} },\n`;
 let megaDefs = '';
 let itConsts = '    pub const NONE: u16 = 0;\n';
 items.forEach((item, i) => {
@@ -249,7 +272,7 @@ items.forEach((item, i) => {
 		mega = `&MEGA_${item.id.toUpperCase()}`;
 	}
 	itConsts += `    pub const ${item.id.toUpperCase()}: u16 = ${i + 1};\n`;
-	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre}, mega: ${mega}, boosts: ${boostsLit(item.boosts)} },\n`;
+	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre}, mega: ${mega}, boosts: ${boostsLit(item.boosts)}, fling: ${flingLit(item)} },\n`;
 });
 for (const id of L.SUPPORTED_ITEMS) if (id && !items.some(a => a.id === id)) throw new Error('supported item not in table: ' + id);
 
@@ -317,7 +340,9 @@ for (const s of L.legalSpecies()) {
 	// Mega Stones this species can use, where the Mega's ability is modelled.
 	const megas = items.filter(i => i.megaStone && i.megaStone[s.name] &&
 		L.SUPPORTED_ABILITIES.has(L.PS.toID(dex.species.get(i.megaStone[s.name]).abilities['0']))).map(i => i.id);
-	if (ok.length >= 4) pool.species.push({ id: s.id, moves: ok, abilities: own, gender: s.gender || '', megas });
+	// (Ditto learns one move, and is brought with just that.)
+	const few = all.length < 4 && ok.length === all.length && ok.length > 0;
+	if (ok.length >= 4 || few) pool.species.push({ id: s.id, moves: ok, abilities: own, gender: s.gender || '', megas });
 }
 pool.megastones = items.filter(i => i.megaStone).map(i => i.id);
 fs.writeFileSync(path.join(__dirname, 'pool.json'), JSON.stringify(pool));

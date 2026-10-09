@@ -1,6 +1,112 @@
 {
+ "abilities": {
+  "legal": 225,
+  "modelled": 181,
+  "not_modelled": {
+   "battlebond": "forme changes",
+   "chlorophyll": "weather",
+   "cloudnine": "weather",
+   "cursedbody": "the Disable volatile",
+   "cutecharm": "the Attract volatile",
+   "disguise": "forme changes",
+   "drizzle": "weather",
+   "drought": "weather",
+   "dryskin": "weather",
+   "electricsurge": "terrain",
+   "electromorphosis": "the Charge volatile",
+   "emergencyexit": "switching out mid-turn",
+   "forecast": "weather",
+   "grasspelt": "terrain",
+   "grassysurge": "terrain",
+   "gulpmissile": "forme changes",
+   "hungerswitch": "forme changes",
+   "hydration": "weather",
+   "icebody": "weather",
+   "iceface": "weather",
+   "illusion": "Illusion and Transform",
+   "imposter": "Illusion and Transform",
+   "leafguard": "weather",
+   "megasol": "weather",
+   "mimicry": "terrain",
+   "psychicsurge": "terrain",
+   "raindish": "weather",
+   "sandforce": "weather",
+   "sandrush": "weather",
+   "sandspit": "weather",
+   "sandstream": "weather",
+   "sandveil": "weather",
+   "seedsower": "terrain",
+   "shieldsdown": "forme changes",
+   "slushrush": "weather",
+   "snowcloak": "weather",
+   "snowwarning": "weather",
+   "solarpower": "weather",
+   "stancechange": "forme changes",
+   "surgesurfer": "terrain",
+   "swiftswim": "weather",
+   "terashell": "forme changes",
+   "toxicdebris": "entry hazards",
+   "zerotohero": "forme changes"
+  },
+  "dormant_parts": {
+   "anticipation": "only writes to the battle log",
+   "aromaveil": "blocks Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled",
+   "damp": "blocks self-destructing moves, which are not modelled (its Aftermath block is)",
+   "embodyaspectcornerstone": "needs Terastallization, which Champions does not have",
+   "embodyaspecthearthflame": "needs Terastallization, which Champions does not have",
+   "embodyaspectteal": "needs Terastallization, which Champions does not have",
+   "embodyaspectwellspring": "needs Terastallization, which Champions does not have",
+   "flowerveil": "its Yawn block (Yawn is not modelled)",
+   "forewarn": "only writes to the battle log (its random pick is still drawn)",
+   "frisk": "only writes to the battle log",
+   "gluttony": "only matters for pinch berries, which are not in Champions",
+   "guarddog": "its block on being forced out (forced switches are not modelled)",
+   "harvest": "always succeeding in sun (weather is not modelled)",
+   "heavymetal": "weight is only read by moves that are not modelled",
+   "infiltrator": "bypasses Substitute and screens, which are not modelled",
+   "insomnia": "its Yawn block (Yawn is not modelled)",
+   "lightmetal": "weight is only read by moves that are not modelled",
+   "magicbounce": "bouncing moves that target a side (none modelled)",
+   "oblivious": "its Attract and Taunt immunity (neither is modelled)",
+   "overcoat": "its weather-damage immunity (weather is not modelled)",
+   "parentalbond": "its Secret Power special case (not in Champions)",
+   "purifyingsalt": "its Yawn block (Yawn is not modelled)",
+   "sapsipper": "absorbing Grass moves that target a side (none modelled)",
+   "screencleaner": "removes screens, which are not modelled",
+   "soundproof": "blocking sound moves that target a side (none modelled)",
+   "stickyhold": "its Knock Off block (Knock Off is not modelled)",
+   "sturdy": "its one-hit-KO immunity (those moves are not modelled)",
+   "suctioncups": "blocks being forced out (forced switches are not modelled)",
+   "sweetveil": "its Yawn block (Yawn is not modelled)",
+   "vitalspirit": "its Yawn block (Yawn is not modelled)"
+  }
+ },
+ "items": {
+  "held_items": 85,
+  "modelled": 79,
+  "not_modelled": {
+   "ejectbutton": "switching out mid-turn",
+   "electricseed": "terrain",
+   "grassyseed": "terrain",
+   "mistyseed": "terrain",
+   "psychicseed": "terrain",
+   "redcard": "forced switching"
+  },
+  "mega_stones": 81,
+  "dormant_parts": {
+   "bigroot": "boosting Leech Seed, Ingrain, Aqua Ring and Strength Sap (only draining moves are modelled)",
+   "bindingband": "boosts binding moves, which are not modelled",
+   "damprock": "extends rain (weather is not modelled)",
+   "heatrock": "extends sun (weather is not modelled)",
+   "icyrock": "extends snow (weather is not modelled)",
+   "lightclay": "extends screens, which are not modelled",
+   "mentalherb": "cures Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled",
+   "smoothrock": "extends sandstorm (weather is not modelled)",
+   "terrainextender": "extends terrain, which is not modelled"
+  }
+ },
  "learnable_moves": 510,
- "supported_learnable_moves": 231,
+ "supported_learnable_moves": 238,
  "supported": [
   "accelerock",
   "acidarmor",
@@ -43,6 +149,7 @@
   "closecombat",
   "coaching",
   "coil",
+  "confuseray",
   "cosmicpower",
   "cottonguard",
   "cottonspore",
@@ -71,6 +178,7 @@
   "drillrun",
   "drumbeating",
   "dualwingbeat",
+  "dynamicpunch",
   "earthpower",
   "earthquake",
   "eerieimpulse",
@@ -89,6 +197,7 @@
   "flamethrower",
   "flareblitz",
   "flashcannon",
+  "flatter",
   "flowertrick",
   "focusblast",
   "foulplay",
@@ -206,10 +315,13 @@
   "stunspore",
   "superpower",
   "surf",
+  "swagger",
+  "sweetkiss",
   "sweetscent",
   "swordsdance",
   "tailslap",
   "tearfullook",
+  "teeterdance",
   "thunderbolt",
   "thunderfang",
   "thunderpunch",
@@ -225,6 +337,7 @@
   "vacuumwave",
   "volttackle",
   "waterfall",
+  "waterpulse",
   "wavecrash",
   "wildcharge",
   "willowisp",
@@ -279,8 +392,7 @@
   ],
   "axekick": [
    "key:hasCrashDamage",
-   "fn:onMoveFail",
-   "sec.volatile=confusion"
+   "fn:onMoveFail"
   ],
   "banefulbunker": [
    "key:stallingMove",
@@ -379,9 +491,6 @@
    "fn:onModifyTarget",
    "target:scripted"
   ],
-  "confuseray": [
-   "volatile:confusion"
-  ],
   "copycat": [
    "fn:onHit",
    "key:callsMove"
@@ -448,9 +557,6 @@
   ],
   "dragontail": [
    "key:forceSwitch"
-  ],
-  "dynamicpunch": [
-   "sec.volatile=confusion"
   ],
   "eeriespell": [
    "sec.onHit"
@@ -538,9 +644,6 @@
   ],
   "flail": [
    "fn:basePowerCallback"
-  ],
-  "flatter": [
-   "volatile:confusion"
   ],
   "fling": [
    "fn:onPrepareHit",
@@ -681,8 +784,7 @@
    "key:ohko"
   ],
   "hurricane": [
-   "fn:onModifyMove",
-   "sec.volatile=confusion"
+   "fn:onModifyMove"
   ],
   "hydrocannon": [
    "flag:recharge",
@@ -1173,15 +1275,9 @@
   "superfang": [
    "fn:damageCallback"
   ],
-  "swagger": [
-   "volatile:confusion"
-  ],
   "swallow": [
    "fn:onTry",
    "fn:onHit"
-  ],
-  "sweetkiss": [
-   "volatile:confusion"
   ],
   "switcheroo": [
    "fn:onTryImmunity",
@@ -1206,9 +1302,6 @@
   "teatime": [
    "fn:onHitField",
    "target:all"
-  ],
-  "teeterdance": [
-   "volatile:confusion"
   ],
   "temperflare": [
    "fn:basePowerCallback"
@@ -1287,9 +1380,6 @@
   "voltswitch": [
    "selfSwitch"
   ],
-  "waterpulse": [
-   "sec.volatile=confusion"
-  ],
   "watershuriken": [
    "fn:basePowerCallback"
   ],
@@ -1362,14 +1452,12 @@
   "key:selfdestruct": 6,
   "target:randomNormal": 5,
   "weather": 5,
-  "volatile:confusion": 5,
   "key:pseudoWeather": 5,
   "key:stallingMove": 4,
   "key:terrain": 4,
   "key:forceSwitch": 4,
   "fn:onModifyType": 4,
   "target:scripted": 4,
-  "sec.volatile=confusion": 4,
   "fn:onHitField": 4,
   "self.onHit": 4,
   "target:foeSide": 4,

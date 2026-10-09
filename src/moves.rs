@@ -17,47 +17,88 @@ pub(crate) struct HitEff {
     boost_order: u8,
     status: Status,
     volatile: Option<VolKind>,
+    side_condition: Option<SideCond>,
+    slot_condition: Option<SlotCond>,
+    pseudo_weather: Option<Pseudo>,
+    weather: Weather,
+    terrain: Terrain,
     heal: (u8, u8),
+    /// The block's own `onHit` callback, as the event its body is filed under.
+    on_hit: Option<Ev>,
+    /// Index of the secondary this is, for `on_hit` bodies.
+    sec_index: u8,
+    /// The block has a `self` block (effects on the user).
+    has_self: bool,
     self_boosts: Option<Boosts>,
     self_chance: u8,
+    self_volatile: Option<VolKind>,
+    self_on_hit: bool,
 }
+
+const NO_HIT_EFF: HitEff = HitEff {
+    primary: false,
+    boosts: None,
+    boost_order: 0,
+    status: Status::None,
+    volatile: None,
+    side_condition: None,
+    slot_condition: None,
+    pseudo_weather: None,
+    weather: Weather::None,
+    terrain: Terrain::None,
+    heal: (0, 0),
+    on_hit: None,
+    sec_index: 0,
+    has_self: false,
+    self_boosts: None,
+    self_chance: 0,
+    self_volatile: None,
+    self_on_hit: false,
+};
 
 impl HitEff {
     fn of_move(am: &ActiveMove) -> HitEff {
         let d = am.d();
         HitEff {
             primary: true,
-            boosts: d.boosts,
+            boosts: am.boosts,
             boost_order: d.boost_order,
             status: d.status,
             volatile: d.volatile,
+            side_condition: d.side_condition,
+            slot_condition: d.slot_condition,
+            pseudo_weather: d.pseudo_weather,
+            weather: d.weather,
+            terrain: d.terrain,
             heal: d.heal,
+            on_hit: (d.events & Ev::Hit.bit() != 0).then_some(Ev::Hit),
+            has_self: am.self_boosts.is_some() || d.self_volatile.is_some() || d.self_on_hit,
             self_boosts: am.self_boosts,
             self_chance: am.self_chance,
+            self_volatile: d.self_volatile,
+            self_on_hit: d.self_on_hit,
+            ..NO_HIT_EFF
         }
     }
-    fn of_secondary(s: &Secondary) -> HitEff {
+    fn of_secondary(s: &Secondary, index: usize) -> HitEff {
         HitEff {
-            primary: false,
             boosts: s.boosts,
-            boost_order: 0,
             status: s.status,
             volatile: s.volatile,
-            heal: (0, 0),
+            on_hit: s.on_hit.then_some(Ev::SecondaryHit),
+            sec_index: index as u8,
+            has_self: s.self_boosts.is_some(),
             self_boosts: s.self_boosts,
-            self_chance: 0,
+            ..NO_HIT_EFF
         }
     }
-    fn of_self(b: Boosts) -> HitEff {
+    /// The `self` block of `of`: what happens to the user.
+    fn of_self(of: &HitEff) -> HitEff {
         HitEff {
-            primary: false,
-            boosts: Some(b),
-            boost_order: 0,
-            status: Status::None,
-            volatile: None,
-            heal: (0, 0),
-            self_boosts: None,
-            self_chance: 0,
+            boosts: of.self_boosts,
+            volatile: of.self_volatile,
+            on_hit: of.self_on_hit.then_some(Ev::SelfHit),
+            ..NO_HIT_EFF
         }
     }
 }
@@ -65,38 +106,7 @@ impl HitEff {
 impl Battle {
     /// Whether a move has a script callback of its own for `ev`.
     pub(crate) fn move_has_cb(&self, mi: u8, ev: Ev) -> bool {
-        match self.am[mi as usize].d().special {
-            Special::None => false,
-            Special::Protect => matches!(ev, Ev::PrepareHit | Ev::Hit),
-            Special::Struggle => ev == Ev::ModifyMove,
-        }
-    }
-
-    /// The script callbacks of moves the engine implements by hand.
-    pub(crate) fn move_cb(&mut self, mi: u8, ev: Ev) -> Res {
-        let target = self.event.target;
-        match (self.am[mi as usize].d().special, ev) {
-            // protect.onPrepareHit
-            (Special::Protect, Ev::PrepareHit) => {
-                if !self.will_act() {
-                    return FALSE;
-                }
-                self.run_event(Ev::StallMove, target, None, Eff::None, Res::Undef)
-            }
-            // protect.onHit
-            (Special::Protect, Ev::Hit) => {
-                if let Some(t) = target {
-                    self.add_volatile(t, VolKind::Stall, None, Eff::None);
-                }
-                Res::Undef
-            }
-            // struggle.onModifyMove
-            (Special::Struggle, Ev::ModifyMove) => {
-                self.am[mi as usize].typ = Type::Typeless;
-                Res::Undef
-            }
-            _ => Res::Undef,
-        }
+        self.am[mi as usize].d().events & ev.bit() != 0
     }
 
     /// `Pokemon#deductPP`: returns how much PP was actually removed.
@@ -157,7 +167,7 @@ impl Battle {
             self.mon_mut(pokemon).move_this_turn = will_try;
             return;
         }
-        if self.deduct_pp(pokemon, a.move_id, 1) == 0 && d.special != Special::Struggle {
+        if self.deduct_pp(pokemon, a.move_id, 1) == 0 && a.move_id != mv::STRUGGLE {
             self.clear_active_move(true);
             self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
@@ -216,11 +226,12 @@ impl Battle {
             target = self.get_random_target(pokemon, self.am[m].target);
         }
         self.run_event(Ev::ModifyType, Some(pokemon), target, me, Res::Undef);
-        self.run_event(Ev::ModifyMove, Some(pokemon), target, me, Res::Undef);
+        // A handler can veto the move here (Gravity grounding a flying move).
+        let modified = self.run_event(Ev::ModifyMove, Some(pokemon), target, me, Res::Undef);
         if base_target != self.am[m].target {
             target = self.get_random_target(pokemon, self.am[m].target);
         }
-        if self.mon(pokemon).fainted {
+        if !modified.truthy() || self.mon(pokemon).fainted {
             return FALSE;
         }
         let Some(chosen) = target else {
@@ -231,9 +242,20 @@ impl Battle {
             target = Some(targets[n - 1]);
         }
         if source_effect == Eff::None && self.listens(Ev::DeductPP) {
-            // Pressure
+            // Pressure. A move aimed at the foe's side spares them, unless it is
+            // one of the few that take the toll from every opponent.
+            let mut pressure = targets;
+            let mut np = n;
+            if self.am[m].target == Target::FoeSide {
+                np = 0;
+            }
+            if self.am[m].flags & F_MUSTPRESSURE != 0 {
+                let (foes, k) = self.allies_and_self(1 - pokemon.side as usize);
+                pressure[..k].copy_from_slice(&foes[..k]);
+                np = k;
+            }
             let mut extra = 0;
-            for &t in &targets[..n] {
+            for &t in &pressure[..np] {
                 let drop = self.run_event(Ev::DeductPP, Some(t), Some(pokemon), me, Res::Undef);
                 if drop != TRUE {
                     extra += drop.num();
@@ -253,29 +275,103 @@ impl Battle {
             return try_move;
         }
 
-        if n == 0 {
-            return FALSE;
+        let result;
+        if matches!(self.am[m].target, Target::All | Target::FoeSide | Target::AllySide | Target::AllyTeam) {
+            // A move aimed at a side or at the field.
+            let damage = self.try_move_hit(&targets[..n], pokemon, mi);
+            if damage == Res::NotFail {
+                self.mon_mut(pokemon).move_this_turn = Res::Null;
+            }
+            result = damage.hit() || damage == Res::Undef;
+        } else {
+            if n == 0 {
+                return FALSE;
+            }
+            result = self.try_spread_move_hit(&targets[..n], pokemon, mi);
         }
-        let result = self.try_spread_move_hit(&targets[..n], pokemon, mi);
         if self.mon(pokemon).hp == 0 {
             self.faint(pokemon, Some(pokemon), me);
         }
         if !result {
+            self.single_event(Ev::MoveFail, me, None, target, Some(pokemon), me, Res::Undef);
             return FALSE;
         }
         if !self.suppressing_secondaries() {
+            self.single_event(Ev::AfterMoveSecondarySelf, me, None, Some(pokemon), target, me, Res::Undef);
             self.run_event(Ev::AfterMoveSecondarySelf, Some(pokemon), target, me, Res::Undef);
         }
         TRUE
     }
 
+    /// `BattleActions#tryMoveHit`: the path of moves that target a side or the field.
+    fn try_move_hit(&mut self, targets: &[MonRef], pokemon: MonRef, mi: u8) -> Res {
+        let me = Eff::Move(mi);
+        // Showdown reads `targets[0]` even when the list is empty; every caller has one.
+        let Some(&target) = targets.first() else {
+            return FALSE;
+        };
+        self.set_active_move(Some(mi), Some(pokemon), Some(target));
+        let mut hit_result = self.single_event(Ev::Try, me, None, Some(pokemon), Some(target), me, Res::Undef);
+        if hit_result.truthy() {
+            hit_result = self.single_event(Ev::PrepareHit, me, None, Some(target), Some(pokemon), me, Res::Undef);
+        }
+        if hit_result.truthy() {
+            hit_result = self.run_event(Ev::PrepareHit, Some(pokemon), Some(target), me, Res::Undef);
+        }
+        if !hit_result.truthy() {
+            return FALSE;
+        }
+        let ev = if self.am[mi as usize].target == Target::All { Ev::TryHitField } else { Ev::TryHitSide };
+        if !self.run_event(ev, Some(target), Some(pokemon), me, Res::Undef).truthy() {
+            return FALSE;
+        }
+        let eff = HitEff::of_move(&self.am[mi as usize]);
+        self.move_hit(target, pokemon, mi, eff, false, false)
+    }
+
+    /// `BattleActions#moveHit`: `spreadMoveHit` on one target. "Nothing to
+    /// report" (`true`) comes back as `Res::Undef`.
+    fn move_hit(
+        &mut self,
+        target: MonRef,
+        user: MonRef,
+        mi: u8,
+        eff: HitEff,
+        is_secondary: bool,
+        is_self: bool,
+    ) -> Res {
+        let mut one: Targets = [Tgt::Mon(target), Tgt::Gone, Tgt::Gone];
+        let r = self.spread_move_hit(&mut one, 1, user, mi, eff, is_secondary, is_self)[0];
+        if r == TRUE { Res::Undef } else { r }
+    }
+
     /// `Pokemon#getMoveTargets`.
-    fn get_move_targets(&mut self, user: MonRef, mi: u8, target: MonRef) -> ([MonRef; MAX_TARGETS], usize) {
-        let mut out = [user; MAX_TARGETS];
+    fn get_move_targets(&mut self, user: MonRef, mi: u8, target: MonRef) -> ([MonRef; 4], usize) {
+        let mut out = [user; 4];
         let mut n = 0;
         let own = user.side as usize;
         let move_target = self.am[mi as usize].target;
         match move_target {
+            Target::All | Target::FoeSide | Target::AllySide | Target::AllyTeam => {
+                // Everyone on the sides the move covers; for the foe's side that
+                // includes Pokémon that have fainted this turn.
+                if move_target != Target::FoeSide {
+                    let (allies, k) = self.allies_and_self(own);
+                    for &a in &allies[..k] {
+                        out[n] = a;
+                        n += 1;
+                    }
+                }
+                if matches!(move_target, Target::All | Target::FoeSide) {
+                    for pos in 0..ACTIVE {
+                        let f = self.active(1 - own, pos);
+                        if self.in_play(f) {
+                            out[n] = f;
+                            n += 1;
+                        }
+                    }
+                }
+            }
             Target::AllAdjacent | Target::AllAdjacentFoes => {
                 if move_target == Target::AllAdjacent {
                     let (allies, k) = self.adjacent_allies(user);
@@ -348,8 +444,10 @@ impl Battle {
             self.am[m].spread_hit = true;
         }
 
-        // `Try` has no listeners among modelled moves.
-        let mut hit_result = self.single_event(Ev::PrepareHit, me, None, Some(targets[0]), Some(user), me, Res::Undef);
+        let mut hit_result = self.single_event(Ev::Try, me, None, Some(user), Some(targets[0]), me, Res::Undef);
+        if hit_result.truthy() {
+            hit_result = self.single_event(Ev::PrepareHit, me, None, Some(targets[0]), Some(user), me, Res::Undef);
+        }
         if hit_result.truthy() {
             hit_result = self.run_event(Ev::PrepareHit, Some(user), Some(targets[0]), me, Res::Undef);
         }
@@ -402,6 +500,8 @@ impl Battle {
             let powder = am.flags & F_POWDER != 0;
             let prankster = am.prankster_boosted;
             res[i] = if powder && t != user && !self.type_allows(t, 5) {
+                FALSE
+            } else if !self.single_event(Ev::TryImmunity, me, None, Some(t), Some(user), me, Res::Undef).truthy() {
                 FALSE
             } else if prankster
                 && self.has_ability(user, ab::PRANKSTER)
@@ -586,7 +686,7 @@ impl Battle {
     /// `BattleActions#applyRecoilDamage`.
     fn apply_recoil(&mut self, dealt: u32, mi: u8, user: MonRef) {
         let d = self.am[mi as usize].d();
-        if d.special == Special::Struggle {
+        if d.struggle_recoil {
             let r = round_div(self.mon(user).max_hp() as u32, 1, 4).max(1);
             self.direct_damage(r as i32, user, Some(user), Eff::StruggleRecoil);
         } else if d.recoil.0 > 0 {
@@ -609,9 +709,38 @@ impl Battle {
     ) -> Damage {
         let me = Eff::Move(mi);
         let mut damage: Damage = [TRUE; MAX_TARGETS];
+        let move_target = self.am[mi as usize].target;
+        let on_field = move_target == Target::All;
+        let on_side = matches!(move_target, Target::FoeSide | Target::AllySide | Target::AllyTeam);
+
+        // The move's own onTryHit (onTryHitField, onTryHitSide), for the move itself only.
+        if eff.primary {
+            let first = match targets[0] {
+                Tgt::Mon(t) => Some(t),
+                Tgt::Gone => None,
+            };
+            let ev = if on_field && !is_self {
+                Some(Ev::TryHitField)
+            } else if on_side && !is_self {
+                Some(Ev::TryHitSide)
+            } else if first.is_some() {
+                Some(Ev::TryHit)
+            } else {
+                None
+            };
+            if let Some(ev) = ev {
+                let hit_result = self.single_event(ev, me, None, first, Some(user), me, Res::Undef);
+                if !hit_result.truthy() {
+                    // "single-target only": Showdown reports one failure and stops.
+                    let mut out: Damage = [Res::Undef; MAX_TARGETS];
+                    out[0] = FALSE;
+                    return out;
+                }
+            }
+        }
 
         // 0. the TryPrimaryHit event (Substitute, gems)
-        if !is_secondary && !is_self && self.listens(Ev::TryPrimaryHit) {
+        if !is_secondary && !is_self && !on_field && !on_side && self.listens(Ev::TryPrimaryHit) {
             for i in 0..n {
                 if let Tgt::Mon(t) = targets[i] {
                     damage[i] = self.run_event(Ev::TryPrimaryHit, Some(t), Some(user), me, Res::Undef);
@@ -619,7 +748,7 @@ impl Battle {
             }
         }
         for i in 0..n {
-            if targets[i] != Tgt::Gone && is_secondary && eff.self_boosts.is_none() {
+            if targets[i] != Tgt::Gone && is_secondary && !eff.has_self {
                 damage[i] = TRUE;
             }
             if !damage[i].truthy() {
@@ -659,11 +788,9 @@ impl Battle {
 
         let active_target = self.active_target;
 
-        // 4. stat changes to the user
-        if let Some(b) = eff.self_boosts {
-            if !self.am[mi as usize].self_dropped {
-                self.self_drops(targets, n, user, mi, b, eff.self_chance, eff.primary, is_secondary);
-            }
+        // 4. effects on the user (stat changes, recharge and the like)
+        if eff.has_self && !self.am[mi as usize].self_dropped {
+            self.self_drops(targets, n, user, mi, &eff, is_secondary);
         }
 
         // 5. secondary effects
@@ -692,40 +819,36 @@ impl Battle {
             }
             if k > 0 {
                 self.run_event_multi(Ev::DamagingHit, &hit[..k], Some(user), me, &mut amounts[..k], true);
+                // The move's own onAfterHit(target, source, move). Under Champions
+                // it runs even if the user has fainted (Rapid Spin, Ceaseless Edge).
+                if eff.primary && self.move_has_cb(mi, Ev::AfterHit) {
+                    for &t in &hit[..k] {
+                        self.single_event(Ev::AfterHit, me, None, Some(t), Some(user), me, Res::Undef);
+                    }
+                }
             }
         }
         damage
     }
 
     /// `BattleActions#selfDrops`.
-    #[allow(clippy::too_many_arguments)]
-    fn self_drops(
-        &mut self,
-        targets: &Targets,
-        n: usize,
-        user: MonRef,
-        mi: u8,
-        b: Boosts,
-        chance: u8,
-        primary: bool,
-        is_secondary: bool,
-    ) {
+    fn self_drops(&mut self, targets: &Targets, n: usize, user: MonRef, mi: u8, eff: &HitEff, is_secondary: bool) {
         for i in 0..n {
             if targets[i] == Tgt::Gone || self.am[mi as usize].self_dropped {
                 continue;
             }
             let mut apply = true;
-            if !is_secondary {
+            if !is_secondary && eff.self_boosts.is_some() {
                 // Showdown rolls here even when there is no chance to check.
                 let roll = self.rand(100, "self stat change");
-                apply = !primary || chance == 0 || roll < chance as u32;
+                apply = eff.self_chance == 0 || roll < eff.self_chance as u32;
                 if self.am[mi as usize].multihit == (0, 0) {
                     self.am[mi as usize].self_dropped = true;
                 }
             }
             if apply {
                 let mut one: Targets = [Tgt::Mon(user), Tgt::Gone, Tgt::Gone];
-                self.spread_move_hit(&mut one, 1, user, mi, HitEff::of_self(b), is_secondary, true);
+                self.spread_move_hit(&mut one, 1, user, mi, HitEff::of_self(eff), is_secondary, true);
             }
         }
     }
@@ -752,7 +875,7 @@ impl Battle {
                 let roll = self.rand(100, "secondary effect");
                 if sec.chance == 0 || roll < sec.chance as u32 {
                     let mut one: Targets = [Tgt::Mon(t), Tgt::Gone, Tgt::Gone];
-                    self.spread_move_hit(&mut one, 1, user, mi, HitEff::of_secondary(&sec), true, is_self);
+                    self.spread_move_hit(&mut one, 1, user, mi, HitEff::of_secondary(&sec, k), true, is_self);
                 }
             }
         }
@@ -809,12 +932,56 @@ impl Battle {
                 let r = self.add_volatile(t, v, Some(source), me);
                 did = did.combine(r);
             }
-            if eff.primary && self.move_has_cb(mi, Ev::Hit) {
-                let r = self.single_event(Ev::Hit, me, None, Some(t), Some(source), me, Res::Undef);
+            if let Some(k) = eff.side_condition {
+                let r = self.add_side_condition(t.side as usize, k, Some(source), me);
                 did = did.combine(r);
             }
-            if !is_self && !is_secondary {
-                self.run_event(Ev::Hit, Some(t), Some(source), me, Res::Undef);
+            if let Some(k) = eff.slot_condition {
+                let pos = self.mon(t).position as usize;
+                let r = self.add_slot_condition(t.side as usize, pos, k, Some(source), me);
+                did = did.combine(r);
+            }
+            if eff.weather != Weather::None {
+                let r = self.set_weather(eff.weather, Some(source), me);
+                did = did.combine(r);
+            }
+            if eff.terrain != Terrain::None {
+                let r = self.set_terrain(eff.terrain, Some(source), me);
+                did = did.combine(Res::Bool(r));
+            }
+            if let Some(k) = eff.pseudo_weather {
+                let r = self.add_pseudo_weather(k, Some(source), me);
+                did = did.combine(Res::Bool(r));
+            }
+            // The Hit events. A move aimed at the field or at a side has its own.
+            let move_target = self.am[mi as usize].target;
+            if move_target == Target::All && !is_self {
+                if eff.primary && self.move_has_cb(mi, Ev::HitField) {
+                    let r = self.single_event(Ev::HitField, me, None, Some(t), Some(source), me, Res::Undef);
+                    did = did.combine(r);
+                }
+            } else if matches!(move_target, Target::FoeSide | Target::AllySide) && !is_self {
+                if eff.primary && self.move_has_cb(mi, Ev::HitSide) {
+                    let mut e = Event::new(Ev::HitSide, None, Some(source), me);
+                    e.target_side = Some(t.side);
+                    let r = self.single_event_ex(Ev::HitSide, Ev::HitSide, Pre::On, me, None, e, Res::Undef, false);
+                    did = did.combine(r);
+                }
+            } else {
+                if let Some(body) = eff.on_hit {
+                    // The block's own onHit: the move's, a secondary's or a self block's.
+                    let e = Event::new(Ev::Hit, Some(t), Some(source), me);
+                    let relay = if body == Ev::SecondaryHit { Res::Num(eff.sec_index as i32) } else { Res::Undef };
+                    let mut r = self.single_event_ex(Ev::Hit, body, Pre::On, me, None, e, relay, true);
+                    if body == Ev::SecondaryHit && r == relay {
+                        // Nothing returned: the relay variable is not a result.
+                        r = TRUE;
+                    }
+                    did = did.combine(r);
+                }
+                if !is_self && !is_secondary {
+                    self.run_event(Ev::Hit, Some(t), Some(source), me, Res::Undef);
+                }
             }
             if did == Res::Undef {
                 did = TRUE;
@@ -834,7 +1001,27 @@ impl Battle {
         if !self.run_immunity(target, mi) {
             return FALSE;
         }
-        let base_power = self.am[m].base_power as i32;
+        let mut base_power = self.am[m].base_power as i32;
+        if self.move_has_cb(mi, Ev::BasePowerCallback) {
+            // basePowerCallback(source, target, move)
+            let e = Event::new(Ev::BasePowerCallback, Some(user), Some(target), me);
+            let r = self.single_event_ex(
+                Ev::BasePowerCallback,
+                Ev::BasePowerCallback,
+                Pre::On,
+                me,
+                None,
+                e,
+                Res::Undef,
+                true,
+            );
+            match r {
+                Res::Num(bp) => base_power = bp,
+                // `false` or `null`: the move fails here.
+                Res::Bool(false) | Res::Null => return r,
+                _ => {}
+            }
+        }
         if base_power == 0 {
             return Res::Undef;
         }
@@ -863,8 +1050,8 @@ impl Battle {
 
         let d = self.am[m].d();
         let physical = self.am[m].category == Category::Physical;
-        let atk_stat = if d.off_stat != 0 {
-            d.off_stat as usize
+        let atk_stat = if self.am[m].off_stat != 0 {
+            self.am[m].off_stat as usize
         } else if physical {
             1
         } else {
@@ -913,7 +1100,10 @@ impl Battle {
         } else if self.am[m].parental_bond && self.am[m].hit > 1 {
             dmg = modify(dmg, 1024);
         }
-        // WeatherModifyDamage: no weather yet.
+        if self.listens(Ev::WeatherModifyDamage) {
+            dmg = self.priority_event(Ev::WeatherModifyDamage, Some(user), Some(target), me, Res::Num(dmg as i32)).num()
+                as u32;
+        }
         let crit = self.am[m].hit_data[slot].crit;
         if crit {
             dmg = dmg * 3 / 2;

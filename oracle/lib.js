@@ -24,22 +24,63 @@ const BASE_KEYS = new Set([
 	'pressureTarget',
 ]);
 // Extra declarative properties the Rust engine implements.
-const EXTRA_OK = new Set(['boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTarget', 'willCrit', 'ignoreEvasion', 'multihit']);
+const EXTRA_OK = new Set([
+	'boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTarget', 'willCrit', 'ignoreEvasion', 'multihit',
+	'stallingMove', 'struggleRecoil', 'condition', 'sideCondition', 'slotCondition', 'pseudoWeather', 'terrain',
+]);
 const TARGETS_OK = new Set([
 	'normal', 'any', 'adjacentFoe', 'allAdjacentFoes', 'allAdjacent', 'self', 'adjacentAlly', 'adjacentAllyOrSelf', 'allies',
+	'randomNormal', 'all', 'allySide', 'foeSide',
 ]);
-const BAD_FLAGS = ['charge', 'recharge', 'futuremove', 'cantusetwice', 'mustpressure', 'pledgecombo'];
-// Moves with script callbacks that the Rust engine implements by hand.
-const SPECIAL = { protect: 'Protect', detect: 'Protect', struggle: 'Struggle' };
+const BAD_FLAGS = ['charge', 'recharge', 'futuremove', 'cantusetwice', 'pledgecombo'];
+// Moves whose script callbacks (onHit, onTry, basePowerCallback, ...) all have a
+// hand-written body in src/movecbs.rs. A move with callbacks that is not listed
+// here is rejected by `Battle::new`.
+const HAND_MOVES = new Set(('protect detect struggle auroraveil ' +
+	// weather, terrain, screens and hazards
+	'blizzard hurricane thunder weatherball growth moonlight morningsun synthesis expandingforce risingvoltage ' +
+	'grassyglide terrainpulse steelroller icespinner brickbreak psychicfangs defog rapidspin mortalspin tidyup ' +
+	'courtchange magneticflux haze').split(' '));
+// Callback-like move properties, mapped to the event the Rust engine files them under.
+const MOVE_CALLBACKS = {
+	basePowerCallback: 'BasePowerCallback', damageCallback: 'DamageCallback', beforeMoveCallback: 'BeforeMoveCallback',
+	beforeTurnCallback: 'BeforeTurnCallback', priorityChargeCallback: 'PriorityChargeCallback',
+};
 
-function hitEffectReasons(e, where, why) {
+/** The script callbacks of a move as event names (`onTry` -> `Try`). */
+function moveCallbacks(m) {
+	const out = [];
+	for (const k of Object.keys(m)) {
+		if (typeof m[k] !== 'function') continue;
+		if (MOVE_CALLBACKS[k]) out.push(MOVE_CALLBACKS[k]);
+		else if (k.startsWith('on')) out.push(k.slice(2));
+		else throw new Error(`${m.id}: unexpected function property ${k}`);
+	}
+	return out;
+}
+
+/** Which condition list a condition id belongs to, or null if it is not modelled. */
+function condClass(id) {
+	id = PS.toID(id);
+	if (VOLATILES.includes(id)) return 'volatile';
+	if (SIDE_CONDS.includes(id)) return 'side';
+	if (SLOT_CONDS.includes(id)) return 'slot';
+	if (PSEUDO_WEATHERS.includes(id)) return 'pseudo';
+	if (WEATHERS.includes(id)) return 'weather';
+	if (TERRAINS.includes(id)) return 'terrain';
+	return null;
+}
+
+function hitEffectReasons(e, where, why, moveId) {
 	for (const k in e) {
 		if (k === 'chance' || k === 'dustproof') continue;
 		if (k === 'boosts') continue;
 		if (k === 'status') {
 			if (!STATUSES.includes(e.status)) why.push(`${where}.status=${e.status}`);
 		} else if (k === 'volatileStatus') {
-			if (!MOVE_VOLATILES.includes(e.volatileStatus)) why.push(`${where}.volatile=${e.volatileStatus}`);
+			if (condClass(e.volatileStatus) !== 'volatile') why.push(`${where}.volatile=${e.volatileStatus}`);
+		} else if (k === 'onHit') {
+			if (!HAND_MOVES.has(moveId)) why.push(`${where}.onHit`);
 		} else if (k === 'self') {
 			for (const sk in e.self) if (sk !== 'boosts') why.push(`${where}.self.${sk}`);
 		} else {
@@ -50,16 +91,29 @@ function hitEffectReasons(e, where, why) {
 
 /** Returns [] if the Rust engine models every effect of this move, else the reasons it does not. */
 function unsupportedReasons(m) {
-	if (SPECIAL[m.id]) return [];
 	const why = [];
+	const hand = HAND_MOVES.has(m.id);
+	if (PENDING_MOVES.has(m.id)) why.push('pending');
 	for (const k in m) {
 		if (BASE_KEYS.has(k) || EXTRA_OK.has(k)) continue;
-		why.push((typeof m[k] === 'function' ? 'fn:' : 'key:') + k);
+		if (typeof m[k] === 'function') {
+			if (!hand) why.push('fn:' + k);
+			continue;
+		}
+		// Ordering metadata of a callback (onTryHitPriority and the like) goes with the callback.
+		if (/^on.*(Priority|Order|SubOrder)$/.test(k) && hand) continue;
+		why.push('key:' + k);
 	}
 	if (!TARGETS_OK.has(m.target)) why.push('target:' + m.target);
 	if (m.status && !STATUSES.includes(m.status)) why.push('status:' + m.status);
-	if (m.volatileStatus && !MOVE_VOLATILES.includes(m.volatileStatus)) why.push('volatile:' + m.volatileStatus);
-	if (m.weather) why.push('weather');
+	if (m.volatileStatus && condClass(m.volatileStatus) !== 'volatile') why.push('volatile:' + m.volatileStatus);
+	if (m.sideCondition && condClass(m.sideCondition) !== 'side') why.push('sideCondition:' + m.sideCondition);
+	if (m.slotCondition && condClass(m.slotCondition) !== 'slot') why.push('slotCondition:' + m.slotCondition);
+	if (m.pseudoWeather && condClass(m.pseudoWeather) !== 'pseudo') why.push('pseudoWeather:' + m.pseudoWeather);
+	if (m.weather && condClass(m.weather) !== 'weather') why.push('weather:' + m.weather);
+	if (m.terrain && condClass(m.terrain) !== 'terrain') why.push('terrain:' + m.terrain);
+	// A move's own `condition` block is the definition of the condition named after the move.
+	if (m.condition && !condClass(m.id)) why.push('condition');
 	if (m.selfSwitch) why.push('selfSwitch');
 	if (m.damage) why.push('damage:' + m.damage);
 	if (m.isZ || m.isMax) why.push('zmax');
@@ -69,8 +123,15 @@ function unsupportedReasons(m) {
 	if (m.ignoreNegativeOffensive || m.ignorePositiveDefensive || m.ignoreOffensive) why.push('ignoreBoosts');
 	if (m.overrideDefensivePokemon) why.push('overrideDefensivePokemon');
 	for (const f of BAD_FLAGS) if (m.flags[f]) why.push('flag:' + f);
-	if (m.self) for (const sk in m.self) if (sk !== 'boosts' && sk !== 'chance') why.push('self.' + sk);
-	if (m.secondaries) for (const s of m.secondaries) hitEffectReasons(s, 'sec', why);
+	if (m.self) {
+		for (const sk in m.self) {
+			if (sk === 'boosts' || sk === 'chance') continue;
+			if (sk === 'volatileStatus' && condClass(m.self.volatileStatus) === 'volatile') continue;
+			if (sk === 'onHit' && hand) continue;
+			why.push('self.' + sk);
+		}
+	}
+	if (m.secondaries) for (const s of m.secondaries) hitEffectReasons(s, 'sec', why, m.id);
 	return why;
 }
 
@@ -115,10 +176,22 @@ function mulberry32(a) {
 
 // ---- abilities, items and conditions ------------------------------------------
 
-// Volatile conditions the Rust engine implements, in `VolKind` order.
+// Conditions the Rust engine implements. Each list is one Rust enum, in this order;
+// every callback of a listed condition has a hand-written body in src/conditions.rs.
+// Volatile conditions sit on a Pokémon (`VolKind`).
 const VOLATILES = ['protect', 'stall', 'flinch', 'confusion', 'choicelock', 'gem', 'metronome', 'flashfire', 'unburden'];
-// Volatiles a move may inflict through `volatileStatus` (its own or a secondary's).
-const MOVE_VOLATILES = ['flinch', 'confusion'];
+// Side conditions sit on one side of the field (`SideCond`).
+const SIDE_CONDS = ['tailwind', 'reflect', 'lightscreen', 'auroraveil', 'safeguard', 'spikes', 'toxicspikes', 'stealthrock', 'stickyweb'];
+// Slot conditions sit on one active position of a side (`SlotCond`).
+const SLOT_CONDS = ['wish'];
+// Pseudo-weathers sit on the whole field (`Pseudo`).
+const PSEUDO_WEATHERS = ['trickroom', 'gravity', 'magicroom', 'wonderroom', 'fairylock'];
+// `Weather` and `Terrain`; index 0 of each Rust enum is "none".
+const WEATHERS = ['raindance', 'sunnyday', 'sandstorm', 'snowscape'];
+const TERRAINS = ['electricterrain', 'grassyterrain', 'mistyterrain', 'psychicterrain'];
+// Moves that pass every declarative check but are held back until the engine part
+// they need has been written and fuzzed.
+const PENDING_MOVES = new Set([]);
 
 // Abilities and items whose every callback has a hand-written body in the Rust
 // engine (src/abilities.rs, src/items.rs). Everything else is rejected by
@@ -127,15 +200,12 @@ const MOVE_VOLATILES = ['flinch', 'confusion'];
 // here with the mechanic they wait for.
 const DEFERRED_ABILITIES = {};
 const defer = (why, ids) => { for (const id of ids.split(' ')) DEFERRED_ABILITIES[id] = why; };
-defer('weather', 'chlorophyll cloudnine drizzle drought dryskin forecast hydration icebody iceface leafguard megasol ' +
-	'raindish sandforce sandrush sandspit sandstream sandveil slushrush snowcloak snowwarning solarpower swiftswim');
-defer('terrain', 'electricsurge grasspelt grassysurge mimicry psychicsurge seedsower surgesurfer');
+defer('forme changes', 'iceface');
 defer('forme changes', 'battlebond disguise gulpmissile hungerswitch shieldsdown stancechange zerotohero terashell');
 defer('Illusion and Transform', 'illusion imposter');
 defer('the Disable volatile', 'cursedbody');
 defer('the Attract volatile', 'cutecharm');
 defer('the Charge volatile', 'electromorphosis');
-defer('entry hazards', 'toxicdebris');
 defer('switching out mid-turn', 'emergencyexit wimpout');
 const SUPPORTED_ABILITIES = new Set(['noability']);
 // Modelled effects with a part that can never come up yet, because it reacts to
@@ -155,19 +225,13 @@ const DORMANT_PARTS = {
 		frisk: 'only writes to the battle log',
 		gluttony: 'only matters for pinch berries, which are not in Champions',
 		guarddog: 'its block on being forced out (forced switches are not modelled)',
-		harvest: 'always succeeding in sun (weather is not modelled)',
 		heavymetal: 'weight is only read by moves that are not modelled',
-		infiltrator: 'bypasses Substitute and screens, which are not modelled',
+		infiltrator: 'bypasses Substitute, which is not modelled (screens, Safeguard and Aurora Veil are)',
 		insomnia: 'its Yawn block (Yawn is not modelled)',
 		lightmetal: 'weight is only read by moves that are not modelled',
-		magicbounce: 'bouncing moves that target a side (none modelled)',
 		oblivious: 'its Attract and Taunt immunity (neither is modelled)',
-		overcoat: 'its weather-damage immunity (weather is not modelled)',
 		parentalbond: 'its Secret Power special case (not in Champions)',
 		purifyingsalt: 'its Yawn block (Yawn is not modelled)',
-		sapsipper: 'absorbing Grass moves that target a side (none modelled)',
-		screencleaner: 'removes screens, which are not modelled',
-		soundproof: 'blocking sound moves that target a side (none modelled)',
 		stickyhold: 'its Knock Off block (Knock Off is not modelled)',
 		sturdy: 'its one-hit-KO immunity (those moves are not modelled)',
 		suctioncups: 'blocks being forced out (forced switches are not modelled)',
@@ -177,13 +241,7 @@ const DORMANT_PARTS = {
 	items: {
 		bigroot: 'boosting Leech Seed, Ingrain, Aqua Ring and Strength Sap (only draining moves are modelled)',
 		bindingband: 'boosts binding moves, which are not modelled',
-		damprock: 'extends rain (weather is not modelled)',
-		heatrock: 'extends sun (weather is not modelled)',
-		icyrock: 'extends snow (weather is not modelled)',
-		lightclay: 'extends screens, which are not modelled',
 		mentalherb: 'cures Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled',
-		smoothrock: 'extends sandstorm (weather is not modelled)',
-		terrainextender: 'extends terrain, which is not modelled',
 	},
 };
 // Items: everything except the ones listed here with the mechanic they wait for. (A Mega Stone is
@@ -191,10 +249,6 @@ const DORMANT_PARTS = {
 const DEFERRED_ITEMS = {
 	ejectbutton: 'switching out mid-turn',
 	redcard: 'forced switching',
-	electricseed: 'terrain',
-	grassyseed: 'terrain',
-	mistyseed: 'terrain',
-	psychicseed: 'terrain',
 };
 const SUPPORTED_ITEMS = new Set(['']);
 for (const item of dex.items.all()) {
@@ -213,19 +267,28 @@ const META = /(Priority|Order|SubOrder)$/;
 
 /**
  * The event callbacks of an ability, item or condition, with the ordering
- * metadata `Battle#resolvePriority` would give them.
+ * metadata `Battle#resolvePriority` would give them. `cls` says where a
+ * condition sits: 'volatile', 'status', 'side', 'slot', 'pseudo', 'weather' or 'terrain'.
  */
-function callbacks(effect) {
+function callbacks(effect, cls) {
 	const out = [];
 	const subOrderDefault = () => {
-		if (effect.effectType === 'Condition') return 2;
+		// `effectTypeOrder` in resolvePriority; statuses and terrains are not in it.
+		if (cls === 'volatile') return 2;
+		if (cls === 'slot') return 3;
+		if (cls === 'side') return 4;
+		// A pseudo-weather's state has no target until one of its handlers has run in an
+		// event, so its default flips from 2 to 5 during the battle; 0 = let the engine decide.
+		if (cls === 'pseudo') return 0;
+		if (cls === 'weather') return 5;
+		if (cls === 'status' || cls === 'terrain') return 0;
 		if (effect.effectType === 'Ability') {
 			if (effect.name === 'Poison Touch' || effect.name === 'Perish Body') return 6;
 			if (effect.name === 'Stall') return 9;
 			return 7;
 		}
 		if (effect.effectType === 'Item') return 8;
-		return 0;
+		throw new Error(`no default subOrder for ${effect.id} (${cls})`);
 	};
 	const meta = key => ({
 		order: effect[key + 'Order'] || 0,
@@ -233,17 +296,18 @@ function callbacks(effect) {
 		subOrder: effect[key + 'SubOrder'] || subOrderDefault(),
 	});
 	const parse = rest => {
+		if (EVENTS.includes(rest)) return [rest, 'On'];
 		for (const p of PREFIXES) {
 			if (rest.startsWith(p) && EVENTS.includes(rest.slice(p.length))) return [rest.slice(p.length), p];
 		}
-		return EVENTS.includes(rest) ? [rest, 'On'] : [null, 'On'];
+		return [null, 'On'];
 	};
 	for (const key of Object.keys(effect)) {
 		if (!key.startsWith('on') || effect[key] === undefined) continue;
 		// `onXPriority: 5` is ordering metadata for `onX`. But `onFractionalPriority` and
 		// `onModifyPriority` are events in their own right, and may even be constants
 		// (Stall's `onFractionalPriority: -0.1`).
-		if (typeof effect[key] !== 'function' && META.test(key) && parse(key.slice(2).replace(META, ''))[0]) continue;
+		if (typeof effect[key] !== 'function' && META.test(key) && (parse(key.slice(2).replace(META, ''))[0] || /^on(Side|Field)?Residual/.test(key))) continue;
 		const [ev, pre] = parse(key.slice(2));
 		if (!ev) { out.push({ key, unknown: true }); continue; }
 		out.push({ key, ev, pre, kind: 'Fn', constant: typeof effect[key] === 'function' ? undefined : effect[key], ...meta(key) });
@@ -252,8 +316,11 @@ function callbacks(effect) {
 	if (['Ability', 'Item'].includes(effect.effectType) && has('onStart') && !has('onSwitchIn') && !has('onAnySwitchIn')) {
 		out.push({ key: 'onSwitchIn', ev: 'SwitchIn', pre: 'On', kind: 'StartAlias', ...meta('onSwitchIn') });
 	}
-	if ((effect.duration || effect.durationCallback) && !has('onResidual')) {
-		out.push({ key: 'onResidual', ev: 'Residual', pre: 'On', kind: 'DurationOnly', ...meta('onResidual') });
+	// An effect with a duration takes part in the Residual event even without a callback
+	// there, so that the duration counts down (in the order its onXResidualOrder gives).
+	const residual = { side: 'SideResidual', pseudo: 'FieldResidual', weather: 'FieldResidual', terrain: 'FieldResidual' }[cls] || 'Residual';
+	if ((effect.duration || effect.durationCallback) && !has('on' + residual)) {
+		out.push({ key: 'on' + residual, ev: residual, pre: 'On', kind: 'DurationOnly', ...meta('on' + residual) });
 	}
 	return out;
 }
@@ -293,7 +360,8 @@ if (process.env.VGC_ABILITIES !== undefined) {
 }
 
 module.exports = {
-	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, SPECIAL, VOLATILES, MOVE_VOLATILES, EVENTS,
+	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, EVENTS, HAND_MOVES,
+	VOLATILES, SIDE_CONDS, SLOT_CONDS, PSEUDO_WEATHERS, WEATHERS, TERRAINS, condClass, moveCallbacks,
 	SUPPORTED_ABILITIES, SUPPORTED_ITEMS, DEFERRED_ABILITIES, DEFERRED_ITEMS, DORMANT_PARTS,
 	unsupportedReasons, legalSpecies, learnableMoves, tableMoves, tableSpecies, mulberry32,
 	callbacks, tableAbilities, legalAbilities, tableItems,

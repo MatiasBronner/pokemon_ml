@@ -33,8 +33,15 @@ const boostsLit = (b, allowOrder) => {
 	if (!allowOrder && boostOrder(b) !== 0) throw new Error('boost keys out of canonical order: ' + Object.keys(b));
 	return `Some([${L.BOOST_IDS.map(k => b[k] || 0).join(', ')}])`;
 };
-const volName = id => id[0].toUpperCase() + id.slice(1);
-const volLit = v => (v ? `Some(VolKind::${volName(v)})` : 'None');
+const volName = id => { id = L.PS.toID(id); return id[0].toUpperCase() + id.slice(1); };
+// A condition named by a move, as a literal of the enum for its class.
+const condLit = (v, cls, enumName) => {
+	if (!v) return 'None';
+	if (L.condClass(v) !== cls) throw new Error(`${v} is not a modelled ${cls} condition`);
+	return `Some(${enumName}::${volName(v)})`;
+};
+const volLit = v => condLit(v, 'volatile', 'VolKind');
+const fieldLit = (v, cls, enumName) => (v ? condLit(v, cls, enumName).slice(5, -1) : `${enumName}::None`);
 const statusLit = s => (s ? 'Status::' + s[0].toUpperCase() + s.slice(1) : 'Status::None');
 const frac = f => (f ? `(${f[0]}, ${f[1]})` : '(0, 0)');
 const statIdx = s => (s ? L.STAT_IDS.indexOf(s) : 0);
@@ -43,8 +50,13 @@ const FLAGS = {
 	punch: 'F_PUNCH', bite: 'F_BITE', bullet: 'F_BULLET', pulse: 'F_PULSE', slicing: 'F_SLICING', wind: 'F_WIND',
 	dance: 'F_DANCE', reflectable: 'F_REFLECTABLE', bypasssub: 'F_BYPASSSUB', mirror: 'F_MIRROR', snatch: 'F_SNATCH',
 	charge: 'F_CHARGE', recharge: 'F_RECHARGE', futuremove: 'F_FUTUREMOVE', metronome: 'F_METRONOME',
-	noparentalbond: 'F_NOPARENTALBOND', failcopycat: 'F_FAILCOPYCAT',
+	noparentalbond: 'F_NOPARENTALBOND', failcopycat: 'F_FAILCOPYCAT', mustpressure: 'F_MUSTPRESSURE', gravity: 'F_GRAVITY',
+	nonsky: 'F_NONSKY', minimize: 'F_MINIMIZE', failencore: 'F_FAILENCORE', nosleeptalk: 'F_NOSLEEPTALK',
+	failinstruct: 'F_FAILINSTRUCT', failmimic: 'F_FAILMIMIC', cantusetwice: 'F_CANTUSETWICE', noassist: 'F_NOASSIST',
+	failmefirst: 'F_FAILMEFIRST',
 };
+// Flags with no effect on a battle's outcome in this format.
+const IGNORED_FLAGS = new Set(['allyanim', 'distance', 'nosketch', 'pledgecombo']);
 const TARGETS = {
 	normal: 'Normal', any: 'Any', adjacentFoe: 'AdjacentFoe', allAdjacentFoes: 'AllAdjacentFoes', allAdjacent: 'AllAdjacent',
 	self: 'User', adjacentAlly: 'AdjacentAlly', adjacentAllyOrSelf: 'AdjacentAllyOrSelf', allies: 'Allies',
@@ -62,8 +74,8 @@ for (const atk of TYPES) {
 	out += '    [' + TYPES.map(def => dex.types.get(def).damageTaken[atk] || 0).join(', ') + `], // ${atk}\n`;
 }
 out += '];\n\n';
-const IMM = ['brn', 'par', 'psn', 'slp', 'frz', 'powder', 'trapped', 'prankster'];
-out += '/// `STATUS_IMMUNE[kind][type]` for kind = brn, par, psn (also tox), slp, frz, powder, trapped, prankster.\n';
+const IMM = ['brn', 'par', 'psn', 'slp', 'frz', 'powder', 'trapped', 'prankster', 'sandstorm'];
+out += '/// `STATUS_IMMUNE[kind][type]` for kind = brn, par, psn (also tox), slp, frz, powder, trapped, prankster, sandstorm.\n';
 out += `pub static STATUS_IMMUNE: [[bool; ${TYPES.length}]; ${IMM.length}] = [\n`;
 for (const k of IMM) out += '    [' + TYPES.map(t => dex.types.get(t).damageTaken[k] === 3).join(', ') + `], // ${k}\n`;
 out += '];\n\n';
@@ -96,21 +108,34 @@ out += '];\n\n';
 const moves = L.tableMoves();
 let secDefs = '';
 let moveRows = '';
+let mvConsts = '';
 const report = { supported: [], unsupported: {} };
-for (const m of moves) {
+const evMask = evs => {
+	let mask = 0n;
+	for (const ev of evs) {
+		if (!L.EVENTS.includes(ev)) throw new Error(`no Ev variant for move callback ${ev} (add it to src/data.rs)`);
+		mask |= 1n << BigInt(L.EVENTS.indexOf(ev));
+	}
+	return `0x${mask.toString(16)}`;
+};
+moves.forEach((m, index) => {
 	const why = L.unsupportedReasons(m);
 	const supported = why.length === 0;
 	if (supported) report.supported.push(m.id); else report.unsupported[m.id] = why;
 	const pp = m.noPPBoosts ? m.pp : (m.pp / 5 + 1) * 4;
 	if (!Number.isInteger(pp) || pp > 255) throw new Error(`bad pp for ${m.id}: ${pp}`);
+	for (const f in m.flags) if (!FLAGS[f] && !IGNORED_FLAGS.has(f)) throw new Error(`move ${m.id}: unknown flag ${f}`);
 	const flags = Object.keys(FLAGS).filter(f => m.flags[f]).map(f => FLAGS[f]).join(' | ') || '0';
 	let secName = '&[]';
 	let self = null, selfChance = 0, multihit = '(0, 0)';
+	// Everything below is only filled in for modelled moves, so that unmodelled
+	// ones cannot name conditions the engine has no variant for.
+	const d = supported ? m : {};
 	if (supported) {
 		if (m.secondaries && m.secondaries.length) {
 			secName = `SEC_${m.id.toUpperCase()}`;
 			const rows = m.secondaries.map(s => `Secondary { chance: ${s.chance === undefined ? 0 : s.chance}, status: ${statusLit(s.status)}, ` +
-				`boosts: ${boostsLit(s.boosts)}, volatile: ${volLit(s.volatileStatus)}, self_boosts: ${boostsLit(s.self && s.self.boosts)} }`);
+				`boosts: ${boostsLit(s.boosts)}, volatile: ${volLit(s.volatileStatus)}, self_boosts: ${boostsLit(s.self && s.self.boosts)}, on_hit: ${!!s.onHit} }`);
 			secDefs += `static ${secName}: [Secondary; ${rows.length}] = [${rows.join(', ')}];\n`;
 			secName = '&' + secName;
 		}
@@ -120,28 +145,30 @@ for (const m of moves) {
 	const type = m.type === '???' ? 'Type::Typeless' : 'Type::' + m.type;
 	const target = TARGETS[m.target];
 	if (!target) throw new Error(`unknown target ${m.target} for ${m.id}`);
+	mvConsts += `    pub const ${m.id.toUpperCase()}: u16 = ${index};\n`;
 	moveRows += `    MoveData { id: ${rs(m.id)}, name: ${rs(m.name)}, typ: ${type}, category: Category::${m.category}, ` +
 		`base_power: ${m.basePower}, accuracy: ${m.accuracy === true ? 0 : m.accuracy}, pp: ${pp}, priority: ${m.priority}, ` +
 		`target: Target::${target}, crit_ratio: ${m.critRatio || 0}, will_crit: ${!!m.willCrit}, flags: ${flags}, ` +
-		`boosts: ${supported ? boostsLit(m.boosts, true) : 'None'}, boost_order: ${supported ? boostOrder(m.boosts) : 0}, status: ${supported ? statusLit(m.status) : 'Status::None'}, ` +
-		`volatile: ${supported ? volLit(m.volatileStatus) : 'None'}, ` +
-		`self_boosts: ${boostsLit(self)}, self_chance: ${selfChance}, secondaries: ${secName}, ` +
-		`drain: ${frac(supported && m.drain)}, recoil: ${frac(supported && m.recoil)}, heal: ${frac(supported && m.heal)}, multihit: ${multihit}, ` +
+		`boosts: ${boostsLit(d.boosts, true)}, boost_order: ${boostOrder(d.boosts)}, status: ${statusLit(d.status)}, ` +
+		`volatile: ${volLit(d.volatileStatus)}, self_volatile: ${volLit(d.self && d.self.volatileStatus)}, ` +
+		`side_condition: ${condLit(d.sideCondition, 'side', 'SideCond')}, slot_condition: ${condLit(d.slotCondition, 'slot', 'SlotCond')}, ` +
+		`pseudo_weather: ${condLit(d.pseudoWeather, 'pseudo', 'Pseudo')}, weather: ${fieldLit(d.weather, 'weather', 'Weather')}, ` +
+		`terrain: ${fieldLit(d.terrain, 'terrain', 'Terrain')}, ` +
+		`self_boosts: ${boostsLit(self)}, self_chance: ${selfChance}, self_on_hit: ${!!(d.self && d.self.onHit)}, secondaries: ${secName}, ` +
+		`drain: ${frac(d.drain)}, recoil: ${frac(d.recoil)}, heal: ${frac(d.heal)}, multihit: ${multihit}, ` +
 		`off_stat: ${statIdx(m.overrideOffensiveStat)}, def_stat: ${statIdx(m.overrideDefensiveStat)}, ` +
 		`off_from_target: ${m.overrideOffensivePokemon === 'target'}, ignore_defensive: ${!!m.ignoreDefensive}, ` +
 		`ignore_evasion: ${!!m.ignoreEvasion}, thaws_target: ${!!m.thawsTarget}, ignore_immunity: ${m.ignoreImmunity === true}, ` +
-		`special: Special::${L.SPECIAL[m.id] || 'None'}, supported: ${supported} },\n`;
-}
-out += '/// Orders in which a stat-change table is applied; `MoveData::boost_order` indexes this.\n';
-out += `pub static BOOST_ORDERS: [[u8; 7]; ${boostOrders.length}] = [${boostOrders.map(o => `[${o}]`).join(', ')}];\n\n`;
-out += secDefs + '\n';
-out += `pub static MOVES: [MoveData; ${moves.length}] = [\n${moveRows}];\n\n`;
+		`stalling_move: ${!!m.stallingMove}, struggle_recoil: ${!!m.struggleRecoil}, ` +
+		`events: ${supported ? evMask(L.moveCallbacks(m)) : '0'}, supported: ${supported} },\n`;
+});
+for (const id of L.HAND_MOVES) if (!moves.some(m => m.id === id)) throw new Error('hand-written move not in table: ' + id);
 
 // ---- event handlers of conditions, abilities and items ----------------------------
 let cbDefs = '';
 /** Emits the callback table of one effect; returns [slice expression, events bit set literal]. */
-function cbTable(name, effect, what) {
-	const cbs = L.callbacks(effect);
+function cbTable(name, effect, what, cls) {
+	const cbs = L.callbacks(effect, cls);
 	const unknown = cbs.filter(c => c.unknown).map(c => c.key);
 	if (unknown.length) throw new Error(`${what} ${effect.id}: no Ev variant for ${unknown.join(', ')} (add it to src/data.rs)`);
 	if (!cbs.length) return ['&[]', '0', '0'];
@@ -157,23 +184,26 @@ function cbTable(name, effect, what) {
 	return ['&' + name, `0x${mask.toString(16)}`, `0x${maskPre.toString(16)}`];
 }
 
-// Volatile conditions
-let volRows = '';
-for (const id of L.VOLATILES) {
-	const c = dex.conditions.get(id);
-	if (!c.exists) throw new Error('unknown condition ' + id);
-	if (c.durationCallback) throw new Error(`${id}: durationCallback is not modelled`);
-	const [cbs, mask, maskPre] = cbTable(`CB_VOL_${id.toUpperCase()}`, c, 'condition');
-	if (maskPre !== '0x0') throw new Error(`${id}: conditions with prefixed handlers are not expected`);
-	volRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: ${!!c.affectsFainted}, cbs: ${cbs}, events: ${mask} },\n`;
+const BLANK_COND = '    CondData { id: "", duration: 0, affects_fainted: false, no_copy: false, duration_cb: false, cbs: &[], events: 0, events_pre: 0 },\n';
+/** The `CondData` rows of one class of conditions. */
+function condRows(ids, cls, prefix) {
+	let rows = '';
+	for (const id of ids) {
+		const c = dex.conditions.get(id);
+		if (!c.exists) throw new Error('unknown condition ' + id);
+		const [cbs, mask, maskPre] = cbTable(`CB_${prefix}_${id.toUpperCase()}`, c, 'condition', cls);
+		rows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: ${!!c.affectsFainted}, no_copy: ${!!c.noCopy}, ` +
+			`duration_cb: ${!!c.durationCallback}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;
+	}
+	return rows;
 }
-let statusRows = `    CondData { id: "", duration: 0, affects_fainted: false, cbs: &[], events: 0 },\n`;
-for (const id of L.STATUSES) {
-	const c = dex.conditions.get(id);
-	const [cbs, mask, maskPre] = cbTable(`CB_STATUS_${id.toUpperCase()}`, c, 'status');
-	if (maskPre !== '0x0') throw new Error(`${id}: conditions with prefixed handlers are not expected`);
-	statusRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: false, cbs: ${cbs}, events: ${mask} },\n`;
-}
+const volRows = condRows(L.VOLATILES, 'volatile', 'VOL');
+const statusRows = BLANK_COND + condRows(L.STATUSES, 'status', 'STATUS');
+const sideRows = condRows(L.SIDE_CONDS, 'side', 'SIDE');
+const slotRows = condRows(L.SLOT_CONDS, 'slot', 'SLOT');
+const pseudoRows = condRows(L.PSEUDO_WEATHERS, 'pseudo', 'PSEUDO');
+const weatherRows = BLANK_COND + condRows(L.WEATHERS, 'weather', 'WEATHER');
+const terrainRows = BLANK_COND + condRows(L.TERRAINS, 'terrain', 'TERRAIN');
 
 // Abilities
 const AFLAGS = {
@@ -185,7 +215,7 @@ abilities.forEach((a, i) => {
 	const supported = L.SUPPORTED_ABILITIES.has(a.id);
 	for (const f in a.flags) if (!AFLAGS[f]) throw new Error(`ability ${a.id}: unknown flag ${f}`);
 	const flags = Object.keys(a.flags).map(f => AFLAGS[f]).join(' | ') || '0';
-	const [cbs, mask, maskPre] = supported ? cbTable(`CB_AB_${a.id.toUpperCase()}`, a, 'ability') : ['&[]', '0', '0'];
+	const [cbs, mask, maskPre] = supported ? cbTable(`CB_AB_${a.id.toUpperCase()}`, a, 'ability', 'ability') : ['&[]', '0', '0'];
 	abConsts += `    pub const ${a.id.toUpperCase()}: u16 = ${i};\n`;
 	abRows += `    AbilityData { id: ${rs(a.id)}, name: ${rs(a.name)}, flags: ${flags}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;
 });
@@ -193,7 +223,7 @@ for (const id of L.SUPPORTED_ABILITIES) if (!abilities.some(a => a.id === id)) t
 
 // Items
 const items = L.tableItems();
-let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },\n`;
+let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[], boosts: None },\n`;
 let megaDefs = '';
 let itConsts = '    pub const NONE: u16 = 0;\n';
 items.forEach((item, i) => {
@@ -203,28 +233,64 @@ items.forEach((item, i) => {
 	if (item.isGem) fl.push('IF_GEM');
 	if (item.isChoice) fl.push('IF_CHOICE');
 	if (item.ignoreKlutz) fl.push('IF_IGNORE_KLUTZ');
-	const [cbs, mask, maskPre] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item') : ['&[]', '0', '0'];
+	const [cbs, mask, maskPre] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item', 'item') : ['&[]', '0', '0'];
 	let mega = '&[]';
 	if (item.megaStone) {
+		// Who the stone cannot be taken from. Two rules exist; refuse to guess at a third.
+		const rule = (item.onTakeItem || '').toString().replace(/\s+/g, ' ');
+		if (rule.includes('!item.megaStone[source.baseSpecies.name] && !Object.values(item.megaStone).includes(source.baseSpecies.name)')) {
+			fl.push('IF_MEGA_BY_FORME');
+		} else if (!rule.includes('return !item.megaStone?.[source.baseSpecies.baseSpecies];')) {
+			throw new Error(`item ${item.id}: unrecognised onTakeItem`);
+		}
 		// (species that can use the stone, the Mega it becomes)
 		const pairs = Object.entries(item.megaStone).map(([from, to]) => `(${speciesIndex(from)}, ${speciesIndex(to)})`);
 		megaDefs += `static MEGA_${item.id.toUpperCase()}: [(u16, u16); ${pairs.length}] = [${pairs.join(', ')}];\n`;
 		mega = `&MEGA_${item.id.toUpperCase()}`;
 	}
 	itConsts += `    pub const ${item.id.toUpperCase()}: u16 = ${i + 1};\n`;
-	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre}, mega: ${mega} },\n`;
+	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre}, mega: ${mega}, boosts: ${boostsLit(item.boosts)} },\n`;
 });
 for (const id of L.SUPPORTED_ITEMS) if (id && !items.some(a => a.id === id)) throw new Error('supported item not in table: ' + id);
 
-out += '/// Volatile conditions the engine models, in the order of `VOL_CONDS`.\n';
-out += '#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n#[repr(u8)]\npub enum VolKind {\n';
-out += L.VOLATILES.map(id => `    ${volName(id)},\n`).join('');
-out += `}\n\n/// Number of \`VolKind\` variants; a Pokémon can hold at most one of each.\npub const N_VOLATILES: usize = ${L.VOLATILES.length};\n`;
-out += '\nimpl VolKind {\n    pub fn id(self) -> &\'static str {\n        VOL_CONDS[self as usize].id\n    }\n}\n\n';
+/** A Rust enum with one variant per condition id (plus `None` first when `withNone`). */
+function condEnum(name, doc, ids, table, withNone) {
+	let e = `/// ${doc}\n#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n#[repr(u8)]\npub enum ${name} {\n`;
+	if (withNone) e += '    None,\n';
+	e += ids.map(id => `    ${volName(id)},\n`).join('');
+	e += `}\n\nimpl ${name} {\n    pub fn id(self) -> &'static str {\n        ${table}[self as usize].id\n    }\n` +
+		`    pub fn data(self) -> &'static CondData {\n        &${table}[self as usize]\n    }\n` +
+		`    pub const FIRST: ${name} = ${name}::${withNone ? 'None' : volName(ids[0])};\n` +
+		`    pub const ALL: [${name}; ${ids.length + (withNone ? 1 : 0)}] = [${(withNone ? ['None'] : []).concat(ids.map(volName)).map(v => `${name}::${v}`).join(', ')}];\n` +
+		`    /// The condition with this id, if the engine models it.\n` +
+		`    pub fn named(id: &str) -> Option<${name}> {\n        ${name}::ALL.iter().copied().find(|k| !id.is_empty() && k.id() == id)\n    }\n}\n\n`;
+	return e;
+}
+for (const [name, ids] of [['side', L.SIDE_CONDS], ['slot', L.SLOT_CONDS], ['pseudo', L.PSEUDO_WEATHERS]]) {
+	if (!ids.length) throw new Error(`the ${name} condition list must not be empty`);
+}
+out += '/// Orders in which a stat-change table is applied; `MoveData::boost_order` indexes this.\n';
+out += `pub static BOOST_ORDERS: [[u8; 7]; ${boostOrders.length}] = [${boostOrders.map(o => `[${o}]`).join(', ')}];\n\n`;
+out += condEnum('VolKind', 'Volatile conditions the engine models (conditions that sit on a Pokémon), in the order of `VOL_CONDS`.', L.VOLATILES, 'VOL_CONDS', false);
+out += condEnum('SideCond', 'Conditions that sit on one side of the field, in the order of `SIDE_CONDS`.', L.SIDE_CONDS, 'SIDE_CONDS', false);
+out += condEnum('SlotCond', 'Conditions that sit on one active position of a side, in the order of `SLOT_CONDS`.', L.SLOT_CONDS, 'SLOT_CONDS', false);
+out += condEnum('Pseudo', 'Pseudo-weathers (conditions on the whole field), in the order of `PSEUDO_CONDS`.', L.PSEUDO_WEATHERS, 'PSEUDO_CONDS', false);
+out += condEnum('Weather', 'Weather; `WEATHER_CONDS` is indexed by it.', L.WEATHERS, 'WEATHER_CONDS', true);
+out += condEnum('Terrain', 'Terrain; `TERRAIN_CONDS` is indexed by it.', L.TERRAINS, 'TERRAIN_CONDS', true);
+out += `/// Number of \`VolKind\` variants.\npub const N_VOLATILES: usize = ${L.VOLATILES.length};\n`;
+out += `pub const N_SIDE_CONDS: usize = ${L.SIDE_CONDS.length};\npub const N_SLOT_CONDS: usize = ${L.SLOT_CONDS.length};\npub const N_PSEUDO: usize = ${L.PSEUDO_WEATHERS.length};\n\n`;
+out += secDefs + '\n';
+out += `/// Move indices into \`MOVES\`.\npub mod mv {\n${mvConsts}}\n\n`;
+out += `pub static MOVES: [MoveData; ${moves.length}] = [\n${moveRows}];\n\n`;
 out += cbDefs + '\n';
 out += `pub static VOL_CONDS: [CondData; ${L.VOLATILES.length}] = [\n${volRows}];\n\n`;
 out += '/// Indexed by `Status as usize`.\n';
 out += `pub static STATUS_CONDS: [CondData; ${L.STATUSES.length + 1}] = [\n${statusRows}];\n\n`;
+out += `pub static SIDE_CONDS: [CondData; ${L.SIDE_CONDS.length}] = [\n${sideRows}];\n\n`;
+out += `pub static SLOT_CONDS: [CondData; ${L.SLOT_CONDS.length}] = [\n${slotRows}];\n\n`;
+out += `pub static PSEUDO_CONDS: [CondData; ${L.PSEUDO_WEATHERS.length}] = [\n${pseudoRows}];\n\n`;
+out += `pub static WEATHER_CONDS: [CondData; ${L.WEATHERS.length + 1}] = [\n${weatherRows}];\n\n`;
+out += `pub static TERRAIN_CONDS: [CondData; ${L.TERRAINS.length + 1}] = [\n${terrainRows}];\n\n`;
 out += `/// Ability indices into \`ABILITIES\`.\npub mod ab {\n${abConsts}}\n\n`;
 out += `pub static ABILITIES: [AbilityData; ${abilities.length}] = [\n${abRows}];\n\n`;
 out += `/// Item indices into \`ITEMS\`.\npub mod it {\n${itConsts}}\n\n`;

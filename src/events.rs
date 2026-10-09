@@ -22,7 +22,12 @@ const INLINE_HANDLERS: usize = 12;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Handler {
     pub eff: Eff,
-    pub holder: MonRef,
+    /// The effect holder the callback sees. For a side or field condition
+    /// run once per Pokémon (hazards at switch-in, Grassy Terrain's healing)
+    /// this is that Pokémon, not the side or field the condition sits on.
+    pub holder: Holder,
+    /// `holder` is such a stand-in.
+    pub custom: bool,
     /// The event whose body runs (`Start` for an `onStart` run at switch-in).
     pub ev: Ev,
     pub pre: Pre,
@@ -30,11 +35,12 @@ pub(crate) struct Handler {
     pub order: u32,
     pub priority: i16,
     /// Holder's cached speed times four (switch-in handlers subtract their
-    /// place in the speed order, which Showdown expresses in quarters).
+    /// place in the speed order, which Showdown expresses in quarters); zero
+    /// when the holder is a side or the field.
     pub speed: i32,
     pub sub_order: u8,
     pub effect_order: u32,
-    /// `abilityState.effectOrder` of the holder, used by `compareRedirectOrder`.
+    /// `abilityState.effectOrder` of a Pokémon holder, used by `compareRedirectOrder`.
     pub ability_order: u32,
     pub uid: u16,
     /// Position of the handler's target in a multi-target event.
@@ -43,7 +49,8 @@ pub(crate) struct Handler {
 
 const BLANK: Handler = Handler {
     eff: Eff::None,
-    holder: MonRef { side: 0, idx: 0 },
+    holder: Holder::Field,
+    custom: false,
     ev: Ev::Start,
     pre: Pre::On,
     has_cb: false,
@@ -128,19 +135,42 @@ fn cmp_left_to_right(a: &Handler, b: &Handler) -> std::cmp::Ordering {
     ord(a).cmp(&ord(b)).then(b.priority.cmp(&a.priority)).then(a.index.cmp(&b.index))
 }
 
-/// `Battle.compareRedirectOrder`.
+/// `Battle.compareRedirectOrder`. The last key only applies between two
+/// handlers whose holders are Pokémon.
 fn cmp_redirect(a: &Handler, b: &Handler) -> std::cmp::Ordering {
-    b.priority.cmp(&a.priority).then(b.speed.cmp(&a.speed)).then(a.ability_order.cmp(&b.ability_order))
+    let both_mons = matches!(a.holder, Holder::Mon(_)) && matches!(b.holder, Holder::Mon(_));
+    b.priority.cmp(&a.priority).then(b.speed.cmp(&a.speed)).then(if both_mons {
+        a.ability_order.cmp(&b.ability_order)
+    } else {
+        std::cmp::Ordering::Equal
+    })
 }
 
 fn find_cb(cbs: &'static [CbInfo], ev: Ev, pre: Pre) -> Option<&'static CbInfo> {
     cbs.iter().find(|c| c.ev == ev && c.pre == pre)
 }
 
+/// The callback of a condition for `ev` with `pre`, after the cheap bit-set test.
+fn cond_cb(c: &'static CondData, ev: Ev, pre: Pre) -> Option<&'static CbInfo> {
+    let mask = if pre == Pre::On { c.events } else { c.events_pre };
+    if mask & ev.bit() == 0 {
+        return None;
+    }
+    find_cb(c.cbs, ev, pre)
+}
+
 impl Battle {
-    /// `Battle#initEffectState` for an effect starting on `holder`.
+    /// `Battle#initEffectState` for an effect starting on a Pokémon.
     pub(crate) fn new_state(&mut self, has_id: bool, holder: MonRef) -> EffState {
-        let order = if has_id && self.mon(holder).is_active {
+        let counted = has_id && self.mon(holder).is_active;
+        self.new_state_counted(counted)
+    }
+
+    /// `Battle#initEffectState`: `counted` says whether the state takes the
+    /// next `effectOrder` (an effect with an id on an active Pokémon or on a
+    /// side) or gets 0 (anything else, including everything on the field).
+    pub(crate) fn new_state_counted(&mut self, counted: bool) -> EffState {
+        let order = if counted {
             let o = self.effect_order;
             self.effect_order += 1;
             o
@@ -151,45 +181,78 @@ impl Battle {
         EffState { order, uid: self.next_uid, a: 0, b: 0 }
     }
 
+    /// Record that an effect with these callbacks is now somewhere in the
+    /// battle. Events nobody has ever listened to are skipped outright.
+    pub(crate) fn listen(&mut self, events: u128, events_pre: u128) {
+        self.event_mask |= events | events_pre;
+        self.event_mask_pre |= events_pre;
+    }
+
     /// Whether `eff` has an unprefixed callback for `ev`.
     pub(crate) fn has_cb(&self, eff: Eff, ev: Ev) -> bool {
+        let of = |cbs: &'static [CbInfo]| find_cb(cbs, ev, Pre::On).is_some_and(|c| c.kind == CbKind::Fn);
         match eff {
-            Eff::Status(s) => find_cb(STATUS_CONDS[s as usize].cbs, ev, Pre::On).is_some_and(|c| c.kind == CbKind::Fn),
-            Eff::Vol(v) => find_cb(VOL_CONDS[v as usize].cbs, ev, Pre::On).is_some_and(|c| c.kind == CbKind::Fn),
-            Eff::Ability(a) => find_cb(ABILITIES[a as usize].cbs, ev, Pre::On).is_some_and(|c| c.kind == CbKind::Fn),
-            Eff::Item(i) => find_cb(ITEMS[i as usize].cbs, ev, Pre::On).is_some_and(|c| c.kind == CbKind::Fn),
+            Eff::Status(s) => of(STATUS_CONDS[s as usize].cbs),
+            Eff::Vol(v) => of(v.data().cbs),
+            Eff::Ability(a) => of(ABILITIES[a as usize].cbs),
+            Eff::Item(i) => of(ITEMS[i as usize].cbs),
+            Eff::SideCond(k) => of(k.data().cbs),
+            Eff::SlotCond(k) => of(k.data().cbs),
+            Eff::Pseudo(k) => of(k.data().cbs),
+            Eff::Weather(k) => of(k.data().cbs),
+            Eff::Terrain(k) => of(k.data().cbs),
             Eff::Move(mi) => self.move_has_cb(mi, ev),
             _ => false,
         }
     }
 
     /// `Battle#resolvePriority`.
-    fn resolve(&self, eff: Eff, cb: &CbInfo, holder: MonRef, st: EffState) -> Handler {
-        let m = self.mon(holder);
-        let mut speed = m.speed * 4;
+    fn resolve(
+        &self,
+        eff: Eff,
+        cb: &CbInfo,
+        holder: Holder,
+        custom: bool,
+        st: EffState,
+        default_sub_order: u8,
+    ) -> Handler {
+        let mut speed = 0;
+        let mut ability_order = 0;
         let mut effect_order = 0;
-        if matches!(cb.ev, Ev::SwitchIn | Ev::BeforeSwitchIn) {
-            // Speed ties between switch-in handlers were settled when the
-            // Pokémon were sorted; use that fixed order.
-            let fpv = holder.side + 2 * m.position;
-            let idx = self.speed_order[..self.n_speed_order as usize].iter().position(|&v| v == fpv);
-            speed -= idx.map_or(-1, |i| i as i32);
+        if matches!(cb.ev, Ev::SwitchIn | Ev::BeforeSwitchIn | Ev::RedirectTarget) {
+            // Hazards on one side, or two redirecting abilities, tie on everything
+            // else; they go in the order they were created.
             effect_order = st.order;
-        } else if cb.ev == Ev::RedirectTarget {
-            effect_order = st.order;
+        }
+        if let Holder::Mon(r) = holder {
+            let m = self.mon(r);
+            speed = m.speed * 4;
+            ability_order = m.ability_st.order;
+            if matches!(cb.ev, Ev::SwitchIn | Ev::BeforeSwitchIn) {
+                // Speed ties between switch-in handlers were settled when the
+                // Pokémon were sorted; use that fixed order.
+                let fpv = r.side + 2 * m.position;
+                let idx = self.speed_order[..self.n_speed_order as usize].iter().position(|&v| v == fpv);
+                speed -= idx.map_or(-1, |i| i as i32);
+            }
+            if eff == Eff::Ability(ab::MAGICBOUNCE) && cb.ev == Ev::TryHitSide && cb.pre == Pre::Ally {
+                // Showdown special-cases this one handler to use the raw Speed stat.
+                speed = m.stats[5] as i32 * 4;
+            }
         }
         Handler {
             eff,
             holder,
+            custom,
             ev: if cb.kind == CbKind::StartAlias { Ev::Start } else { cb.ev },
             pre: cb.pre,
             has_cb: cb.kind != CbKind::DurationOnly,
             order: cb.order,
             priority: cb.priority,
             speed,
-            sub_order: cb.sub_order,
+            sub_order: if cb.sub_order != 0 { cb.sub_order } else { default_sub_order },
             effect_order,
-            ability_order: m.ability_st.order,
+            ability_order,
             uid: st.uid,
             index: 0,
         }
@@ -199,59 +262,106 @@ impl Battle {
     fn find_pokemon_handlers(&self, mon: MonRef, ev: Ev, pre: Pre, get_duration: bool, out: &mut HList) {
         let m = self.mon(mon);
         let bit = ev.bit();
-        let a = &ABILITIES[m.ability as usize];
-        let i = &ITEMS[m.item as usize];
-        if pre != Pre::On {
-            // Only abilities and items listen from the side (onAlly, onFoe, onAny, onSource).
-            if a.events_pre & bit != 0 {
-                if let Some(cb) = find_cb(a.cbs, ev, pre) {
-                    out.push(self.resolve(Eff::Ability(m.ability), cb, mon, m.ability_st));
-                }
-            }
-            if i.events_pre & bit != 0 {
-                if let Some(cb) = find_cb(i.cbs, ev, pre) {
-                    out.push(self.resolve(Eff::Item(m.item), cb, mon, m.item_st));
-                }
-            }
-            return;
-        }
+        let holder = Holder::Mon(mon);
         if m.status != Status::None {
-            let c = &STATUS_CONDS[m.status as usize];
-            if c.events & bit != 0 {
-                if let Some(cb) = find_cb(c.cbs, ev, pre) {
-                    out.push(self.resolve(Eff::Status(m.status), cb, mon, m.status_st));
-                }
+            if let Some(cb) = cond_cb(&STATUS_CONDS[m.status as usize], ev, pre) {
+                out.push(self.resolve(Eff::Status(m.status), cb, holder, false, m.status_st, 0));
             }
         }
-        for v in m.volatiles.as_slice() {
-            let c = &VOL_CONDS[v.kind as usize];
-            if c.events & bit == 0 {
-                continue;
-            }
-            if let Some(cb) = find_cb(c.cbs, ev, pre) {
+        for v in self.vols(mon).as_slice() {
+            if let Some(cb) = cond_cb(v.kind.data(), ev, pre) {
                 if cb.kind == CbKind::DurationOnly && !(get_duration && v.duration > 0) {
                     continue;
                 }
-                out.push(self.resolve(Eff::Vol(v.kind), cb, mon, v.st));
+                out.push(self.resolve(Eff::Vol(v.kind), cb, holder, false, v.st, 2));
             }
         }
-        if a.events & bit != 0 {
+        let a = &ABILITIES[m.ability as usize];
+        if (if pre == Pre::On { a.events } else { a.events_pre }) & bit != 0 {
             if let Some(cb) = find_cb(a.cbs, ev, pre) {
-                out.push(self.resolve(Eff::Ability(m.ability), cb, mon, m.ability_st));
+                out.push(self.resolve(Eff::Ability(m.ability), cb, holder, false, m.ability_st, 7));
             }
         }
-        if i.events & bit != 0 {
+        let i = &ITEMS[m.item as usize];
+        if (if pre == Pre::On { i.events } else { i.events_pre }) & bit != 0 {
             if let Some(cb) = find_cb(i.cbs, ev, pre) {
-                out.push(self.resolve(Eff::Item(m.item), cb, mon, m.item_st));
+                out.push(self.resolve(Eff::Item(m.item), cb, holder, false, m.item_st, 8));
+            }
+        }
+        if (m.position as usize) < ACTIVE {
+            for c in self.sides[mon.side as usize].slot_conds[m.position as usize].as_slice() {
+                if let Some(cb) = cond_cb(c.kind.data(), ev, pre) {
+                    if cb.kind == CbKind::DurationOnly && !(get_duration && c.duration > 0) {
+                        continue;
+                    }
+                    out.push(self.resolve(Eff::SlotCond(c.kind), cb, holder, false, c.st, 3));
+                }
             }
         }
     }
 
-    /// `Battle#findEventHandlers` for a Pokémon target (or none).
+    /// `Battle#findSideEventHandlers`. With `custom`, the handlers are run
+    /// for that Pokémon instead of for the side.
+    fn find_side_handlers(
+        &self,
+        side: usize,
+        ev: Ev,
+        pre: Pre,
+        get_duration: bool,
+        custom: Option<MonRef>,
+        out: &mut HList,
+    ) {
+        let holder = custom.map_or(Holder::Side(side as u8), Holder::Mon);
+        for c in self.sides[side].conds.as_slice() {
+            if let Some(cb) = cond_cb(c.kind.data(), ev, pre) {
+                if cb.kind == CbKind::DurationOnly && !(get_duration && c.duration > 0) {
+                    continue;
+                }
+                out.push(self.resolve(Eff::SideCond(c.kind), cb, holder, custom.is_some(), c.st, 4));
+            }
+        }
+    }
+
+    /// `Battle#findFieldEventHandlers`: pseudo-weathers, then weather, then terrain.
+    fn find_field_handlers(&self, ev: Ev, get_duration: bool, custom: Option<MonRef>, out: &mut HList) {
+        let holder = custom.map_or(Holder::Field, Holder::Mon);
+        let is_custom = custom.is_some();
+        for c in self.field.pseudo.as_slice() {
+            if let Some(cb) = cond_cb(c.kind.data(), ev, Pre::On) {
+                if cb.kind == CbKind::DurationOnly && !(get_duration && c.duration > 0) {
+                    continue;
+                }
+                // A pseudo-weather sorts as a plain condition until one of its
+                // handlers has run in an event, and as a field condition after.
+                let default = if c.targeted { 5 } else { 2 };
+                out.push(self.resolve(Eff::Pseudo(c.kind), cb, holder, is_custom, c.st, default));
+            }
+        }
+        let w = &self.field.weather;
+        if w.kind != Weather::None {
+            if let Some(cb) = cond_cb(w.kind.data(), ev, Pre::On) {
+                if !(cb.kind == CbKind::DurationOnly && !(get_duration && w.duration > 0)) {
+                    out.push(self.resolve(Eff::Weather(w.kind), cb, holder, is_custom, w.st, 5));
+                }
+            }
+        }
+        let t = &self.field.terrain;
+        if t.kind != Terrain::None {
+            if let Some(cb) = cond_cb(t.kind.data(), ev, Pre::On) {
+                if !(cb.kind == CbKind::DurationOnly && !(get_duration && t.duration > 0)) {
+                    out.push(self.resolve(Eff::Terrain(t.kind), cb, holder, is_custom, t.st, 0));
+                }
+            }
+        }
+    }
+
+    /// `Battle#findEventHandlers` for a Pokémon target (or none). Nothing
+    /// modelled listens to the few events Showdown aims at a side.
     fn find_event_handlers(&self, target: Option<MonRef>, ev: Ev, source: Option<MonRef>, out: &mut HList) {
         // Events normally run through `eachEvent` never have prefixed handlers.
         let prefixed = !matches!(ev, Ev::BeforeTurn | Ev::Update | Ev::Weather | Ev::WeatherChange | Ev::TerrainChange)
             && self.event_mask_pre & ev.bit() != 0;
+        let mut side_target = None;
         if let Some(t) = target {
             if self.mon(t).is_active || source.is_some_and(|s| self.mon(s).is_active) {
                 self.find_pokemon_handlers(t, ev, Pre::On, false, out);
@@ -267,6 +377,8 @@ impl Battle {
                         self.find_pokemon_handlers(f, ev, Pre::Any, false, out);
                     }
                 }
+                // The event bubbles up to the target's side.
+                side_target = Some(t.side as usize);
             }
         }
         if let Some(s) = source {
@@ -274,7 +386,19 @@ impl Battle {
                 self.find_pokemon_handlers(s, ev, Pre::Source, false, out);
             }
         }
-        // Side, field and format handlers: nothing modelled has any.
+        if let Some(ts) = side_target {
+            for side in 0..2 {
+                if side == ts {
+                    self.find_side_handlers(side, ev, Pre::On, false, None, out);
+                } else if prefixed {
+                    self.find_side_handlers(side, ev, Pre::Foe, false, None, out);
+                }
+                if prefixed {
+                    self.find_side_handlers(side, ev, Pre::Any, false, None, out);
+                }
+            }
+        }
+        self.find_field_handlers(ev, false, None, out);
     }
 
     /// `Battle#suppressingAbility`: a Mold Breaker-style move is in flight
@@ -292,37 +416,64 @@ impl Battle {
     /// The suppression rules `runEvent` applies to each handler. Returns
     /// whether the handler is skipped.
     fn handler_suppressed(&self, h: &Handler, ev: Ev) -> bool {
-        match h.eff {
-            Eff::Status(s) => self.mon(h.holder).status != s,
-            Eff::Ability(a) => {
-                if ABILITIES[a as usize].flags & AF_BREAKABLE != 0 && self.suppressing_ability(Some(h.holder)) {
+        match (h.eff, h.holder) {
+            (Eff::Status(s), Holder::Mon(r)) => {
+                if self.mon(r).status != s {
                     return true;
                 }
-                ev != Ev::End && self.ignoring_ability(h.holder)
             }
-            Eff::Item(_) => !matches!(ev, Ev::Start | Ev::SwitchIn | Ev::TakeItem) && self.ignoring_item(h.holder),
-            _ => false,
+            (Eff::Ability(a), Holder::Mon(r)) => {
+                if ABILITIES[a as usize].flags & AF_BREAKABLE != 0 && self.suppressing_ability(Some(r)) {
+                    return true;
+                }
+                if ev != Ev::End && self.ignoring_ability(r) {
+                    return true;
+                }
+            }
+            (Eff::Item(_), Holder::Mon(r)) => {
+                if !matches!(ev, Ev::Start | Ev::SwitchIn | Ev::TakeItem) && self.ignoring_item(r) {
+                    return true;
+                }
+            }
+            _ => {}
         }
+        // Air Lock and Cloud Nine switch off the weather's own handlers and
+        // everything that reacts to the Weather event.
+        (matches!(h.eff, Eff::Weather(_)) || ev == Ev::Weather)
+            && !matches!(ev, Ev::Residual | Ev::End)
+            && self.suppressing_weather()
     }
 
     fn call_handler(&mut self, h: &Handler) -> Res {
         let parent = (self.effect, self.effect_holder);
         self.effect = h.eff;
         self.effect_holder = Some(h.holder);
+        if let Eff::Pseudo(kind) = h.eff {
+            if let Some(c) = self.field.pseudo.get_mut(kind) {
+                c.targeted = true;
+            }
+        }
         let r = self.dispatch(h.eff, h.ev, h.pre, Some(h.holder));
         (self.effect, self.effect_holder) = parent;
         r
     }
 
-    /// The hand-written body of one callback. `holder` is the Pokémon the
-    /// effect is on (`this.effectState.target`).
-    fn dispatch(&mut self, eff: Eff, ev: Ev, pre: Pre, holder: Option<MonRef>) -> Res {
+    /// The hand-written body of one callback. `holder` is what the effect
+    /// sits on (`this.effectState.target`).
+    fn dispatch(&mut self, eff: Eff, ev: Ev, pre: Pre, holder: Option<Holder>) -> Res {
         match (eff, holder) {
             (Eff::Move(mi), _) => self.move_cb(mi, ev),
-            (Eff::Status(s), Some(h)) => self.status_cb(s, ev, h),
-            (Eff::Vol(v), Some(h)) => self.vol_cb(v, ev, h),
-            (Eff::Ability(a), Some(h)) => self.ability_cb(a, ev, pre, h),
-            (Eff::Item(i), Some(h)) => self.item_cb(i, ev, pre, h),
+            (Eff::Status(s), Some(Holder::Mon(h))) => self.status_cb(s, ev, h),
+            (Eff::Vol(v), Some(Holder::Mon(h))) => self.vol_cb(v, ev, pre, h),
+            (Eff::Ability(a), Some(Holder::Mon(h))) => self.ability_cb(a, ev, pre, h),
+            (Eff::Item(i), Some(Holder::Mon(h))) => self.item_cb(i, ev, pre, h),
+            (Eff::SlotCond(k), Some(Holder::Mon(h))) => self.slot_cb(k, ev, h),
+            // A side condition run for one Pokémon is on that Pokémon's side.
+            (Eff::SideCond(k), Some(Holder::Side(s))) => self.side_cb(k, ev, pre, s as usize),
+            (Eff::SideCond(k), Some(Holder::Mon(h))) => self.side_cb(k, ev, pre, h.side as usize),
+            (Eff::Pseudo(k), _) => self.pseudo_cb(k, ev),
+            (Eff::Weather(k), _) => self.weather_cb(k, ev),
+            (Eff::Terrain(k), _) => self.terrain_cb(k, ev),
             _ => Res::Undef,
         }
     }
@@ -365,7 +516,7 @@ impl Battle {
             let m = self.mon(holder);
             let h = Handler {
                 eff: e.effect,
-                holder,
+                holder: Holder::Mon(holder),
                 ev,
                 has_cb: true,
                 speed: m.speed * 4,
@@ -510,6 +661,7 @@ impl Battle {
     }
 
     /// `Battle#singleEvent`: run one effect's own callback for an event.
+    /// `holder` is the Pokémon the effect is on, if it is on one.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn single_event(
         &mut self,
@@ -521,7 +673,35 @@ impl Battle {
         source_effect: Eff,
         relay: Res,
     ) -> Res {
-        self.single_event_ex(ev, ev, Pre::On, eff, holder, Event::new(ev, target, source, source_effect), relay, false)
+        self.single_event_ex(
+            ev,
+            ev,
+            Pre::On,
+            eff,
+            holder.map(Holder::Mon),
+            Event::new(ev, target, source, source_effect),
+            relay,
+            false,
+        )
+    }
+
+    /// `singleEvent` for an effect on a side or on the field: the event's
+    /// target is that side (or nothing, for the field).
+    pub(crate) fn single_event_at(
+        &mut self,
+        ev: Ev,
+        eff: Eff,
+        holder: Holder,
+        source: Option<MonRef>,
+        source_effect: Eff,
+    ) -> Res {
+        let mut e = Event::new(ev, None, source, source_effect);
+        match holder {
+            Holder::Mon(r) => e.target = Some(r),
+            Holder::Side(s) => e.target_side = Some(s),
+            Holder::Field => {}
+        }
+        self.single_event_ex(ev, ev, Pre::On, eff, Some(holder), e, Res::Undef, false)
     }
 
     /// `singleEvent` in full: `ev` is the event the suppression rules see,
@@ -534,7 +714,7 @@ impl Battle {
         body: Ev,
         pre: Pre,
         eff: Eff,
-        holder: Option<MonRef>,
+        holder: Option<Holder>,
         e: Event,
         relay: Res,
         custom: bool,
@@ -564,6 +744,11 @@ impl Battle {
                     return relay_var;
                 }
             }
+            Eff::Weather(_) => {
+                if !matches!(ev, Ev::FieldStart | Ev::FieldResidual | Ev::FieldEnd) && self.suppressing_weather() {
+                    return relay_var;
+                }
+            }
             _ => {}
         }
         if !custom && !self.has_cb(eff, body) {
@@ -576,7 +761,7 @@ impl Battle {
         self.event.relay = relay_var;
         self.event_depth += 1;
         debug_assert!(self.event_depth < 12, "event stack too deep in single {ev:?}");
-        let ret = self.dispatch(eff, body, pre, holder.or(e.target));
+        let ret = self.dispatch(eff, body, pre, holder.or(e.target.map(Holder::Mon)));
         self.event_depth -= 1;
         (self.effect, self.effect_holder, self.event) = parent;
         if ret == Res::Undef { relay_var } else { ret }
@@ -584,19 +769,115 @@ impl Battle {
 
     /// `Battle#eachEvent`: run an event on every active Pokémon in speed order.
     pub(crate) fn each_event(&mut self, ev: Ev) {
+        let effect = self.effect;
+        self.each_event_from(ev, effect);
+    }
+
+    /// `eachEvent` with the causing effect given (it defaults to the running one).
+    pub(crate) fn each_event_from(&mut self, ev: Ev, effect: Eff) {
+        let effect = if effect == Eff::None { self.effect } else { effect };
         let (actives, n) = self.all_active(false);
         let mut keyed = [(actives[0], 0i32); 4];
         for i in 0..n {
             keyed[i] = (actives[i], self.mon(actives[i]).speed);
         }
         self.speed_sort(&mut keyed[..n], |a, b| b.1 as i64 - a.1 as i64, trace::each_label(ev));
-        if self.event_mask & ev.bit() == 0 {
-            return;
+        if self.event_mask & ev.bit() != 0 {
+            for &(r, _) in &keyed[..n] {
+                self.run_event_ex(Event::new(ev, Some(r), None, effect), Res::Undef, false, false);
+            }
         }
-        let effect = self.effect;
-        for &(r, _) in &keyed[..n] {
-            self.run_event_ex(Event::new(ev, Some(r), None, effect), Res::Undef, false, false);
+        if ev == Ev::Weather {
+            self.each_event(Ev::Update);
         }
+    }
+
+    /// The identity of the live instance of the effect a handler was collected for.
+    fn live_uid(&self, h: &Handler) -> Option<u16> {
+        match (h.eff, h.holder) {
+            (Eff::Ability(_), Holder::Mon(r)) => Some(self.mon(r).ability_st.uid),
+            (Eff::Item(_), Holder::Mon(r)) => Some(self.mon(r).item_st.uid),
+            (Eff::Status(_), Holder::Mon(r)) => Some(self.mon(r).status_st.uid),
+            (Eff::Vol(kind), Holder::Mon(r)) => self.vols(r).get(kind).map(|v| v.st.uid),
+            (Eff::SlotCond(kind), Holder::Mon(r)) => {
+                let pos = self.mon(r).position as usize;
+                if pos < ACTIVE {
+                    self.sides[r.side as usize].slot_conds[pos].get(kind).map(|c| c.st.uid)
+                } else {
+                    None
+                }
+            }
+            (Eff::SideCond(kind), Holder::Side(s)) => self.sides[s as usize].conds.get(kind).map(|c| c.st.uid),
+            (Eff::SideCond(kind), Holder::Mon(r)) => self.sides[r.side as usize].conds.get(kind).map(|c| c.st.uid),
+            (Eff::Pseudo(kind), _) => self.field.pseudo.get(kind).map(|c| c.st.uid),
+            (Eff::Weather(kind), _) => (self.field.weather.kind == kind).then_some(self.field.weather.st.uid),
+            (Eff::Terrain(kind), _) => (self.field.terrain.kind == kind).then_some(self.field.terrain.st.uid),
+            _ => None,
+        }
+    }
+
+    /// The Residual countdown of a handler's effect: returns true if the
+    /// duration ran out and the effect was ended.
+    fn tick_duration(&mut self, h: &Handler) -> bool {
+        let uid = h.uid;
+        // Count down, and report whether the instance has just expired.
+        fn tick<K: Copy>(c: Option<&mut Cond<K>>, uid: u16) -> bool {
+            match c {
+                Some(c) if c.st.uid == uid && c.duration > 0 => {
+                    c.duration -= 1;
+                    c.duration == 0
+                }
+                _ => false,
+            }
+        }
+        match (h.eff, h.holder) {
+            (Eff::Vol(kind), Holder::Mon(r)) => {
+                let Some(list) = self.vols_mut(r) else {
+                    return false;
+                };
+                if tick(list.get_mut(kind), uid) {
+                    self.remove_volatile(r, kind);
+                    return true;
+                }
+            }
+            (Eff::SlotCond(kind), Holder::Mon(r)) => {
+                let pos = self.mon(r).position as usize;
+                if pos < ACTIVE && tick(self.sides[r.side as usize].slot_conds[pos].get_mut(kind), uid) {
+                    self.remove_slot_condition(r.side as usize, pos, kind);
+                    return true;
+                }
+            }
+            (Eff::SideCond(kind), Holder::Side(s)) => {
+                if tick(self.sides[s as usize].conds.get_mut(kind), uid) {
+                    self.remove_side_condition(s as usize, kind);
+                    return true;
+                }
+            }
+            (Eff::Pseudo(kind), Holder::Field) => {
+                if tick(self.field.pseudo.get_mut(kind), uid) {
+                    self.remove_pseudo_weather(kind);
+                    return true;
+                }
+            }
+            (Eff::Weather(kind), Holder::Field) => {
+                let w = &mut self.field.weather;
+                if w.kind == kind && tick(Some(w), uid) {
+                    self.clear_weather();
+                    return true;
+                }
+            }
+            (Eff::Terrain(kind), Holder::Field) => {
+                let t = &mut self.field.terrain;
+                if t.kind == kind && tick(Some(t), uid) {
+                    self.clear_terrain();
+                    return true;
+                }
+            }
+            // Statuses, abilities and items never carry a duration; a side or
+            // field condition run for one Pokémon does not count down there.
+            _ => {}
+        }
+        false
     }
 
     /// `Battle#fieldEvent`, used for Residual and SwitchIn: every effect on
@@ -604,7 +885,15 @@ impl Battle {
     pub(crate) fn field_event(&mut self, ev: Ev, targets: Option<&[MonRef]>) {
         let get_duration = ev == Ev::Residual;
         let mut hl = HList::new();
+        // `onFieldResidual` / `onSideResidual`: the condition's own turn, on the
+        // field or side itself. (Nothing has an onFieldSwitchIn or onSideSwitchIn.)
+        if ev == Ev::Residual {
+            self.find_field_handlers(Ev::FieldResidual, true, None, &mut hl);
+        }
         for side in 0..2 {
+            if ev == Ev::Residual {
+                self.find_side_handlers(side, Ev::SideResidual, Pre::On, true, None, &mut hl);
+            }
             for pos in 0..ACTIVE {
                 let active = self.active(side, pos);
                 if !self.in_play(active) {
@@ -617,6 +906,9 @@ impl Battle {
                     continue;
                 }
                 self.find_pokemon_handlers(active, ev, Pre::On, get_duration, &mut hl);
+                // `onResidual` / `onSwitchIn` of side and field conditions, once per Pokémon.
+                self.find_side_handlers(side, ev, Pre::On, false, Some(active), &mut hl);
+                self.find_field_handlers(ev, false, Some(active), &mut hl);
             }
         }
         let n = hl.n;
@@ -627,42 +919,39 @@ impl Battle {
         );
         for k in 0..n {
             let h = hl.get(k);
-            if self.mon(h.holder).fainted {
-                continue;
-            }
-            if ev == Ev::Residual {
-                if let Eff::Vol(kind) = h.eff {
-                    // Count the volatile's duration down; it ends at zero.
-                    let m = self.mon_mut(h.holder);
-                    if let Some(v) = m.volatiles.get_mut(kind) {
-                        if v.st.uid == h.uid && v.duration > 0 {
-                            v.duration -= 1;
-                            if v.duration == 0 {
-                                self.remove_volatile(h.holder, kind);
-                                if self.ended {
-                                    return;
-                                }
-                                continue;
-                            }
-                        }
-                    }
+            if let Holder::Mon(r) = h.holder {
+                if self.mon(r).fainted && !matches!(h.eff, Eff::SlotCond(_)) {
+                    continue;
                 }
             }
+            if ev == Ev::Residual && !h.custom && self.tick_duration(&h) {
+                if self.ended {
+                    return;
+                }
+                continue;
+            }
             // The effect may have been removed or replaced by an earlier handler.
-            let m = self.mon(h.holder);
-            let current = match h.eff {
-                Eff::Ability(_) => Some(m.ability_st.uid),
-                Eff::Item(_) => Some(m.item_st.uid),
-                Eff::Status(_) => Some(m.status_st.uid),
-                Eff::Vol(kind) => m.volatiles.get(kind).map(|v| v.st.uid),
-                _ => None,
-            };
-            if current != Some(h.uid) {
+            // (Showdown does not check slot conditions.)
+            if !matches!(h.eff, Eff::SlotCond(_)) && self.live_uid(&h) != Some(h.uid) {
                 continue;
             }
             if h.has_cb {
-                let e = Event::new(ev, Some(h.holder), None, Eff::None);
-                self.single_event_ex(ev, h.ev, h.pre, h.eff, Some(h.holder), e, Res::Undef, true);
+                // The event is named after what the handler sits on.
+                let (event_id, mut e) = match (h.holder, ev) {
+                    (Holder::Side(_), Ev::Residual) => {
+                        (Ev::SideResidual, Event::new(Ev::SideResidual, None, None, Eff::None))
+                    }
+                    (Holder::Field, Ev::Residual) => {
+                        (Ev::FieldResidual, Event::new(Ev::FieldResidual, None, None, Eff::None))
+                    }
+                    _ => (ev, Event::new(ev, None, None, Eff::None)),
+                };
+                match h.holder {
+                    Holder::Mon(r) => e.target = Some(r),
+                    Holder::Side(s) => e.target_side = Some(s),
+                    Holder::Field => {}
+                }
+                self.single_event_ex(event_id, h.ev, h.pre, h.eff, Some(h.holder), e, Res::Undef, true);
             }
             self.faint_messages(false, false, true);
             if self.ended {

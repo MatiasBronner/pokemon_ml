@@ -4,7 +4,7 @@
 //
 //   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID]
 //                     [--max-turns 250] [--policy switch] [--plain] [--check-legal]
-//                     [--abilities id,id] [--items id,id] [--mega-rate 0.5]
+//                     [--abilities id,id] [--items id,id] [--moves id,id] [--species id,id] [--mega-rate 0.5]
 //
 // --plain gives every Pokémon no ability, no item and no gender (the set-up the
 // engine's first version was checked with).
@@ -33,6 +33,10 @@ const PLAIN = !!args.plain;
 // --abilities a,b and --items x,y: make every battle a themed one over just these.
 const listArg = name => (typeof args[name] === 'string' ? args[name].split(',').filter(Boolean) : []);
 const FORCED_THEME = (args.abilities || args.items) ? { abilities: listArg('abilities'), items: listArg('items') } : null;
+// --moves a,b: every Pokémon is one that learns at least one of these, and knows up to two of them.
+const FORCED_MOVES = listArg('moves');
+// --species a,b: at least half of every team is drawn from these.
+const FORCED_SPECIES = listArg('species');
 // --check-legal: at every move request, also ask Showdown itself about every
 // conceivable choice and insist that `legalOptions` lists exactly the accepted ones.
 const CHECK_LEGAL = !!args['check-legal'];
@@ -116,11 +120,29 @@ function extras(rand, s) {
 }
 
 function randomSet(rand) {
-	const s = pick(rand, pool.species);
-	const moves = shuffled(rand, s.moves).slice(0, 4);
+	let from = FORCED_MOVES.length ? moveLearners() : pool.species;
+	if (FORCED_SPECIES.length && rand() < 0.6) {
+		from = pool.species.filter(sp => FORCED_SPECIES.includes(sp.id));
+		if (from.length !== FORCED_SPECIES.length) throw new Error('--species: not all of these are in the pool');
+	}
+	const s = pick(rand, from);
+	let moves = shuffled(rand, s.moves).slice(0, 4);
+	if (FORCED_MOVES.length) {
+		const known = shuffled(rand, FORCED_MOVES.filter(m => s.moves.includes(m))).slice(0, 2);
+		moves = [...known, ...moves.filter(m => !known.includes(m))].slice(0, 4);
+	}
 	// Protect is on nearly every real doubles set; make sure it is exercised.
 	if (rand() < 0.35 && !moves.includes('protect') && s.moves.includes('protect')) moves[3] = 'protect';
 	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand), ...extras(rand, s) };
+}
+
+let learners = null;
+function moveLearners() {
+	if (!learners) {
+		learners = pool.species.filter(s => FORCED_MOVES.some(m => s.moves.includes(m)));
+		if (learners.length < 12) throw new Error(`--moves: only ${learners.length} species learn any of ${FORCED_MOVES}`);
+	}
+	return learners;
 }
 
 /** A set guaranteed to know `moveId`, so that every modelled move gets exercised. */
@@ -207,8 +229,21 @@ function snapshot(battle) {
 		request: battle.requestState || '',
 		rng: battle.prng.getSeed().split(',').map(Number),
 		effect_order: battle.effectOrder,
+		field: {
+			weather: battle.field.weather,
+			weather_turns: battle.field.weatherState.duration || 0,
+			terrain: battle.field.terrain,
+			terrain_turns: battle.field.terrainState.duration || 0,
+			pseudo: Object.keys(battle.field.pseudoWeather).map(id => `${id}:${battle.field.pseudoWeather[id].duration || 0}`),
+		},
 		sides: battle.sides.map(side => ({
 			left: side.pokemonLeft,
+			// Side conditions as id:turns left:detail:effect order, in the order they were added.
+			conds: Object.keys(side.sideConditions).map(id => {
+				const st = side.sideConditions[id];
+				return `${id}:${st.duration || 0}:${condDetail(id, st)}:${st.effectOrder || 0}`;
+			}),
+			slots: side.slotConditions.map(slot => Object.keys(slot).map(id => `${id}:${slot[id].duration || 0}:${condDetail(id, slot[id])}`)),
 			mons: side.pokemon.map(p => ({
 				idx: p.pickIndex,
 				species: p.species.id,
@@ -242,6 +277,15 @@ function snapshot(battle) {
 			})),
 		})),
 	};
+}
+
+/** The state a side or slot condition carries, as the Rust engine prints it. */
+function condDetail(id, state) {
+	switch (id) {
+	case 'spikes': case 'toxicspikes': return state.layers || 0;
+	case 'wish': return `${Math.floor(state.hp)}/${state.startingTurn}`;
+	default: return 0;
+	}
 }
 
 /** The state a volatile carries, as the Rust engine prints it. */

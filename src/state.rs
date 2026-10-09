@@ -1,7 +1,10 @@
 //! Battle state. Everything here is plain fixed-size data so a `Battle` can be
 //! copied cheaply (search wants thousands of copies per decision).
 
-use crate::data::{Boosts, Category, Ev, Gender, MOVES, MoveData, Secondary, Status, Target, Type, VolKind};
+use crate::data::{
+    Boosts, Category, Ev, Gender, MOVES, MoveData, Pseudo, Secondary, SideCond, SlotCond, Status, Target, Terrain,
+    Type, VolKind, Weather,
+};
 use crate::rng::Rng;
 
 /// Largest team a side can bring into battle.
@@ -9,7 +12,11 @@ pub const MAX_TEAM: usize = 6;
 /// Active Pokémon per side (doubles).
 pub const ACTIVE: usize = 2;
 pub const MAX_MOVES: usize = 4;
-const MAX_VOLATILES: usize = crate::data::N_VOLATILES;
+/// Most volatile conditions one Pokémon can hold at once. Far more than any
+/// real game state reaches; adding one beyond it fails like an immunity would.
+pub const VOL_CAP: usize = 20;
+/// "No position" in `Cond::source_slot`.
+pub const NO_SLOT: u8 = u8::MAX;
 
 /// "No species" in fields that hold an optional species index.
 pub const NO_SPECIES: u16 = u16::MAX;
@@ -46,56 +53,84 @@ pub struct EffState {
     pub b: i16,
 }
 
+/// One instance of a condition: a volatile on a Pokémon, a condition on a
+/// side or on one of its positions, a pseudo-weather, the weather or the
+/// terrain. `K` is the enum naming the condition.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Volatile {
-    pub kind: VolKind,
-    /// Turns left; 0 means the volatile has no duration.
+pub struct Cond<K: Copy> {
+    pub kind: K,
+    /// Turns left; 0 means the condition has no duration.
     pub duration: u8,
+    /// Whatever the condition keeps in its state, documented where the
+    /// condition is written (`conditions.rs`). For the first volatiles:
     /// `stall`: 1-in-`data` chance the next protecting move works.
     /// `choicelock`: the move table index the holder is locked into, plus one.
     /// `confusion`: turns of confusion left.
     /// `metronome`: the last move used (table index plus one); `st.a` counts consecutive uses.
     pub data: u16,
+    /// The Pokémon that caused the condition (`effectState.source`).
+    pub source: Option<MonRef>,
+    /// Where that Pokémon stood at the time, as side * 2 + position (`effectState.sourceSlot`).
+    pub source_slot: u8,
+    /// Set once one of the condition's handlers has run inside an event.
+    /// Showdown sorts a pseudo-weather's handlers differently from then on.
+    pub(crate) targeted: bool,
     pub st: EffState,
 }
 
-/// Volatile statuses in the order they were added. Showdown iterates them in
-/// insertion order, and that order decides how speed ties between their
-/// handlers are broken, so it is part of the state.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Volatiles {
-    len: u8,
-    items: [Volatile; MAX_VOLATILES],
-}
-
-impl Default for Volatiles {
-    fn default() -> Self {
-        let blank =
-            Volatile { kind: VolKind::Flinch, duration: 0, data: 0, st: EffState { order: 0, uid: 0, a: 0, b: 0 } };
-        Volatiles { len: 0, items: [blank; MAX_VOLATILES] }
+impl<K: Copy> Cond<K> {
+    pub(crate) const fn new(kind: K) -> Cond<K> {
+        Cond {
+            kind,
+            duration: 0,
+            data: 0,
+            source: None,
+            source_slot: NO_SLOT,
+            targeted: false,
+            st: EffState { order: 0, uid: 0, a: 0, b: 0 },
+        }
     }
 }
 
-impl Volatiles {
-    pub fn as_slice(&self) -> &[Volatile] {
+/// Conditions in the order they were added. Showdown iterates them in
+/// insertion order, and that order decides how ties between their handlers
+/// come out, so it is part of the state.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CondList<K: Copy, const N: usize> {
+    len: u8,
+    items: [Cond<K>; N],
+}
+
+impl<K: Copy, const N: usize> CondList<K, N> {
+    /// An empty list; `blank` only fills the unused storage.
+    pub(crate) const fn new(blank: K) -> Self {
+        CondList { len: 0, items: [Cond::new(blank); N] }
+    }
+}
+
+impl<K: Copy + PartialEq, const N: usize> CondList<K, N> {
+    pub fn as_slice(&self) -> &[Cond<K>] {
         &self.items[..self.len as usize]
     }
-    pub fn get(&self, kind: VolKind) -> Option<&Volatile> {
+    pub fn get(&self, kind: K) -> Option<&Cond<K>> {
         self.as_slice().iter().find(|v| v.kind == kind)
     }
-    pub fn get_mut(&mut self, kind: VolKind) -> Option<&mut Volatile> {
+    pub fn get_mut(&mut self, kind: K) -> Option<&mut Cond<K>> {
         let n = self.len as usize;
         self.items[..n].iter_mut().find(|v| v.kind == kind)
     }
-    pub fn has(&self, kind: VolKind) -> bool {
+    pub fn has(&self, kind: K) -> bool {
         self.get(kind).is_some()
     }
-    pub fn push(&mut self, v: Volatile) {
+    pub fn is_full(&self) -> bool {
+        self.len as usize == N
+    }
+    pub(crate) fn push(&mut self, v: Cond<K>) {
         debug_assert!(!self.has(v.kind));
         self.items[self.len as usize] = v;
         self.len += 1;
     }
-    pub fn remove(&mut self, kind: VolKind) -> bool {
+    pub(crate) fn remove(&mut self, kind: K) -> bool {
         let n = self.len as usize;
         match self.items[..n].iter().position(|v| v.kind == kind) {
             Some(i) => {
@@ -106,9 +141,44 @@ impl Volatiles {
             None => false,
         }
     }
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.len = 0;
     }
+    /// Remove every condition `pred` picks and return them, both lists keeping their order.
+    pub(crate) fn take_where(&mut self, pred: impl Fn(K) -> bool) -> Self {
+        let mut taken = Self { len: 0, items: self.items };
+        let mut kept = 0;
+        for i in 0..self.len as usize {
+            let c = self.items[i];
+            if pred(c.kind) {
+                taken.items[taken.len as usize] = c;
+                taken.len += 1;
+            } else {
+                self.items[kept] = c;
+                kept += 1;
+            }
+        }
+        self.len = kept as u8;
+        taken
+    }
+}
+
+/// A volatile condition on a Pokémon.
+pub type Volatile = Cond<VolKind>;
+/// The volatiles of the Pokémon in one active position. Only Pokémon on the
+/// field have any, so they are stored per position rather than per Pokémon.
+pub type Volatiles = CondList<VolKind, VOL_CAP>;
+pub type SideConds = CondList<SideCond, { crate::data::N_SIDE_CONDS }>;
+pub type SlotConds = CondList<SlotCond, { crate::data::N_SLOT_CONDS }>;
+pub type PseudoWeathers = CondList<Pseudo, { crate::data::N_PSEUDO }>;
+
+/// Conditions on the whole field (Showdown's `Field`).
+#[derive(Clone, Copy, Debug)]
+pub struct Field {
+    /// `kind` is `Weather::None` when there is no weather.
+    pub weather: Cond<Weather>,
+    pub terrain: Cond<Terrain>,
+    pub pseudo: PseudoWeathers,
 }
 
 /// `Pokemon#trapped`.
@@ -186,7 +256,6 @@ pub struct Pokemon {
     /// Speed as last cached by Showdown's `updateSpeed`; several orderings read
     /// this stale value rather than the live stat.
     pub speed: i32,
-    pub volatiles: Volatiles,
 }
 
 impl Pokemon {
@@ -205,6 +274,10 @@ pub struct Side {
     pub pokemon_left: u8,
     /// How many of this side's Pokémon have fainted so far.
     pub total_fainted: u8,
+    /// Conditions on the whole side (Tailwind, screens, hazards).
+    pub conds: SideConds,
+    /// Conditions on each active position (Wish).
+    pub slot_conds: [SlotConds; ACTIVE],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -402,6 +475,18 @@ impl Queue {
     pub fn clear(&mut self) {
         self.len = 0;
     }
+    /// Showdown's `cancelMove`: drop the queued move of `mon`.
+    pub fn cancel_move(&mut self, mon: MonRef) -> bool {
+        let n = self.len as usize;
+        match self.items[..n].iter().position(|a| a.kind == ActKind::Move && a.mon == Some(mon)) {
+            Some(i) => {
+                self.items.copy_within(i + 1..n, i);
+                self.len -= 1;
+                true
+            }
+            None => false,
+        }
+    }
     /// Showdown's `cancelAction`: drop every queued action belonging to `mon`.
     pub fn cancel(&mut self, mon: MonRef) {
         let mut w = 0;
@@ -425,6 +510,11 @@ pub(crate) enum Eff {
     Vol(VolKind),
     Ability(u16),
     Item(u16),
+    Weather(Weather),
+    Terrain(Terrain),
+    Pseudo(Pseudo),
+    SideCond(SideCond),
+    SlotCond(SlotCond),
     /// The pseudo-conditions Showdown names `recoil`, `drain` and `strugglerecoil`.
     Recoil,
     Drain,
@@ -439,6 +529,14 @@ impl Eff {
     pub fn is_move(self) -> bool {
         matches!(self, Eff::Move(_) | Eff::Confused)
     }
+}
+
+/// What an effect sits on (Showdown's `effectHolder`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Holder {
+    Mon(MonRef),
+    Side(u8),
+    Field,
 }
 
 /// Showdown callbacks return numbers, booleans, `undefined`, `null` or `''`
@@ -507,6 +605,8 @@ pub(crate) enum Imm {
     Vol(VolKind),
     Powder,
     Trapped,
+    /// Damage from a weather (only sandstorm deals any).
+    Weather(Weather),
 }
 
 /// The event being run (Showdown's `battle.event`), including the values that
@@ -516,6 +616,8 @@ pub(crate) struct Event {
     /// `None` outside any event.
     pub id: Option<Ev>,
     pub target: Option<MonRef>,
+    /// The side, for the few events whose target is a side rather than a Pokémon.
+    pub target_side: Option<u8>,
     pub source: Option<MonRef>,
     /// The effect that caused the event (`sourceEffect`).
     pub effect: Eff,
@@ -543,6 +645,7 @@ impl Event {
     pub const NONE: Event = Event {
         id: None,
         target: None,
+        target_side: None,
         source: None,
         effect: Eff::None,
         modifier: 4096,
@@ -596,6 +699,8 @@ pub(crate) struct ActiveMove {
     /// `None` is Showdown's `undefined`: roll for a critical hit.
     pub will_crit: Option<bool>,
     pub multihit: (u8, u8),
+    /// The stat changes the move makes to its target (Growth doubles its own in the sun).
+    pub boosts: Option<Boosts>,
     pub secs: [Secondary; MAX_SECS],
     pub n_secs: u8,
     /// Whether `secondaries` still exists (Sheer Force deletes it).
@@ -606,6 +711,8 @@ pub(crate) struct ActiveMove {
     pub ignore_immunity: IgnoreImm,
     pub ignore_evasion: bool,
     pub ignore_defensive: bool,
+    /// `overrideOffensiveStat` (0 = the category's own); Wonder Room can flip it.
+    pub off_stat: u8,
     pub has_sheer_force: bool,
     pub prankster_boosted: bool,
     pub tracks_target: bool,
@@ -639,7 +746,14 @@ impl ActiveMove {
     /// `dex.getActiveMove`: a fresh copy of the move's data.
     pub fn new(id: u16) -> ActiveMove {
         let d = &MOVES[id as usize];
-        let blank = Secondary { chance: 0, status: Status::None, boosts: None, volatile: None, self_boosts: None };
+        let blank = Secondary {
+            chance: 0,
+            status: Status::None,
+            boosts: None,
+            volatile: None,
+            self_boosts: None,
+            on_hit: false,
+        };
         let mut secs = [blank; MAX_SECS];
         for (i, s) in d.secondaries.iter().enumerate() {
             secs[i] = *s;
@@ -656,6 +770,7 @@ impl ActiveMove {
             crit_ratio: d.crit_ratio,
             will_crit: if d.will_crit { Some(true) } else { None },
             multihit: d.multihit,
+            boosts: d.boosts,
             secs,
             n_secs: d.secondaries.len() as u8,
             has_secs: !d.secondaries.is_empty(),
@@ -666,6 +781,7 @@ impl ActiveMove {
             ignore_immunity: if d.ignore_immunity { IgnoreImm::All } else { IgnoreImm::No },
             ignore_evasion: d.ignore_evasion,
             ignore_defensive: d.ignore_defensive,
+            off_stat: d.off_stat,
             has_sheer_force: false,
             prankster_boosted: false,
             tracks_target: false,
@@ -702,6 +818,9 @@ pub(crate) const AM_CAP: usize = 6;
 pub struct Battle {
     pub rng: Rng,
     pub sides: [Side; 2],
+    pub field: Field,
+    /// Volatile conditions, indexed by side and active position.
+    pub(crate) vols: [[Volatiles; ACTIVE]; 2],
     pub turn: u16,
     pub request: Request,
     pub ended: bool,
@@ -721,7 +840,7 @@ pub struct Battle {
     pub(crate) event: Event,
     /// The effect whose handler is running (`battle.effect`) and the Pokémon it is on.
     pub(crate) effect: Eff,
-    pub(crate) effect_holder: Option<MonRef>,
+    pub(crate) effect_holder: Option<Holder>,
     pub(crate) event_depth: u8,
     pub(crate) am: [ActiveMove; AM_CAP],
     pub(crate) am_len: u8,

@@ -2,8 +2,8 @@
 //! and reports the first place this engine disagrees. Used by the `difftest`
 //! binary and by the fixture test in `tests/`.
 
-use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, Type, VolKind};
-use crate::state::{NO_SPECIES, Res, Trapped};
+use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather};
+use crate::state::{Cond, NO_SPECIES, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -98,6 +98,22 @@ pub struct MonSnap {
 pub struct SideSnap {
     pub left: u8,
     pub mons: Vec<MonSnap>,
+    /// Side conditions as `id:turns left:detail:effect order` (absent in older files).
+    #[serde(default)]
+    pub conds: Option<Vec<String>>,
+    /// Slot conditions per active position, as `id:turns left:detail`.
+    #[serde(default)]
+    pub slots: Option<Vec<Vec<String>>>,
+}
+
+/// Weather, terrain and pseudo-weathers.
+#[derive(Deserialize, PartialEq, Debug)]
+pub struct FieldSnap {
+    pub weather: String,
+    pub weather_turns: u8,
+    pub terrain: String,
+    pub terrain_turns: u8,
+    pub pseudo: Vec<String>,
 }
 
 /// Showdown's state at one decision point.
@@ -112,6 +128,8 @@ pub struct Snap {
     /// Showdown's `effectOrder` counter (absent in older files).
     #[serde(default)]
     pub effect_order: Option<u32>,
+    #[serde(default)]
+    pub field: Option<FieldSnap>,
     pub sides: [SideSnap; 2],
     /// Showdown's RNG draws during the step (only recorded with `--trace`).
     #[serde(default)]
@@ -166,7 +184,7 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         fainted: m.fainted,
         switch_flag: m.switch_flag,
         speed: m.speed,
-        vol: m.volatiles.as_slice().iter().map(vol_snap).collect(),
+        vol: b.vols(r).as_slice().iter().map(vol_snap).collect(),
         ability: Some(ABILITIES[m.ability as usize].id.to_string()),
         item: Some(ITEMS[m.item as usize].id.to_string()),
         last_item: Some(ITEMS[m.last_item as usize].id.to_string()),
@@ -199,6 +217,23 @@ fn result_code(r: Res) -> char {
         Res::Bool(true) => 't',
         Res::Bool(false) => 'f',
         _ => '?',
+    }
+}
+
+/// The state a side condition carries (the recorder writes the same thing).
+fn side_detail(c: &Cond<SideCond>) -> String {
+    match c.kind {
+        // Layers.
+        SideCond::Spikes | SideCond::Toxicspikes => c.data.to_string(),
+        _ => "0".to_string(),
+    }
+}
+
+/// The state a slot condition carries.
+fn slot_detail(c: &Cond<SlotCond>) -> String {
+    match c.kind {
+        // HP to restore / turn counter value when the wish was made.
+        SlotCond::Wish => format!("{}/{}", c.data, c.st.a),
     }
 }
 
@@ -242,9 +277,39 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
     if let Some(eo) = want.effect_order {
         check!("effect order counter", b.effect_order, eo);
     }
+    if let Some(wf) = &want.field {
+        let f = &b.field;
+        let got = FieldSnap {
+            weather: f.weather.kind.id().to_string(),
+            weather_turns: if f.weather.kind == Weather::None { 0 } else { f.weather.duration },
+            terrain: f.terrain.kind.id().to_string(),
+            terrain_turns: if f.terrain.kind == Terrain::None { 0 } else { f.terrain.duration },
+            pseudo: f.pseudo.as_slice().iter().map(|c| format!("{}:{}", c.kind.id(), c.duration)).collect(),
+        };
+        check!("field", &got, wf);
+    }
     for side in 0..2 {
         let ws = &want.sides[side];
         check!(format!("p{} pokemon left", side + 1), b.sides[side].pokemon_left, ws.left);
+        if let Some(wc) = &ws.conds {
+            let got: Vec<String> = b.sides[side]
+                .conds
+                .as_slice()
+                .iter()
+                .map(|c| format!("{}:{}:{}:{}", c.kind.id(), c.duration, side_detail(c), c.st.order))
+                .collect();
+            check!(format!("p{} side conditions", side + 1), &got, wc);
+        }
+        if let Some(wsl) = &ws.slots {
+            let got: Vec<Vec<String>> = b.sides[side]
+                .slot_conds
+                .iter()
+                .map(|l| {
+                    l.as_slice().iter().map(|c| format!("{}:{}:{}", c.kind.id(), c.duration, slot_detail(c))).collect()
+                })
+                .collect();
+            check!(format!("p{} slot conditions", side + 1), &got, wsl);
+        }
         if b.sides[side].n as usize != ws.mons.len() {
             out.push(format!("p{} team size differs", side + 1));
             continue;

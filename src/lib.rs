@@ -11,6 +11,7 @@ mod conditions;
 pub mod data;
 mod events;
 mod items;
+mod movecbs;
 mod moves;
 pub mod replay;
 #[rustfmt::skip]

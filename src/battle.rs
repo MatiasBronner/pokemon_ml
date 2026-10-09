@@ -263,6 +263,29 @@ impl Battle {
         r.side as usize * 2 + (self.mon(r).position as usize).min(1)
     }
 
+    /// The volatile conditions of a Pokémon. Only a Pokémon in an active
+    /// position can have any.
+    pub fn vols(&self, r: MonRef) -> &Volatiles {
+        static EMPTY: Volatiles = Volatiles::new(VolKind::FIRST);
+        let pos = self.mon(r).position as usize;
+        if pos < ACTIVE { &self.vols[r.side as usize][pos] } else { &EMPTY }
+    }
+    pub(crate) fn vols_mut(&mut self, r: MonRef) -> Option<&mut Volatiles> {
+        let pos = self.mon(r).position as usize;
+        if pos < ACTIVE { Some(&mut self.vols[r.side as usize][pos]) } else { None }
+    }
+    pub(crate) fn vol_mut(&mut self, r: MonRef, kind: VolKind) -> Option<&mut Volatile> {
+        self.vols_mut(r).and_then(|l| l.get_mut(kind))
+    }
+    /// Delete a volatile outright (Showdown's `delete pokemon.volatiles[id]`): no End event.
+    pub(crate) fn drop_vol(&mut self, r: MonRef, kind: VolKind) -> bool {
+        self.vols_mut(r).is_some_and(|l| l.remove(kind))
+    }
+    /// `side * 2 + position` of a Pokémon, for `Cond::source_slot`.
+    pub(crate) fn field_slot(&self, r: MonRef) -> u8 {
+        r.side * 2 + self.mon(r).position
+    }
+
     // ------------------------------------------------------------------- rng
 
     pub(crate) fn rand(&mut self, n: u32, what: &'static str) -> u32 {
@@ -330,6 +353,13 @@ impl Battle {
     /// `Pokemon#getStat` (stat index 1 = atk .. 5 = spe).
     pub(crate) fn get_stat(&mut self, r: MonRef, stat: usize, unboosted: bool, unmodified: bool) -> u32 {
         let mut value = self.mon(r).stats[stat] as u32;
+        // Download ignores Wonder Room's swap of the stats, but then reads the
+        // stage of the other defence.
+        let stat = match stat {
+            2 if unmodified && self.field.pseudo.has(Pseudo::Wonderroom) => 4,
+            4 if unmodified && self.field.pseudo.has(Pseudo::Wonderroom) => 2,
+            s => s,
+        };
         if !unboosted {
             let mut boosts = self.mon(r).boosts;
             if !unmodified {
@@ -359,16 +389,24 @@ impl Battle {
 
     /// `Pokemon#calculateStat`: a stat at a given stage, as seen by `stat_user`.
     pub(crate) fn calculate_stat(&mut self, r: MonRef, stat: usize, boost: i32, stat_user: MonRef) -> u32 {
-        let value = self.mon(r).stats[stat] as u32;
+        // Wonder Room swaps the raw defences before anything else (the stage and
+        // the modifiers applied afterwards are still those of the stat asked for).
+        let raw = match stat {
+            2 if self.field.pseudo.has(Pseudo::Wonderroom) => 4,
+            4 if self.field.pseudo.has(Pseudo::Wonderroom) => 2,
+            s => s,
+        };
+        let value = self.mon(r).stats[raw] as u32;
         let mut boosts = [0i8; 7];
         boosts[stat - 1] = boost as i8;
         let boosts = self.modify_boost(stat_user, boosts);
         boosted(value, boosts[stat - 1] as i32)
     }
 
-    /// `Pokemon#getActionSpeed` under the Champions mod (no Trick Room yet).
+    /// `Pokemon#getActionSpeed` under the Champions mod: Trick Room simply negates Speed.
     pub(crate) fn action_speed(&mut self, r: MonRef) -> i32 {
-        self.get_stat(r, 5, false, false) as i32
+        let speed = self.get_stat(r, 5, false, false) as i32;
+        if self.field.pseudo.has(Pseudo::Trickroom) { -speed } else { speed }
     }
     /// `Battle#updateSpeed`.
     pub(crate) fn update_speed(&mut self) {
@@ -407,6 +445,8 @@ impl Battle {
             Imm::Status(Status::None) => return true,
             Imm::Powder => self.type_allows(r, 5),
             Imm::Trapped => self.type_allows(r, 6),
+            Imm::Weather(Weather::Sandstorm) => self.type_allows(r, 8),
+            Imm::Weather(_) => true,
             Imm::Vol(_) => true,
         };
         if !natural {
@@ -423,16 +463,29 @@ impl Battle {
     /// `Pokemon#isGrounded`. Showdown returns `null` for Levitate, which every
     /// caller treats like `false`.
     pub(crate) fn is_grounded(&mut self, r: MonRef, negate_immunity: bool) -> bool {
+        if self.field.pseudo.has(Pseudo::Gravity) {
+            return true;
+        }
+        if self.has_vol_named(r, "ingrain") || self.has_vol_named(r, "smackdown") {
+            return true;
+        }
         let item = if self.ignoring_item(r) { it::NONE } else { self.mon(r).item };
         if item == it::IRONBALL {
             return true;
         }
-        if !negate_immunity && self.has_type(r, Type::Flying) {
+        // (A Fire/Flying type that used Burn Up and then Roost is the exception to this rule.)
+        if !negate_immunity
+            && self.has_type(r, Type::Flying)
+            && !(self.has_type(r, Type::Typeless) && self.has_vol_named(r, "roost"))
+        {
             return false;
         }
         if (self.has_ability(r, ab::LEVITATE) || self.has_ability(r, ab::EELEVATE))
             && !self.suppressing_ability(Some(r))
         {
+            return false;
+        }
+        if self.has_vol_named(r, "magnetrise") || self.has_vol_named(r, "telekinesis") {
             return false;
         }
         item != it::AIRBALLOON
@@ -587,11 +640,24 @@ impl Battle {
             let d = &MOVES[a.move_id as usize];
             let mut priority = d.priority as i32;
             let target = self.get_target(r, d.target, a.target_loc, None);
-            if self.event_mask & Ev::ModifyPriority.bit() != 0 {
+            let own = d.events & Ev::ModifyPriority.bit() != 0;
+            if own || self.event_mask & Ev::ModifyPriority.bit() != 0 {
                 // Handlers see the queued move itself; give it a scratch slot.
                 let saved = self.am_len;
                 let mi = self.new_am(a.move_id);
                 self.am[mi as usize].prankster_boosted = a.prankster;
+                // The move's own onModifyPriority(priority, source, target, move) (Grassy Glide).
+                priority = self
+                    .single_event(
+                        Ev::ModifyPriority,
+                        Eff::Move(mi),
+                        None,
+                        Some(r),
+                        target,
+                        Eff::None,
+                        Res::Num(priority),
+                    )
+                    .num();
                 priority = self.run_event(Ev::ModifyPriority, Some(r), target, Eff::Move(mi), Res::Num(priority)).num();
                 a.prankster = self.am[mi as usize].prankster_boosted;
                 self.am_len = saved;
@@ -692,6 +758,11 @@ impl Battle {
         self.queue = q;
     }
 
+    /// `BattleQueue#cancelMove`.
+    pub(crate) fn cancel_move(&mut self, r: MonRef) -> bool {
+        self.queue.cancel_move(r)
+    }
+
     /// `BattleQueue#willAct`.
     pub(crate) fn will_act(&self) -> bool {
         self.queue.as_slice().iter().any(|a| matches!(a.kind, ActKind::Move | ActKind::Switch | ActKind::InstaSwitch))
@@ -712,7 +783,10 @@ impl Battle {
         let m = self.mon_mut(r);
         m.boosts = [0; 7];
         m.ability = m.base_ability;
-        m.volatiles.clear();
+        if let Some(list) = self.vols_mut(r) {
+            list.clear();
+        }
+        let m = self.mon_mut(r);
         if include_switch_flags {
             m.switch_flag = false;
         }
@@ -953,6 +1027,12 @@ impl Battle {
                 amount = amount.max(1);
             }
             if effect != Eff::StruggleRecoil {
+                if let Eff::Weather(w) = effect {
+                    if !self.run_status_immunity(target, Imm::Weather(w)) {
+                        damage[i] = Res::Num(0);
+                        continue;
+                    }
+                }
                 let e = Event::new(Ev::Damage, Some(target), source, effect);
                 let r = if self.event_mask & Ev::Damage.bit() != 0 || effect.is_move() {
                     self.run_event_ex(e, Res::Num(amount), true, false).0
@@ -1163,6 +1243,8 @@ impl Battle {
             m.tox_stage = 0;
             m.status_st = st;
         }
+        let data = &STATUS_CONDS[status as usize];
+        self.listen(data.events, data.events_pre);
         if !self
             .single_event(Ev::Start, Eff::Status(status), Some(r), Some(r), source, source_effect, Res::Undef)
             .truthy()
@@ -1219,7 +1301,7 @@ impl Battle {
         }
         let source = source.or(self.event.source).or(Some(r));
         let source_effect = if source_effect == Eff::None { self.effect } else { source_effect };
-        if self.mon(r).volatiles.has(kind) {
+        if self.vols(r).has(kind) {
             if !self.has_cb(Eff::Vol(kind), Ev::Restart) {
                 return FALSE;
             }
@@ -1236,12 +1318,24 @@ impl Battle {
                 return result;
             }
         }
-        let st = self.new_state(true, r);
-        let v = Volatile { kind, duration: VOL_CONDS[kind as usize].duration, data: 0, st };
-        self.mon_mut(r).volatiles.push(v);
+        if self.vols_mut(r).is_none_or(|l| l.is_full()) {
+            // Not on the field, or holding an absurd number of volatiles already.
+            return FALSE;
+        }
+        let data = kind.data();
+        let mut v = Volatile::new(kind);
+        v.st = self.new_state(true, r);
+        v.duration = data.duration;
+        v.source = source;
+        v.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        if data.duration_cb {
+            v.duration = self.cond_duration(Eff::Vol(kind), Some(r), source, source_effect);
+        }
+        self.vols_mut(r).unwrap().push(v);
+        self.listen(data.events, data.events_pre);
         let result = self.single_event(Ev::Start, Eff::Vol(kind), Some(r), Some(r), source, source_effect, Res::Undef);
         if !result.truthy() {
-            self.mon_mut(r).volatiles.remove(kind);
+            self.drop_vol(r, kind);
             return result;
         }
         TRUE
@@ -1249,11 +1343,297 @@ impl Battle {
 
     /// `Pokemon#removeVolatile`.
     pub(crate) fn remove_volatile(&mut self, r: MonRef, kind: VolKind) -> bool {
-        if self.mon(r).hp == 0 || !self.mon(r).volatiles.has(kind) {
+        if self.mon(r).hp == 0 || !self.vols(r).has(kind) {
             return false;
         }
         self.single_event(Ev::End, Eff::Vol(kind), Some(r), Some(r), None, Eff::None, Res::Undef);
-        self.mon_mut(r).volatiles.remove(kind);
+        self.drop_vol(r, kind);
+        true
+    }
+
+    // ------------------------------------------------- field and side conditions
+
+    /// `Field#suppressingWeather`: an active Pokémon has Cloud Nine or Air Lock.
+    pub(crate) fn suppressing_weather(&self) -> bool {
+        for side in 0..2 {
+            for pos in 0..ACTIVE {
+                let r = self.active(side, pos);
+                let m = self.mon(r);
+                if self.in_play(r)
+                    && !m.fainted
+                    && !self.ignoring_ability(r)
+                    && matches!(m.ability, ab::CLOUDNINE | ab::AIRLOCK)
+                    && m.ability_st.a == 0
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// `Field#effectiveWeather`.
+    pub(crate) fn field_weather(&self) -> Weather {
+        if self.field.weather.kind == Weather::None || self.suppressing_weather() {
+            Weather::None
+        } else {
+            self.field.weather.kind
+        }
+    }
+
+    /// `Field#isWeather`.
+    pub(crate) fn is_weather(&self, w: Weather) -> bool {
+        self.field_weather() == w
+    }
+
+    /// `Pokemon#effectiveWeather`: the weather as one Pokémon experiences it.
+    /// While a Pokémon with Mega Sol is using a move, moves and weather
+    /// effects behave as if the sun were out. (Utility Umbrella is not in Champions.)
+    pub(crate) fn effective_weather(&self, _r: MonRef) -> Weather {
+        let weather = self.field_weather();
+        if self.active_pokemon.is_some_and(|p| self.has_ability(p, ab::MEGASOL))
+            && (self.effect == Eff::Ability(ab::MEGASOL) || matches!(self.effect, Eff::Move(_) | Eff::Weather(_)))
+        {
+            return Weather::Sunnyday;
+        }
+        weather
+    }
+
+    /// `Field#setWeather`. `Res::Null` is Showdown's "blocked, say nothing".
+    pub(crate) fn set_weather(&mut self, w: Weather, source: Option<MonRef>, source_effect: Eff) -> Res {
+        let source_effect = if source_effect == Eff::None { self.effect } else { source_effect };
+        let source = source.or(self.event.target);
+        if self.field.weather.kind == w {
+            return FALSE;
+        }
+        // The SetWeather event only has listeners among the primal weathers.
+        let prev = self.field.weather;
+        let data = w.data();
+        let mut c = Cond::new(w);
+        // A field effect's state has no target, so it takes no place in the effect order.
+        c.st = self.new_state_counted(false);
+        c.source = source;
+        c.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        c.duration = data.duration;
+        if data.duration_cb {
+            c.duration = self.cond_duration(Eff::Weather(w), source, source, source_effect);
+        }
+        self.field.weather = c;
+        self.listen(data.events, data.events_pre);
+        if !self.single_event_at(Ev::FieldStart, Eff::Weather(w), Holder::Field, source, source_effect).truthy() {
+            self.field.weather = prev;
+            return FALSE;
+        }
+        self.each_event_from(Ev::WeatherChange, source_effect);
+        TRUE
+    }
+
+    /// `Field#clearWeather`.
+    pub(crate) fn clear_weather(&mut self) -> bool {
+        let prev = self.field.weather.kind;
+        if prev == Weather::None {
+            return false;
+        }
+        self.single_event_at(Ev::FieldEnd, Eff::Weather(prev), Holder::Field, None, Eff::None);
+        self.field.weather = Cond::new(Weather::None);
+        let effect = self.effect;
+        self.each_event_from(Ev::WeatherChange, effect);
+        true
+    }
+
+    /// `Field#setTerrain`.
+    pub(crate) fn set_terrain(&mut self, t: Terrain, source: Option<MonRef>, source_effect: Eff) -> bool {
+        let source_effect = if source_effect == Eff::None { self.effect } else { source_effect };
+        let source = source.or(self.event.target);
+        if self.field.terrain.kind == t {
+            return false;
+        }
+        let prev = self.field.terrain;
+        let data = t.data();
+        let mut c = Cond::new(t);
+        c.st = self.new_state_counted(false);
+        c.source = source;
+        c.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        c.duration = data.duration;
+        if data.duration_cb {
+            c.duration = self.cond_duration(Eff::Terrain(t), source, source, source_effect);
+        }
+        self.field.terrain = c;
+        self.listen(data.events, data.events_pre);
+        if !self.single_event_at(Ev::FieldStart, Eff::Terrain(t), Holder::Field, source, source_effect).truthy() {
+            self.field.terrain = prev;
+            return false;
+        }
+        self.each_event_from(Ev::TerrainChange, source_effect);
+        true
+    }
+
+    /// `Field#clearTerrain`.
+    pub(crate) fn clear_terrain(&mut self) -> bool {
+        let prev = self.field.terrain.kind;
+        if prev == Terrain::None {
+            return false;
+        }
+        self.single_event_at(Ev::FieldEnd, Eff::Terrain(prev), Holder::Field, None, Eff::None);
+        self.field.terrain = Cond::new(Terrain::None);
+        let effect = self.effect;
+        self.each_event_from(Ev::TerrainChange, effect);
+        true
+    }
+
+    /// `Field#isTerrain`. (The TryTerrain event has no listeners.)
+    pub(crate) fn is_terrain(&self, t: Terrain) -> bool {
+        self.field.terrain.kind == t
+    }
+
+    /// `Field#addPseudoWeather`.
+    pub(crate) fn add_pseudo_weather(&mut self, kind: Pseudo, source: Option<MonRef>, source_effect: Eff) -> bool {
+        let source = source.or(self.event.target);
+        if self.field.pseudo.has(kind) {
+            if !self.has_cb(Eff::Pseudo(kind), Ev::FieldRestart) {
+                return false;
+            }
+            return self
+                .single_event_at(Ev::FieldRestart, Eff::Pseudo(kind), Holder::Field, source, source_effect)
+                .truthy();
+        }
+        let data = kind.data();
+        let mut c = Cond::new(kind);
+        c.st = self.new_state_counted(false);
+        c.source = source;
+        c.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        c.duration = data.duration;
+        if data.duration_cb {
+            c.duration = self.cond_duration(Eff::Pseudo(kind), source, source, source_effect);
+        }
+        self.field.pseudo.push(c);
+        self.listen(data.events, data.events_pre);
+        if !self.single_event_at(Ev::FieldStart, Eff::Pseudo(kind), Holder::Field, source, source_effect).truthy() {
+            self.field.pseudo.remove(kind);
+            return false;
+        }
+        // The PseudoWeatherChange event has no listeners.
+        true
+    }
+
+    /// `Field#removePseudoWeather`.
+    pub(crate) fn remove_pseudo_weather(&mut self, kind: Pseudo) -> bool {
+        if !self.field.pseudo.has(kind) {
+            return false;
+        }
+        self.single_event_at(Ev::FieldEnd, Eff::Pseudo(kind), Holder::Field, None, Eff::None);
+        self.field.pseudo.remove(kind);
+        true
+    }
+
+    /// `Side#addSideCondition`.
+    pub(crate) fn add_side_condition(
+        &mut self,
+        side: usize,
+        kind: SideCond,
+        source: Option<MonRef>,
+        source_effect: Eff,
+    ) -> Res {
+        let source = source.or(self.event.target);
+        let holder = Holder::Side(side as u8);
+        if self.sides[side].conds.has(kind) {
+            if !self.has_cb(Eff::SideCond(kind), Ev::SideRestart) {
+                return FALSE;
+            }
+            return self.single_event_at(Ev::SideRestart, Eff::SideCond(kind), holder, source, source_effect);
+        }
+        let data = kind.data();
+        let mut c = Cond::new(kind);
+        // A side condition's state has the side as its target, so it is counted.
+        c.st = self.new_state_counted(true);
+        c.source = source;
+        c.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        c.duration = data.duration;
+        if data.duration_cb {
+            let first = self.active(side, 0);
+            c.duration = self.cond_duration(Eff::SideCond(kind), Some(first), source, source_effect);
+        }
+        self.sides[side].conds.push(c);
+        self.listen(data.events, data.events_pre);
+        if !self.single_event_at(Ev::SideStart, Eff::SideCond(kind), holder, source, source_effect).truthy() {
+            self.sides[side].conds.remove(kind);
+            return FALSE;
+        }
+        // The SideConditionStart event has no listeners.
+        TRUE
+    }
+
+    /// `Side#removeSideCondition`.
+    pub(crate) fn remove_side_condition(&mut self, side: usize, kind: SideCond) -> bool {
+        if !self.sides[side].conds.has(kind) {
+            return false;
+        }
+        self.single_event_at(Ev::SideEnd, Eff::SideCond(kind), Holder::Side(side as u8), None, Eff::None);
+        self.sides[side].conds.remove(kind);
+        true
+    }
+
+    /// `Side#addSlotCondition`.
+    pub(crate) fn add_slot_condition(
+        &mut self,
+        side: usize,
+        pos: usize,
+        kind: SlotCond,
+        source: Option<MonRef>,
+        source_effect: Eff,
+    ) -> Res {
+        let source = source.or(self.event.target);
+        let occupant = self.active(side, pos);
+        if self.sides[side].slot_conds[pos].has(kind) {
+            if !self.has_cb(Eff::SlotCond(kind), Ev::Restart) {
+                return FALSE;
+            }
+            return self.single_event(
+                Ev::Restart,
+                Eff::SlotCond(kind),
+                Some(occupant),
+                None,
+                source,
+                source_effect,
+                Res::Undef,
+            );
+        }
+        let data = kind.data();
+        let mut c = Cond::new(kind);
+        c.st = self.new_state_counted(true);
+        c.source = source;
+        c.source_slot = source.map_or(NO_SLOT, |s| self.field_slot(s));
+        c.duration = data.duration;
+        if data.duration_cb {
+            let first = self.active(side, 0);
+            c.duration = self.cond_duration(Eff::SlotCond(kind), Some(first), source, source_effect);
+        }
+        self.sides[side].slot_conds[pos].push(c);
+        self.listen(data.events, data.events_pre);
+        let started = self.single_event(
+            Ev::Start,
+            Eff::SlotCond(kind),
+            Some(occupant),
+            Some(occupant),
+            source,
+            source_effect,
+            Res::Undef,
+        );
+        if !started.truthy() {
+            self.sides[side].slot_conds[pos].remove(kind);
+            return FALSE;
+        }
+        TRUE
+    }
+
+    /// `Side#removeSlotCondition`.
+    pub(crate) fn remove_slot_condition(&mut self, side: usize, pos: usize, kind: SlotCond) -> bool {
+        if !self.sides[side].slot_conds[pos].has(kind) {
+            return false;
+        }
+        let occupant = self.active(side, pos);
+        self.single_event(Ev::End, Eff::SlotCond(kind), Some(occupant), Some(occupant), None, Eff::None, Res::Undef);
+        self.sides[side].slot_conds[pos].remove(kind);
         true
     }
 
@@ -1365,7 +1745,17 @@ impl Battle {
         if !m.is_active {
             return true;
         }
+        if self.field.pseudo.has(Pseudo::Magicroom) || self.has_vol_named(r, "embargo") {
+            return true;
+        }
         ITEMS[m.item as usize].flags & IF_IGNORE_KLUTZ == 0 && self.has_ability(r, ab::KLUTZ)
+    }
+
+    /// Whether a Pokémon has the volatile with this id. For the places where
+    /// Showdown looks up a volatile the engine may not model yet: the check
+    /// starts working the moment the volatile is added to the modelled list.
+    pub(crate) fn has_vol_named(&self, r: MonRef, id: &str) -> bool {
+        VolKind::named(id).is_some_and(|k| self.vols(r).has(k))
     }
 
     /// `Pokemon#hasItem`.
@@ -1445,6 +1835,9 @@ impl Battle {
         if !self.run_event_ex(e, Res::Undef, false, false).0.truthy() {
             return false;
         }
+        if let Some(b) = ITEMS[item as usize].boosts {
+            self.boost(b, Some(r), source, Eff::Item(item));
+        }
         self.single_event(Ev::Use, Eff::Item(item), Some(r), Some(r), source, source_effect, Res::Undef);
         {
             let m = self.mon_mut(r);
@@ -1490,6 +1883,7 @@ impl Battle {
             return false;
         }
         let old = self.mon(r).item;
+        self.listen(ITEMS[item as usize].events, ITEMS[item as usize].events_pre);
         let st = self.new_state(item != it::NONE, r);
         {
             let m = self.mon_mut(r);
@@ -1543,6 +1937,7 @@ impl Battle {
         }
         self.single_event(Ev::End, Eff::Ability(old), Some(r), Some(r), source, Eff::None, Res::Undef);
         self.mon_mut(r).ability = ability;
+        self.listen(ABILITIES[ability as usize].events, ABILITIES[ability as usize].events_pre);
         self.new_ability_state(r);
         self.single_event(Ev::Start, Eff::Ability(ability), Some(r), Some(r), source, Eff::None, Res::Undef);
         true
@@ -1579,6 +1974,11 @@ impl Battle {
         }
         self.mon_mut(r).trapped = if hidden { Trapped::Hidden } else { Trapped::Yes };
         true
+    }
+
+    /// `Pokemon#isSemiInvulnerable`: in the middle of Fly, Dig and the like. None of those is modelled yet.
+    pub(crate) fn is_semi_invulnerable(&self, _r: MonRef) -> bool {
+        false
     }
 
     /// `Pokemon#isAdjacent` in doubles: two different Pokémon, neither fainted.

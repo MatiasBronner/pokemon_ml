@@ -10,11 +10,14 @@
 //! ones that tie, so a handler that does nothing still changes the random
 //! number stream if it ties with another one.
 
+// The nesting mirrors Showdown's code; keep it rather than folding conditions together.
+#![allow(clippy::collapsible_if, clippy::collapsible_match)]
+
 use crate::data::*;
 use crate::state::*;
 use crate::trace;
 
-const MAX_HANDLERS: usize = 48;
+const INLINE_HANDLERS: usize = 12;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Handler {
@@ -54,18 +57,46 @@ const BLANK: Handler = Handler {
     index: 0,
 };
 
+/// The handlers collected for one event. Nearly every event has only a few,
+/// so they live in a small inline array; the rare larger set spills to the heap.
 pub(crate) struct HList {
     n: usize,
-    h: [Handler; MAX_HANDLERS],
+    inline: [Handler; INLINE_HANDLERS],
+    spill: Vec<Handler>,
 }
 
 impl HList {
     fn new() -> HList {
-        HList { n: 0, h: [BLANK; MAX_HANDLERS] }
+        HList { n: 0, inline: [BLANK; INLINE_HANDLERS], spill: Vec::new() }
     }
     fn push(&mut self, h: Handler) {
-        self.h[self.n] = h;
+        if self.spill.is_empty() && self.n < INLINE_HANDLERS {
+            self.inline[self.n] = h;
+        } else {
+            if self.spill.is_empty() {
+                self.spill.extend_from_slice(&self.inline[..self.n]);
+            }
+            self.spill.push(h);
+        }
         self.n += 1;
+    }
+    fn insert_front(&mut self, h: Handler) {
+        if self.spill.is_empty() && self.n < INLINE_HANDLERS {
+            self.inline.copy_within(0..self.n, 1);
+            self.inline[0] = h;
+        } else {
+            if self.spill.is_empty() {
+                self.spill.extend_from_slice(&self.inline[..self.n]);
+            }
+            self.spill.insert(0, h);
+        }
+        self.n += 1;
+    }
+    fn as_mut_slice(&mut self) -> &mut [Handler] {
+        if self.spill.is_empty() { &mut self.inline[..self.n] } else { &mut self.spill[..] }
+    }
+    fn get(&self, k: usize) -> Handler {
+        if self.spill.is_empty() { self.inline[k] } else { self.spill[k] }
     }
 }
 
@@ -168,6 +199,22 @@ impl Battle {
     fn find_pokemon_handlers(&self, mon: MonRef, ev: Ev, pre: Pre, get_duration: bool, out: &mut HList) {
         let m = self.mon(mon);
         let bit = ev.bit();
+        let a = &ABILITIES[m.ability as usize];
+        let i = &ITEMS[m.item as usize];
+        if pre != Pre::On {
+            // Only abilities and items listen from the side (onAlly, onFoe, onAny, onSource).
+            if a.events_pre & bit != 0 {
+                if let Some(cb) = find_cb(a.cbs, ev, pre) {
+                    out.push(self.resolve(Eff::Ability(m.ability), cb, mon, m.ability_st));
+                }
+            }
+            if i.events_pre & bit != 0 {
+                if let Some(cb) = find_cb(i.cbs, ev, pre) {
+                    out.push(self.resolve(Eff::Item(m.item), cb, mon, m.item_st));
+                }
+            }
+            return;
+        }
         if m.status != Status::None {
             let c = &STATUS_CONDS[m.status as usize];
             if c.events & bit != 0 {
@@ -188,13 +235,11 @@ impl Battle {
                 out.push(self.resolve(Eff::Vol(v.kind), cb, mon, v.st));
             }
         }
-        let a = &ABILITIES[m.ability as usize];
         if a.events & bit != 0 {
             if let Some(cb) = find_cb(a.cbs, ev, pre) {
                 out.push(self.resolve(Eff::Ability(m.ability), cb, mon, m.ability_st));
             }
         }
-        let i = &ITEMS[m.item as usize];
         if i.events & bit != 0 {
             if let Some(cb) = find_cb(i.cbs, ev, pre) {
                 out.push(self.resolve(Eff::Item(m.item), cb, mon, m.item_st));
@@ -205,7 +250,8 @@ impl Battle {
     /// `Battle#findEventHandlers` for a Pokémon target (or none).
     fn find_event_handlers(&self, target: Option<MonRef>, ev: Ev, source: Option<MonRef>, out: &mut HList) {
         // Events normally run through `eachEvent` never have prefixed handlers.
-        let prefixed = !matches!(ev, Ev::BeforeTurn | Ev::Update | Ev::Weather | Ev::WeatherChange | Ev::TerrainChange);
+        let prefixed = !matches!(ev, Ev::BeforeTurn | Ev::Update | Ev::Weather | Ev::WeatherChange | Ev::TerrainChange)
+            && self.event_mask_pre & ev.bit() != 0;
         if let Some(t) = target {
             if self.mon(t).is_active || source.is_some_and(|s| self.mon(s).is_active) {
                 self.find_pokemon_handlers(t, ev, Pre::On, false, out);
@@ -332,9 +378,7 @@ impl Battle {
                 },
                 ..BLANK
             };
-            hl.h.copy_within(0..hl.n, 1);
-            hl.h[0] = h;
-            hl.n += 1;
+            hl.insert_front(h);
         }
         let mut relays = [Res::Undef; 1];
         let r = self.run_handlers(e, ev, &mut hl, relay, fast_exit, None, &mut relays);
@@ -365,7 +409,7 @@ impl Battle {
         for (i, &t) in targets.iter().enumerate() {
             let start = hl.n;
             self.find_event_handlers(Some(t), ev, source, &mut hl);
-            for h in &mut hl.h[start..hl.n] {
+            for h in &mut hl.as_mut_slice()[start..] {
                 h.index = i as u8;
             }
         }
@@ -386,12 +430,16 @@ impl Battle {
         target_relays: &mut [Res],
     ) -> (Res, Event) {
         let n = hl.n;
+        if n == 0 {
+            // Nobody listens: the relay variable comes straight back.
+            return (if relay == Res::Undef { TRUE } else { relay }, e);
+        }
         if matches!(ev, Ev::Invulnerability | Ev::TryHit | Ev::DamagingHit) {
-            hl.h[..n].sort_by(cmp_left_to_right);
+            hl.as_mut_slice().sort_by(cmp_left_to_right);
         } else if fast_exit {
-            hl.h[..n].sort_by(cmp_redirect);
+            hl.as_mut_slice().sort_by(cmp_redirect);
         } else {
-            self.speed_sort(&mut hl.h[..n], cmp_priority, "event handler tie");
+            self.speed_sort(hl.as_mut_slice(), cmp_priority, "event handler tie");
         }
         let has_relay = relay != Res::Undef;
         let mut relay = if has_relay { relay } else { TRUE };
@@ -403,7 +451,7 @@ impl Battle {
         debug_assert!(self.event_depth < 12, "event stack too deep in {ev:?}");
 
         for k in 0..n {
-            let h = hl.h[k];
+            let h = hl.get(k);
             if let Some(ts) = targets {
                 let i = h.index as usize;
                 let cur = target_relays[i];
@@ -562,7 +610,7 @@ impl Battle {
                 if !self.in_play(active) {
                     continue;
                 }
-                if ev == Ev::SwitchIn {
+                if ev == Ev::SwitchIn && self.event_mask_pre & ev.bit() != 0 {
                     self.find_pokemon_handlers(active, ev, Pre::Any, false, &mut hl);
                 }
                 if targets.is_some_and(|ts| !ts.contains(&active)) {
@@ -573,12 +621,12 @@ impl Battle {
         }
         let n = hl.n;
         self.speed_sort(
-            &mut hl.h[..n],
+            hl.as_mut_slice(),
             cmp_priority,
             if get_duration { "residual handler tie" } else { "switch-in handler tie" },
         );
         for k in 0..n {
-            let h = hl.h[k];
+            let h = hl.get(k);
             if self.mon(h.holder).fainted {
                 continue;
             }

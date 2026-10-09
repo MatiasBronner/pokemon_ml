@@ -63,6 +63,10 @@ fn resist_berry(item: u16) -> Option<Type> {
     })
 }
 
+pub(crate) fn is_resist_berry(item: u16) -> bool {
+    resist_berry(item).is_some()
+}
+
 /// The status a status-curing berry removes.
 fn cure_berry(item: u16) -> Option<&'static [Status]> {
     Some(match item {

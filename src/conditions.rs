@@ -2,6 +2,9 @@
 //! Showdown's `data/conditions.ts` (with the Champions overrides) and from the
 //! `condition` blocks of moves.
 
+// The nesting mirrors Showdown's code; keep it rather than folding conditions together.
+#![allow(clippy::collapsible_if, clippy::collapsible_match)]
+
 use crate::battle::div1;
 use crate::data::*;
 use crate::state::*;
@@ -251,6 +254,24 @@ impl Battle {
             }
 
             (VolKind::Gem, Ev::BasePower) => self.chain_modify(5325, 4096),
+
+            // Flash Fire's boost, once a Fire move has been absorbed.
+            (VolKind::Flashfire, Ev::Start | Ev::End) => Res::Undef,
+            (VolKind::Flashfire, Ev::ModifyAtk | Ev::ModifySpA) => {
+                let fire = matches!(self.event.effect, Eff::Move(mi) if self.am[mi as usize].typ == Type::Fire);
+                if fire && self.has_ability(holder, ab::FLASHFIRE) {
+                    return self.chain_modify(6144, 4096);
+                }
+                Res::Undef
+            }
+
+            // Unburden's doubled Speed while the holder has no item.
+            (VolKind::Unburden, Ev::ModifySpe) => {
+                if self.mon(holder).item == it::NONE && !self.ignoring_ability(holder) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
 
             // The Metronome item's counter of consecutive uses of one move.
             (VolKind::Metronome, Ev::Start) => {

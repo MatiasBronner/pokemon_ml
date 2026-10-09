@@ -133,16 +133,17 @@ function cbTable(name, effect, what) {
 	const cbs = L.callbacks(effect);
 	const unknown = cbs.filter(c => c.unknown).map(c => c.key);
 	if (unknown.length) throw new Error(`${what} ${effect.id}: no Ev variant for ${unknown.join(', ')} (add it to src/data.rs)`);
-	if (!cbs.length) return ['&[]', '0'];
-	let mask = 0n;
+	if (!cbs.length) return ['&[]', '0', '0'];
+	let mask = 0n, maskPre = 0n;
 	const rows = cbs.map(c => {
-		mask |= 1n << BigInt(L.EVENTS.indexOf(c.ev));
+		if (c.pre === 'On') mask |= 1n << BigInt(L.EVENTS.indexOf(c.ev));
+		else maskPre |= 1n << BigInt(L.EVENTS.indexOf(c.ev));
 		const prio = c.priority * 10;
 		if (!Number.isInteger(prio) || !Number.isInteger(c.order) || !Number.isInteger(c.subOrder)) throw new Error(`${effect.id}.${c.key}: odd ordering values`);
 		return `CbInfo { ev: Ev::${c.ev}, pre: Pre::${c.pre}, order: ${c.order}, priority: ${prio}, sub_order: ${c.subOrder}, kind: CbKind::${c.kind} }`;
 	});
 	cbDefs += `static ${name}: [CbInfo; ${rows.length}] = [\n${rows.map(r => '    ' + r + ',\n').join('')}];\n`;
-	return ['&' + name, `0x${mask.toString(16)}`];
+	return ['&' + name, `0x${mask.toString(16)}`, `0x${maskPre.toString(16)}`];
 }
 
 // Volatile conditions
@@ -151,13 +152,15 @@ for (const id of L.VOLATILES) {
 	const c = dex.conditions.get(id);
 	if (!c.exists) throw new Error('unknown condition ' + id);
 	if (c.durationCallback) throw new Error(`${id}: durationCallback is not modelled`);
-	const [cbs, mask] = cbTable(`CB_VOL_${id.toUpperCase()}`, c, 'condition');
+	const [cbs, mask, maskPre] = cbTable(`CB_VOL_${id.toUpperCase()}`, c, 'condition');
+	if (maskPre !== '0x0') throw new Error(`${id}: conditions with prefixed handlers are not expected`);
 	volRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: ${!!c.affectsFainted}, cbs: ${cbs}, events: ${mask} },\n`;
 }
 let statusRows = `    CondData { id: "", duration: 0, affects_fainted: false, cbs: &[], events: 0 },\n`;
 for (const id of L.STATUSES) {
 	const c = dex.conditions.get(id);
-	const [cbs, mask] = cbTable(`CB_STATUS_${id.toUpperCase()}`, c, 'status');
+	const [cbs, mask, maskPre] = cbTable(`CB_STATUS_${id.toUpperCase()}`, c, 'status');
+	if (maskPre !== '0x0') throw new Error(`${id}: conditions with prefixed handlers are not expected`);
 	statusRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: false, cbs: ${cbs}, events: ${mask} },\n`;
 }
 
@@ -172,15 +175,15 @@ abilities.forEach((a, i) => {
 	const supported = L.SUPPORTED_ABILITIES.has(a.id);
 	for (const f in a.flags) if (!AFLAGS[f]) throw new Error(`ability ${a.id}: unknown flag ${f}`);
 	const flags = Object.keys(a.flags).map(f => AFLAGS[f]).join(' | ') || '0';
-	const [cbs, mask] = supported ? cbTable(`CB_AB_${a.id.toUpperCase()}`, a, 'ability') : ['&[]', '0'];
+	const [cbs, mask, maskPre] = supported ? cbTable(`CB_AB_${a.id.toUpperCase()}`, a, 'ability') : ['&[]', '0', '0'];
 	abConsts += `    pub const ${a.id.toUpperCase()}: u16 = ${i};\n`;
-	abRows += `    AbilityData { id: ${rs(a.id)}, name: ${rs(a.name)}, flags: ${flags}, supported: ${supported}, cbs: ${cbs}, events: ${mask} },\n`;
+	abRows += `    AbilityData { id: ${rs(a.id)}, name: ${rs(a.name)}, flags: ${flags}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;
 });
 for (const id of L.SUPPORTED_ABILITIES) if (!abilities.some(a => a.id === id)) throw new Error('supported ability not in table: ' + id);
 
 // Items
 const items = L.tableItems();
-let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0 },\n`;
+let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },\n`;
 let itConsts = '    pub const NONE: u16 = 0;\n';
 items.forEach((item, i) => {
 	const supported = L.SUPPORTED_ITEMS.has(item.id);
@@ -189,16 +192,17 @@ items.forEach((item, i) => {
 	if (item.isGem) fl.push('IF_GEM');
 	if (item.isChoice) fl.push('IF_CHOICE');
 	if (item.ignoreKlutz) fl.push('IF_IGNORE_KLUTZ');
-	const [cbs, mask] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item') : ['&[]', '0'];
+	const [cbs, mask, maskPre] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item') : ['&[]', '0', '0'];
 	itConsts += `    pub const ${item.id.toUpperCase()}: u16 = ${i + 1};\n`;
-	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask} },\n`;
+	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;
 });
 for (const id of L.SUPPORTED_ITEMS) if (id && !items.some(a => a.id === id)) throw new Error('supported item not in table: ' + id);
 
 out += '/// Volatile conditions the engine models, in the order of `VOL_CONDS`.\n';
 out += '#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n#[repr(u8)]\npub enum VolKind {\n';
 out += L.VOLATILES.map(id => `    ${volName(id)},\n`).join('');
-out += '}\n\nimpl VolKind {\n    pub fn id(self) -> &\'static str {\n        VOL_CONDS[self as usize].id\n    }\n}\n\n';
+out += `}\n\n/// Number of \`VolKind\` variants; a Pokémon can hold at most one of each.\npub const N_VOLATILES: usize = ${L.VOLATILES.length};\n`;
+out += '\nimpl VolKind {\n    pub fn id(self) -> &\'static str {\n        VOL_CONDS[self as usize].id\n    }\n}\n\n';
 out += cbDefs + '\n';
 out += `pub static VOL_CONDS: [CondData; ${L.VOLATILES.length}] = [\n${volRows}];\n\n`;
 out += '/// Indexed by `Status as usize`.\n';
@@ -231,11 +235,32 @@ fs.writeFileSync(path.join(__dirname, 'pool.json'), JSON.stringify(pool));
 const learnOk = [...learnable].filter(id => supportedSet.has(id));
 const tally = {};
 for (const id of learnable) for (const w of report.unsupported[id] || []) tally[w] = (tally[w] || 0) + 1;
+const legalAb = L.legalAbilities();
+const heldItems = items.filter(i => !i.megaStone).map(i => i.id);
+for (const kind of ['abilities', 'items']) {
+	const supportedSet = kind === 'abilities' ? L.SUPPORTED_ABILITIES : L.SUPPORTED_ITEMS;
+	for (const id in L.DORMANT_PARTS[kind]) if (!supportedSet.has(id)) throw new Error(`dormant ${kind} entry ${id} is not modelled`);
+}
 fs.writeFileSync(path.join(__dirname, 'coverage.json'), JSON.stringify({
+	abilities: {
+		legal: legalAb.length,
+		modelled: legalAb.filter(a => L.SUPPORTED_ABILITIES.has(a)).length,
+		not_modelled: Object.fromEntries(legalAb.filter(a => !L.SUPPORTED_ABILITIES.has(a)).map(a => [a, L.DEFERRED_ABILITIES[a] || 'not yet written'])),
+		dormant_parts: L.DORMANT_PARTS.abilities,
+	},
+	items: {
+		held_items: heldItems.length,
+		modelled: heldItems.filter(i => L.SUPPORTED_ITEMS.has(i)).length,
+		not_modelled: Object.fromEntries(heldItems.filter(i => !L.SUPPORTED_ITEMS.has(i)).map(i => [i, L.DEFERRED_ITEMS[i] || 'not yet written'])),
+		mega_stones: items.filter(i => i.megaStone).length,
+		dormant_parts: L.DORMANT_PARTS.items,
+	},
 	learnable_moves: learnable.size,
 	supported_learnable_moves: learnOk.length,
 	supported: learnOk.sort(),
 	unsupported: Object.fromEntries([...learnable].filter(id => !supportedSet.has(id)).sort().map(id => [id, report.unsupported[id]])),
 	blocking_reasons: Object.fromEntries(Object.entries(tally).sort((a, b) => b[1] - a[1])),
 }, null, 1));
-console.log(`species ${species.length}, moves ${moves.length}; Champions-learnable moves ${learnable.size}, modelled ${learnOk.length}; fuzz pool species ${pool.species.length}`);
+console.log(`species ${species.length}, moves ${moves.length}; Champions-learnable moves ${learnable.size}, modelled ${learnOk.length}; ` +
+	`abilities ${legalAb.filter(a => L.SUPPORTED_ABILITIES.has(a)).length}/${legalAb.length}; ` +
+	`held items ${heldItems.filter(i => L.SUPPORTED_ITEMS.has(i)).length}/${heldItems.length}; fuzz pool species ${pool.species.length}`);

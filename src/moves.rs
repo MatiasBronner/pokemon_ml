@@ -371,7 +371,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return self.spread_done(user, n, failure);
+            return self.spread_done(user, mi, n, failure);
         }
 
         // Step 1: the TryHit event (Protect, absorbing abilities, ...).
@@ -383,7 +383,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return self.spread_done(user, n, failure);
+            return self.spread_done(user, mi, n, failure);
         }
 
         // Step 2: type immunity.
@@ -392,7 +392,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return self.spread_done(user, n, failure);
+            return self.spread_done(user, mi, n, failure);
         }
 
         // Step 3: move-specific immunities.
@@ -415,7 +415,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return self.spread_done(user, n, failure);
+            return self.spread_done(user, mi, n, failure);
         }
 
         // Step 4: accuracy.
@@ -424,7 +424,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return self.spread_done(user, n, failure);
+            return self.spread_done(user, mi, n, failure);
         }
 
         // Steps 5 and 6 (breaking protection, stealing boosts): no modelled move does either.
@@ -432,12 +432,15 @@ impl Battle {
         // Step 7: the hits themselves.
         let dmg = self.move_hit_loop(&targets[..n], user, mi);
         Battle::keep_hits(&mut targets, &mut n, &dmg, &mut failure);
-        self.spread_done(user, n, failure)
+        self.am[m].hit_targets = targets;
+        self.spread_done(user, mi, n, failure)
     }
 
-    /// The tail of `trySpreadMoveHit`: a move that hit nothing without any
-    /// outright failure does not count as having failed.
-    fn spread_done(&mut self, user: MonRef, n: usize, failure: bool) -> bool {
+    /// The tail of `trySpreadMoveHit`: record who was hit; a move that hit
+    /// nothing without any outright failure does not count as having failed.
+    fn spread_done(&mut self, user: MonRef, mi: u8, n: usize, failure: bool) -> bool {
+        self.am[mi as usize].n_hit_targets = n as u8;
+        self.am[mi as usize].has_hit_targets = true;
         if n == 0 && !failure {
             self.mon_mut(user).move_this_turn = Res::Null;
         }
@@ -497,6 +500,7 @@ impl Battle {
             (a, b) => self.rand_range(a as usize, b as usize + 1, "multihit count") as u32,
         };
         let mut copy: Targets = [Tgt::Gone; MAX_TARGETS];
+        let mut last_damage: Damage = [Res::Undef; MAX_TARGETS];
         let mut hit = 1;
         let mut completed_one = false;
         while hit <= target_hits {
@@ -516,6 +520,7 @@ impl Battle {
             }
             let eff = HitEff::of_move(&self.am[m]);
             let move_damage = self.spread_move_hit(&mut copy, n, user, mi, eff, false, false);
+            last_damage = move_damage;
             if !move_damage[..n].iter().any(|&v| v != FALSE) {
                 break;
             }
@@ -539,6 +544,16 @@ impl Battle {
 
         if self.am[m].total_damage > 0 {
             self.apply_recoil(self.am[m].total_damage as u32, mi, user);
+        }
+        // Pokemon#gotAttacked
+        for i in 0..n {
+            if let Tgt::Mon(t) = copy[i] {
+                if t != user {
+                    let mon = self.mon_mut(t);
+                    mon.was_attacked = true;
+                    mon.last_attack_damage = last_damage[i].num();
+                }
+            }
         }
         if !damage[..n].iter().any(|v| v.hit()) {
             return damage;
@@ -764,7 +779,7 @@ impl Battle {
             let mut did = Res::Undef;
             if let Some(b) = eff.boosts {
                 if !self.mon(t).fainted {
-                    let r = self.boost(b, eff.boost_order, Some(t), Some(source), me);
+                    let r = self.boost_ordered(b, &BOOST_ORDERS[eff.boost_order as usize], Some(t), Some(source), me);
                     did = did.combine(r);
                 }
             }
@@ -895,6 +910,8 @@ impl Battle {
         let mut dmg = base + 2;
         if self.am[m].spread_hit {
             dmg = modify(dmg, 3072);
+        } else if self.am[m].parental_bond && self.am[m].hit > 1 {
+            dmg = modify(dmg, 1024);
         }
         // WeatherModifyDamage: no weather yet.
         let crit = self.am[m].hit_data[slot].crit;

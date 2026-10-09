@@ -9,7 +9,7 @@ pub const MAX_TEAM: usize = 6;
 /// Active Pokémon per side (doubles).
 pub const ACTIVE: usize = 2;
 pub const MAX_MOVES: usize = 4;
-const MAX_VOLATILES: usize = 8;
+const MAX_VOLATILES: usize = crate::data::N_VOLATILES;
 
 /// A Pokémon identified by side and by its fixed index in that side's team.
 /// The index never changes, unlike its field position.
@@ -141,6 +141,14 @@ pub struct Pokemon {
     pub ability: u16,
     pub base_ability: u16,
     pub ability_st: EffState,
+    /// Stat stages an ability is holding on to (Opportunist's pending copies).
+    pub(crate) ability_boosts: [i8; 7],
+    /// Supersweet Syrup has already gone off once this battle.
+    pub(crate) syrup_triggered: bool,
+    /// Whether anything has attacked this Pokémon since it came in, and the
+    /// damage of the latest attack (Showdown's `getLastAttackedBy`).
+    pub(crate) was_attacked: bool,
+    pub(crate) last_attack_damage: i32,
     /// Held item; 0 is none.
     pub item: u16,
     pub item_st: EffState,
@@ -393,16 +401,6 @@ impl Eff {
     pub fn is_move(self) -> bool {
         matches!(self, Eff::Move(_) | Eff::Confused)
     }
-    pub fn is_ability(self) -> bool {
-        matches!(self, Eff::Ability(_))
-    }
-    pub fn is_item(self) -> bool {
-        matches!(self, Eff::Item(_))
-    }
-    /// Whether Showdown would see a truthy effect with a non-empty id.
-    pub fn exists(self) -> bool {
-        self != Eff::None
-    }
 }
 
 /// Showdown callbacks return numbers, booleans, `undefined`, `null` or `''`
@@ -448,7 +446,8 @@ impl Res {
             _ => 0,
         }
     }
-    /// `BattleActions#combineResults`.
+    /// `BattleActions#combineResults`, branch for branch.
+    #[allow(clippy::if_same_then_else)]
     pub fn combine(self, right: Res) -> Res {
         let left = self;
         if left.rank() > right.rank() {
@@ -470,7 +469,6 @@ pub(crate) enum Imm {
     Vol(VolKind),
     Powder,
     Trapped,
-    Prankster,
 }
 
 /// The event being run (Showdown's `battle.event`), including the values that
@@ -575,7 +573,6 @@ pub(crate) struct ActiveMove {
     pub tracks_target: bool,
     pub infiltrates: bool,
     pub has_bounced: bool,
-    pub is_external: bool,
     /// The ability that changed this move's type and boosts it (Pixilate and so on).
     pub type_changer_boosted: Eff,
     /// The effect that called this move, if it was not chosen directly.
@@ -587,6 +584,14 @@ pub(crate) struct ActiveMove {
     pub last_hit: bool,
     /// Indexed by side * 2 + position.
     pub hit_data: [HitData; 4],
+    /// Parental Bond made this a two-hit move (`multihitType`).
+    pub parental_bond: bool,
+    /// The Pokémon whose Fairy Aura boosts this move.
+    pub aura_booster: Option<MonRef>,
+    /// The targets the move ended up hitting (`hitTargets`), once known.
+    pub hit_targets: [MonRef; 3],
+    pub n_hit_targets: u8,
+    pub has_hit_targets: bool,
 }
 
 impl ActiveMove {
@@ -628,7 +633,6 @@ impl ActiveMove {
             tracks_target: false,
             infiltrates: false,
             has_bounced: false,
-            is_external: false,
             type_changer_boosted: Eff::None,
             source_effect: Eff::None,
             spread_hit: false,
@@ -637,6 +641,11 @@ impl ActiveMove {
             hit: 0,
             last_hit: false,
             hit_data: [HitData { crit: false, type_mod: 0, bypass_protect: false }; 4],
+            parental_bond: false,
+            aura_booster: None,
+            hit_targets: [MonRef { side: 0, idx: 0 }; 3],
+            n_hit_targets: 0,
+            has_hit_targets: false,
         }
     }
 }
@@ -669,6 +678,8 @@ pub struct Battle {
     pub(crate) next_uid: u16,
     /// Events some effect in this battle can listen to; the rest are skipped outright.
     pub(crate) event_mask: u128,
+    /// The subset something listens to from the side (onAlly, onFoe, onAny, onSource).
+    pub(crate) event_mask_pre: u128,
     pub(crate) event: Event,
     /// The effect whose handler is running (`battle.effect`) and the Pokémon it is on.
     pub(crate) effect: Eff,

@@ -276,26 +276,27 @@ impl Battle {
             return;
         }
         let mut sorted = 0;
-        let mut next = [0usize; 64];
+        debug_assert!(list.len() <= 64);
+        let mut next = [0u8; 64];
         while sorted + 1 < list.len() {
-            next[0] = sorted;
+            next[0] = sorted as u8;
             let mut n_next = 1;
             for i in sorted + 1..list.len() {
-                let delta = cmp(&list[next[0]], &list[i]);
+                let delta = cmp(&list[next[0] as usize], &list[i]);
                 if delta < 0 {
                     continue;
                 }
                 if delta > 0 {
-                    next[0] = i;
+                    next[0] = i as u8;
                     n_next = 1;
                 } else {
-                    next[n_next] = i;
+                    next[n_next] = i as u8;
                     n_next += 1;
                 }
             }
             for (i, &index) in next[..n_next].iter().enumerate() {
-                if index != sorted + i {
-                    list.swap(sorted + i, index);
+                if index as usize != sorted + i {
+                    list.swap(sorted + i, index as usize);
                 }
             }
             if n_next > 1 {
@@ -387,7 +388,6 @@ impl Battle {
             Imm::Status(Status::None) => return true,
             Imm::Powder => self.type_allows(r, 5),
             Imm::Trapped => self.type_allows(r, 6),
-            Imm::Prankster => self.type_allows(r, 7),
             Imm::Vol(_) => true,
         };
         if !natural {
@@ -691,6 +691,8 @@ impl Battle {
         }
         m.move_this_turn = Res::Undef;
         m.move_last_turn = Res::Undef;
+        m.was_attacked = false;
+        m.last_attack_damage = 0;
         // `setSpecies` restores the species' types and resets the cached speed to the raw stat.
         m.types = SPECIES[m.species as usize].types;
         m.speed = m.stats[5] as i32;
@@ -739,8 +741,7 @@ impl Battle {
             m.is_active = true;
             m.active_turns = 0;
         }
-        let st = self.new_state(true, incoming);
-        self.mon_mut(incoming).ability_st = st;
+        self.new_ability_state(incoming);
         let has_item = self.mon(incoming).item != it::NONE;
         let st = self.new_state(has_item, incoming);
         self.mon_mut(incoming).item_st = st;
@@ -1178,12 +1179,30 @@ impl Battle {
 
     // ------------------------------------------------------------ stat stages
 
-    /// `Battle#boost`. `order` indexes `BOOST_ORDERS`.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn boost(
+    /// `Battle#boost` for a table whose keys are in the usual atk..evasion order.
+    pub(crate) fn boost(&mut self, b: Boosts, target: Option<MonRef>, source: Option<MonRef>, effect: Eff) -> Res {
+        self.boost_ordered(b, &BOOST_ORDERS[0], target, source, effect)
+    }
+
+    /// `Battle#boost` for a single stat.
+    pub(crate) fn boost1(
+        &mut self,
+        stat: usize,
+        by: i8,
+        target: Option<MonRef>,
+        source: Option<MonRef>,
+        effect: Eff,
+    ) -> Res {
+        let mut b = [0i8; 7];
+        b[stat] = by;
+        self.boost(b, target, source, effect)
+    }
+
+    /// `Battle#boost`. `order` is the order the table's keys are applied in.
+    pub(crate) fn boost_ordered(
         &mut self,
         b: Boosts,
-        order: u8,
+        order: &[u8; 7],
         target: Option<MonRef>,
         source: Option<MonRef>,
         effect: Eff,
@@ -1218,7 +1237,7 @@ impl Battle {
             b = self.run_event_ex(e, Res::Undef, false, false).1.boosts;
         }
         let mut success = false;
-        for &k in &BOOST_ORDERS[order as usize] {
+        for &k in order {
             let k = k as usize;
             if b[k] == 0 {
                 continue;
@@ -1406,6 +1425,14 @@ impl Battle {
         true
     }
 
+    /// A fresh `abilityState` for the Pokémon's current ability.
+    pub(crate) fn new_ability_state(&mut self, r: MonRef) {
+        let st = self.new_state(true, r);
+        let m = self.mon_mut(r);
+        m.ability_st = st;
+        m.ability_boosts = [0; 7];
+    }
+
     /// `Pokemon#setAbility`: returns whether the ability was changed.
     pub(crate) fn set_ability(&mut self, r: MonRef, ability: u16, source: Option<MonRef>, source_effect: Eff) -> bool {
         if self.mon(r).hp == 0 {
@@ -1420,14 +1447,48 @@ impl Battle {
             return false;
         }
         self.single_event(Ev::End, Eff::Ability(old), Some(r), Some(r), source, Eff::None, Res::Undef);
-        let st = self.new_state(true, r);
-        {
-            let m = self.mon_mut(r);
-            m.ability = ability;
-            m.ability_st = st;
-        }
+        self.mon_mut(r).ability = ability;
+        self.new_ability_state(r);
         self.single_event(Ev::Start, Eff::Ability(ability), Some(r), Some(r), source, Eff::None, Res::Undef);
         true
+    }
+
+    /// `Battle#skillSwap`.
+    pub(crate) fn skill_swap(&mut self, source: MonRef, target: MonRef) -> bool {
+        if self.mon(source).fainted || self.mon(target).fainted {
+            return false;
+        }
+        let (sa, ta) = (self.mon(source).ability, self.mon(target).ability);
+        if (ABILITIES[sa as usize].flags | ABILITIES[ta as usize].flags) & AF_FAILSKILLSWAP != 0 {
+            return false;
+        }
+        // The SetAbility event has no listeners among modelled effects.
+        self.single_event(Ev::End, Eff::Ability(sa), Some(source), Some(source), None, Eff::None, Res::Undef);
+        self.single_event(Ev::End, Eff::Ability(ta), Some(target), Some(target), None, Eff::None, Res::Undef);
+        self.mon_mut(source).ability = ta;
+        self.mon_mut(target).ability = sa;
+        self.new_ability_state(source);
+        self.new_ability_state(target);
+        self.single_event(Ev::Start, Eff::Ability(sa), Some(target), Some(target), None, Eff::None, Res::Undef);
+        self.single_event(Ev::Start, Eff::Ability(ta), Some(source), Some(source), None, Eff::None, Res::Undef);
+        true
+    }
+
+    /// `Pokemon#tryTrap`.
+    pub(crate) fn try_trap(&mut self, r: MonRef, hidden: bool) -> bool {
+        if !self.run_status_immunity(r, Imm::Trapped) {
+            return false;
+        }
+        if self.mon(r).trapped != Trapped::No && hidden {
+            return true;
+        }
+        self.mon_mut(r).trapped = if hidden { Trapped::Hidden } else { Trapped::Yes };
+        true
+    }
+
+    /// `Pokemon#isAdjacent` in doubles: two different Pokémon, neither fainted.
+    pub(crate) fn is_adjacent(&self, a: MonRef, b: MonRef) -> bool {
+        !self.mon(a).fainted && !self.mon(b).fainted && a != b
     }
 
     // -------------------------------------------------------------- the turn

@@ -2,7 +2,8 @@
 //! generated from Pokémon Showdown's Champions data by `oracle/gen_data.js`.
 
 pub use crate::tables::{
-    ABILITIES, BOOST_ORDERS, ITEMS, MOVES, SPECIES, STATUS_CONDS, STATUS_IMMUNE, TYPE_CHART, VOL_CONDS, VolKind, ab, it,
+    ABILITIES, BOOST_ORDERS, ITEMS, MOVES, N_VOLATILES, SPECIES, STATUS_CONDS, STATUS_IMMUNE, TYPE_CHART, VOL_CONDS,
+    VolKind, ab, it,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -405,8 +406,10 @@ pub struct AbilityData {
     pub flags: u8,
     pub supported: bool,
     pub cbs: &'static [CbInfo],
-    /// Bit set of the events in `cbs`.
+    /// Bit set of the events `cbs` listens to with prefix `On`.
     pub events: u128,
+    /// Bit set of the events `cbs` listens to with any other prefix.
+    pub events_pre: u128,
 }
 
 pub const IF_BERRY: u8 = 1 << 0;
@@ -422,6 +425,7 @@ pub struct ItemData {
     pub supported: bool,
     pub cbs: &'static [CbInfo],
     pub events: u128,
+    pub events_pre: u128,
 }
 
 /// A status or volatile condition.
@@ -433,6 +437,7 @@ pub struct CondData {
     /// Can be added to a Pokémon with no HP left.
     pub affects_fainted: bool,
     pub cbs: &'static [CbInfo],
+    /// Bit set of the events in `cbs` (conditions only listen with prefix `On`).
     pub events: u128,
 }
 

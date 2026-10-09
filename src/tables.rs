@@ -1058,7 +1058,12 @@ pub enum VolKind {
     Choicelock,
     Gem,
     Metronome,
+    Flashfire,
+    Unburden,
 }
+
+/// Number of `VolKind` variants; a Pokémon can hold at most one of each.
+pub const N_VOLATILES: usize = 9;
 
 impl VolKind {
     pub fn id(self) -> &'static str {
@@ -1100,6 +1105,15 @@ static CB_VOL_METRONOME: [CbInfo; 3] = [
     CbInfo { ev: Ev::TryMove, pre: Pre::On, order: 0, priority: -20, sub_order: 2, kind: CbKind::Fn },
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::On, order: 0, priority: 0, sub_order: 2, kind: CbKind::Fn },
 ];
+static CB_VOL_FLASHFIRE: [CbInfo; 4] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 2, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 2, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 2, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_VOL_UNBURDEN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySpe, pre: Pre::On, order: 0, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
 static CB_STATUS_BRN: [CbInfo; 2] = [
     CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 0, kind: CbKind::Fn },
     CbInfo { ev: Ev::Residual, pre: Pre::On, order: 10, priority: 0, sub_order: 0, kind: CbKind::Fn },
@@ -1128,6 +1142,644 @@ static CB_STATUS_FRZ: [CbInfo; 5] = [
     CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 0, kind: CbKind::Fn },
     CbInfo { ev: Ev::AfterMoveSecondary, pre: Pre::On, order: 0, priority: 0, sub_order: 0, kind: CbKind::Fn },
     CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 0, kind: CbKind::Fn },
+];
+static CB_AB_ADAPTABILITY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySTAB, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_AERILATE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyType, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_AFTERMATH: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 1, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ANALYTIC: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 210, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ANGERPOINT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Hit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ANTICIPATION: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_ARMORTAIL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryMove, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_AROMAVEIL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_AURAGUARD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_BATTLEARMOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::CriticalHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_BERSERK: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryEatItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::AfterMoveSecondary, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_BIGPECKS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_BLAZE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_BULLETPROOF: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_CHEEKPOUCH: [CbInfo; 1] = [
+    CbInfo { ev: Ev::EatItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_CLEARBODY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_COMPETITIVE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterEachBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_COMPOUNDEYES: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyAccuracy, pre: Pre::Source, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_CONTRARY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ChangeBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_CUDCHEW: [CbInfo; 2] = [
+    CbInfo { ev: Ev::EatItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 28, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_AB_CURIOUSMEDICINE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_DAMP: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryMove, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Damage, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_DEFIANT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterEachBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_DRAGONIZE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyType, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_EARTHEATER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_EELEVATE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterFaint, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_EFFECTSPORE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_EMBODYASPECTCORNERSTONE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_EMBODYASPECTHEARTHFLAME: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_EMBODYASPECTTEAL: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_EMBODYASPECTWELLSPRING: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_FAIRYAURA: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::Any, order: 0, priority: 200, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_FILTER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FIREMANE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FLAMEBODY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FLASHFIRE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FLOWERVEIL: [CbInfo; 3] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FLUFFY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FOREWARN: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_FRIENDGUARD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_FRISK: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_FURCOAT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDef, pre: Pre::On, order: 0, priority: 60, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_GALEWINGS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyPriority, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_GLUTTONY: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_GOODASGOLD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_GOOEY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_GUARDDOG: [CbInfo; 2] = [
+    CbInfo { ev: Ev::DragOut, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 20, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_GUTS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_HARVEST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 28, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_AB_HEALER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 5, priority: 0, sub_order: 3, kind: CbKind::Fn },
+];
+static CB_AB_HEATPROOF: [CbInfo; 3] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::Source, order: 0, priority: 60, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::Source, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_HEAVYMETAL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyWeight, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_HOSPITALITY: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: -20, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_HUGEPOWER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_HUSTLE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyAccuracy, pre: Pre::Source, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_HYPERCUTTER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ILLUMINATE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_IMMUNITY: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_INFILTRATOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_INNARDSOUT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 1, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_INNERFOCUS: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_INSOMNIA: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_INTIMIDATE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_IRONFIST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_JUSTIFIED: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_KEENEYE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_KLUTZ: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_LIBERO: [CbInfo; 1] = [
+    CbInfo { ev: Ev::PrepareHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LIGHTMETAL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyWeight, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LIGHTNINGROD: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::RedirectTarget, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LIMBER: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LIQUIDOOZE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHeal, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LIQUIDVOICE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyType, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_LONGREACH: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MAGICBOUNCE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryHitSide, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MAGICGUARD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MAGICIAN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterMoveSecondarySelf, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MAGMAARMOR: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Immunity, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MARVELSCALE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDef, pre: Pre::On, order: 0, priority: 60, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MEGALAUNCHER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 190, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MERCILESS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyCritRatio, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MINUS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MIRRORARMOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MOLDBREAKER: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_MOODY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 28, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_AB_MOTORDRIVE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MOXIE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterFaint, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MULTISCALE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_MUMMY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_NATURALCURE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::SwitchOut, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_NOGUARD: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Invulnerability, pre: Pre::Any, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Accuracy, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_OBLIVIOUS: [CbInfo; 4] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Immunity, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_OPPORTUNIST: [CbInfo; 7] = [
+    CbInfo { ev: Ev::AfterBoost, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::Any, order: 0, priority: -30, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::AfterMega, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::AfterTerastallization, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::AfterMove, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 29, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_OVERCOAT: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Immunity, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_OVERGROW: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_OWNTEMPO: [CbInfo; 4] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Hit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PARENTALBOND: [CbInfo; 2] = [
+    CbInfo { ev: Ev::PrepareHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySecondaries, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PICKPOCKET: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterMoveSecondary, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PICKUP: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 28, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_AB_PIERCINGDRILL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::HitProtect, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PIXILATE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyType, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PLUS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_POISONHEAL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_POISONPOINT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_POISONTOUCH: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::Source, order: 0, priority: 0, sub_order: 6, kind: CbKind::Fn },
+];
+static CB_AB_PRANKSTER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyPriority, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PRESSURE: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::DeductPP, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_PROTEAN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::PrepareHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PUNKROCK: [CbInfo; 2] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 70, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PUREPOWER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_PURIFYINGSALT: [CbInfo; 4] = [
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::Source, order: 0, priority: 60, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::Source, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_QUEENLYMAJESTY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryMove, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_QUICKDRAW: [CbInfo; 1] = [
+    CbInfo { ev: Ev::FractionalPriority, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_QUICKFEET: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySpe, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RATTLED: [CbInfo; 2] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::AfterBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RECEIVER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Faint, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RECKLESS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_REFRIGERATE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyType, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 230, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_REGENERATOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::SwitchOut, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RIPEN: [CbInfo; 5] = [
+    CbInfo { ev: Ev::TryHeal, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ChangeBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryEatItem, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::EatItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RIVALRY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 240, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ROCKHEAD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_ROUGHSKIN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 1, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_RUNAWAY: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TrapPokemon, pre: Pre::On, order: 0, priority: -100, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::MaybeTrapPokemon, pre: Pre::On, order: 0, priority: -100, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SAPSIPPER: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryHitSide, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SCRAPPY: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: -50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SCREENCLEANER: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_SERENEGRACE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: -20, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SHADOWTAG: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TrapPokemon, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::MaybeTrapPokemon, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SHARPNESS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 190, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SHEDSKIN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 5, priority: 0, sub_order: 3, kind: CbKind::Fn },
+];
+static CB_AB_SHEERFORCE: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 210, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SHELLARMOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::CriticalHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SHIELDDUST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifySecondaries, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SKILLLINK: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SNIPER: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SOLIDROCK: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SOUNDPROOF: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryHitSide, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SPEEDBOOST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Residual, pre: Pre::On, order: 28, priority: 0, sub_order: 2, kind: CbKind::Fn },
+];
+static CB_AB_SPICYSPRAY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STAKEOUT: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STALL: [CbInfo; 1] = [
+    CbInfo { ev: Ev::FractionalPriority, pre: Pre::On, order: 0, priority: 0, sub_order: 9, kind: CbKind::Fn },
+];
+static CB_AB_STALWART: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STAMINA: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STATIC: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STEADFAST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::Flinch, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STEELYSPIRIT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::Ally, order: 0, priority: 220, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STENCH: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyMove, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STICKYHOLD: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STRONGJAW: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 190, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_STURDY: [CbInfo; 2] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: -300, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SUCTIONCUPS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DragOut, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SUPERLUCK: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyCritRatio, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SUPERSWEETSYRUP: [CbInfo; 2] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_SUPREMEOVERLORD: [CbInfo; 4] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 210, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_SWARM: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SWEETVEIL: [CbInfo; 2] = [
+    CbInfo { ev: Ev::SetStatus, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SYMBIOSIS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterUseItem, pre: Pre::Ally, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_SYNCHRONIZE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::AfterSetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TANGLEDFEET: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyAccuracy, pre: Pre::On, order: 0, priority: -10, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TECHNICIAN: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 300, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TELEPATHY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_THERMALEXCHANGE: [CbInfo; 3] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_THICKFAT: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::Source, order: 0, priority: 60, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::Source, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TORRENT: [CbInfo; 2] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TOUGHCLAWS: [CbInfo; 1] = [
+    CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 210, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_TRACE: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_UNAWARE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::ModifyBoost, pre: Pre::Any, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_UNBURDEN: [CbInfo; 3] = [
+    CbInfo { ev: Ev::AfterUseItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_UNNERVE: [CbInfo; 4] = [
+    CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::End, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryEatItem, pre: Pre::Foe, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 10, sub_order: 7, kind: CbKind::StartAlias },
+];
+static CB_AB_UNSEENFIST: [CbInfo; 1] = [
+    CbInfo { ev: Ev::HitProtect, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_VITALSPIRIT: [CbInfo; 3] = [
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::TryAddVolatile, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_VOLTABSORB: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_WANDERINGSPIRIT: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_WATERABSORB: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_WATERBUBBLE: [CbInfo; 6] = [
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::Source, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::Source, order: 0, priority: 50, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+    CbInfo { ev: Ev::SetStatus, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_WEAKARMOR: [CbInfo; 1] = [
+    CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
+];
+static CB_AB_WHITESMOKE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
 ];
 static CB_IT_AIRBALLOON: [CbInfo; 4] = [
     CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1393,7 +2045,7 @@ static CB_IT_ZOOMLENS: [CbInfo; 1] = [
     CbInfo { ev: Ev::ModifyAccuracy, pre: Pre::Source, order: 0, priority: -20, sub_order: 8, kind: CbKind::Fn },
 ];
 
-pub static VOL_CONDS: [CondData; 7] = [
+pub static VOL_CONDS: [CondData; 9] = [
     CondData { id: "protect", duration: 1, affects_fainted: false, cbs: &CB_VOL_PROTECT, events: 0x800201 },
     CondData { id: "stall", duration: 2, affects_fainted: false, cbs: &CB_VOL_STALL, events: 0x2000000000205 },
     CondData { id: "flinch", duration: 1, affects_fainted: false, cbs: &CB_VOL_FLINCH, events: 0x8200 },
@@ -1401,6 +2053,8 @@ pub static VOL_CONDS: [CondData; 7] = [
     CondData { id: "choicelock", duration: 0, affects_fainted: false, cbs: &CB_VOL_CHOICELOCK, events: 0x8401 },
     CondData { id: "gem", duration: 1, affects_fainted: true, cbs: &CB_VOL_GEM, events: 0x80000200 },
     CondData { id: "metronome", duration: 0, affects_fainted: false, cbs: &CB_VOL_METRONOME, events: 0x10000100001 },
+    CondData { id: "flashfire", duration: 0, affects_fainted: false, cbs: &CB_VOL_FLASHFIRE, events: 0x500000003 },
+    CondData { id: "unburden", duration: 0, affects_fainted: false, cbs: &CB_VOL_UNBURDEN, events: 0x1000000000 },
 ];
 
 /// Indexed by `Status as usize`.
@@ -1737,324 +2391,324 @@ pub mod ab {
 }
 
 pub static ABILITIES: [AbilityData; 318] = [
-    AbilityData { id: "adaptability", name: "Adaptability", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "aerilate", name: "Aerilate", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "aftermath", name: "Aftermath", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "airlock", name: "Air Lock", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "analytic", name: "Analytic", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "angerpoint", name: "Anger Point", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "angershell", name: "Anger Shell", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "anticipation", name: "Anticipation", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "arenatrap", name: "Arena Trap", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "armortail", name: "Armor Tail", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "aromaveil", name: "Aroma Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "asoneglastrier", name: "As One (Glastrier)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "asonespectrier", name: "As One (Spectrier)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "aurabreak", name: "Aura Break", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "auraguard", name: "Aura Guard", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "baddreams", name: "Bad Dreams", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "ballfetch", name: "Ball Fetch", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "battery", name: "Battery", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "battlearmor", name: "Battle Armor", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "battlebond", name: "Battle Bond", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "beadsofruin", name: "Beads of Ruin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "beastboost", name: "Beast Boost", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "berserk", name: "Berserk", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "bigpecks", name: "Big Pecks", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "blaze", name: "Blaze", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "bulletproof", name: "Bulletproof", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cheekpouch", name: "Cheek Pouch", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "chillingneigh", name: "Chilling Neigh", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "chlorophyll", name: "Chlorophyll", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "clearbody", name: "Clear Body", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cloudnine", name: "Cloud Nine", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "colorchange", name: "Color Change", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "comatose", name: "Comatose", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "commander", name: "Commander", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "competitive", name: "Competitive", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "compoundeyes", name: "Compound Eyes", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "contrary", name: "Contrary", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "corrosion", name: "Corrosion", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "costar", name: "Costar", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cottondown", name: "Cotton Down", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cudchew", name: "Cud Chew", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "curiousmedicine", name: "Curious Medicine", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cursedbody", name: "Cursed Body", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "cutecharm", name: "Cute Charm", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "damp", name: "Damp", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dancer", name: "Dancer", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "darkaura", name: "Dark Aura", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dauntlessshield", name: "Dauntless Shield", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dazzling", name: "Dazzling", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "defeatist", name: "Defeatist", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "defiant", name: "Defiant", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "deltastream", name: "Delta Stream", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "desolateland", name: "Desolate Land", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "disguise", name: "Disguise", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_BREAKABLE | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "download", name: "Download", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dragonize", name: "Dragonize", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dragonsmaw", name: "Dragon's Maw", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "drizzle", name: "Drizzle", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "drought", name: "Drought", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "dryskin", name: "Dry Skin", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "earlybird", name: "Early Bird", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "eartheater", name: "Earth Eater", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "eelevate", name: "Eelevate", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "effectspore", name: "Effect Spore", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "electricsurge", name: "Electric Surge", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "electromorphosis", name: "Electromorphosis", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "embodyaspectcornerstone", name: "Embody Aspect (Cornerstone)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "embodyaspecthearthflame", name: "Embody Aspect (Hearthflame)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "embodyaspectteal", name: "Embody Aspect (Teal)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "embodyaspectwellspring", name: "Embody Aspect (Wellspring)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "emergencyexit", name: "Emergency Exit", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "fairyaura", name: "Fairy Aura", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "filter", name: "Filter", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "firemane", name: "Fire Mane", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "flamebody", name: "Flame Body", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "flareboost", name: "Flare Boost", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "flashfire", name: "Flash Fire", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "flowergift", name: "Flower Gift", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "flowerveil", name: "Flower Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "fluffy", name: "Fluffy", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "forecast", name: "Forecast", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "forewarn", name: "Forewarn", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "friendguard", name: "Friend Guard", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "frisk", name: "Frisk", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "fullmetalbody", name: "Full Metal Body", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "furcoat", name: "Fur Coat", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "galewings", name: "Gale Wings", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "galvanize", name: "Galvanize", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "gluttony", name: "Gluttony", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "goodasgold", name: "Good as Gold", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "gooey", name: "Gooey", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "gorillatactics", name: "Gorilla Tactics", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "grasspelt", name: "Grass Pelt", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "grassysurge", name: "Grassy Surge", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "grimneigh", name: "Grim Neigh", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "guarddog", name: "Guard Dog", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "gulpmissile", name: "Gulp Missile", flags: AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "guts", name: "Guts", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hadronengine", name: "Hadron Engine", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "harvest", name: "Harvest", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "healer", name: "Healer", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "heatproof", name: "Heatproof", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "heavymetal", name: "Heavy Metal", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "honeygather", name: "Honey Gather", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hospitality", name: "Hospitality", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hugepower", name: "Huge Power", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hungerswitch", name: "Hunger Switch", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hustle", name: "Hustle", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hydration", name: "Hydration", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "hypercutter", name: "Hyper Cutter", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "icebody", name: "Ice Body", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "iceface", name: "Ice Face", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_BREAKABLE | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "icescales", name: "Ice Scales", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "illuminate", name: "Illuminate", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "illusion", name: "Illusion", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "immunity", name: "Immunity", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "imposter", name: "Imposter", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "infiltrator", name: "Infiltrator", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "innardsout", name: "Innards Out", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "innerfocus", name: "Inner Focus", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "insomnia", name: "Insomnia", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "intimidate", name: "Intimidate", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "intrepidsword", name: "Intrepid Sword", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "ironbarbs", name: "Iron Barbs", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "ironfist", name: "Iron Fist", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "justified", name: "Justified", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "keeneye", name: "Keen Eye", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "klutz", name: "Klutz", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "leafguard", name: "Leaf Guard", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "levitate", name: "Levitate", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "libero", name: "Libero", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "lightmetal", name: "Light Metal", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "lightningrod", name: "Lightning Rod", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "limber", name: "Limber", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "lingeringaroma", name: "Lingering Aroma", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "liquidooze", name: "Liquid Ooze", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "liquidvoice", name: "Liquid Voice", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "longreach", name: "Long Reach", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "magicbounce", name: "Magic Bounce", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "magicguard", name: "Magic Guard", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "magician", name: "Magician", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "magmaarmor", name: "Magma Armor", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "magnetpull", name: "Magnet Pull", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "marvelscale", name: "Marvel Scale", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "megalauncher", name: "Mega Launcher", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "megasol", name: "Mega Sol", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "merciless", name: "Merciless", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "mimicry", name: "Mimicry", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "mindseye", name: "Mind's Eye", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "minus", name: "Minus", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "mirrorarmor", name: "Mirror Armor", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "mistysurge", name: "Misty Surge", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "moldbreaker", name: "Mold Breaker", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "moody", name: "Moody", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "motordrive", name: "Motor Drive", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "moxie", name: "Moxie", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "multiscale", name: "Multiscale", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "multitype", name: "Multitype", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "mummy", name: "Mummy", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "myceliummight", name: "Mycelium Might", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "naturalcure", name: "Natural Cure", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "neuroforce", name: "Neuroforce", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "neutralizinggas", name: "Neutralizing Gas", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "noability", name: "No Ability", flags: 0, supported: true, cbs: &[], events: 0 },
-    AbilityData { id: "noguard", name: "No Guard", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "normalize", name: "Normalize", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "oblivious", name: "Oblivious", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "opportunist", name: "Opportunist", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "orichalcumpulse", name: "Orichalcum Pulse", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "overcoat", name: "Overcoat", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "overgrow", name: "Overgrow", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "owntempo", name: "Own Tempo", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "parentalbond", name: "Parental Bond", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "pastelveil", name: "Pastel Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "perishbody", name: "Perish Body", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "pickpocket", name: "Pickpocket", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "pickup", name: "Pickup", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "piercingdrill", name: "Piercing Drill", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "pixilate", name: "Pixilate", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "plus", name: "Plus", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "poisonheal", name: "Poison Heal", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "poisonpoint", name: "Poison Point", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "poisonpuppeteer", name: "Poison Puppeteer", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "poisontouch", name: "Poison Touch", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "powerconstruct", name: "Power Construct", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "powerofalchemy", name: "Power of Alchemy", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "powerspot", name: "Power Spot", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "prankster", name: "Prankster", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "pressure", name: "Pressure", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "primordialsea", name: "Primordial Sea", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "prismarmor", name: "Prism Armor", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "propellertail", name: "Propeller Tail", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "protean", name: "Protean", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "protosynthesis", name: "Protosynthesis", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "psychicsurge", name: "Psychic Surge", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "punkrock", name: "Punk Rock", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "purepower", name: "Pure Power", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "purifyingsalt", name: "Purifying Salt", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "quarkdrive", name: "Quark Drive", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "queenlymajesty", name: "Queenly Majesty", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "quickdraw", name: "Quick Draw", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "quickfeet", name: "Quick Feet", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "raindish", name: "Rain Dish", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "rattled", name: "Rattled", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "receiver", name: "Receiver", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "reckless", name: "Reckless", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "refrigerate", name: "Refrigerate", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "regenerator", name: "Regenerator", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "ripen", name: "Ripen", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "rivalry", name: "Rivalry", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "rkssystem", name: "RKS System", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "rockhead", name: "Rock Head", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "rockypayload", name: "Rocky Payload", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "roughskin", name: "Rough Skin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "runaway", name: "Run Away", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sandforce", name: "Sand Force", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sandrush", name: "Sand Rush", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sandspit", name: "Sand Spit", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sandstream", name: "Sand Stream", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sandveil", name: "Sand Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sapsipper", name: "Sap Sipper", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "schooling", name: "Schooling", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "scrappy", name: "Scrappy", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "screencleaner", name: "Screen Cleaner", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "seedsower", name: "Seed Sower", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "serenegrace", name: "Serene Grace", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shadowshield", name: "Shadow Shield", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shadowtag", name: "Shadow Tag", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sharpness", name: "Sharpness", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shedskin", name: "Shed Skin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sheerforce", name: "Sheer Force", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shellarmor", name: "Shell Armor", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shielddust", name: "Shield Dust", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "shieldsdown", name: "Shields Down", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "simple", name: "Simple", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "skilllink", name: "Skill Link", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "slowstart", name: "Slow Start", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "slushrush", name: "Slush Rush", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sniper", name: "Sniper", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "snowcloak", name: "Snow Cloak", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "snowwarning", name: "Snow Warning", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "solarpower", name: "Solar Power", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "solidrock", name: "Solid Rock", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "soulheart", name: "Soul-Heart", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "soundproof", name: "Soundproof", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "speedboost", name: "Speed Boost", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "spicyspray", name: "Spicy Spray", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stakeout", name: "Stakeout", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stall", name: "Stall", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stalwart", name: "Stalwart", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stamina", name: "Stamina", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stancechange", name: "Stance Change", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "static", name: "Static", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "steadfast", name: "Steadfast", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "steamengine", name: "Steam Engine", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "steelworker", name: "Steelworker", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "steelyspirit", name: "Steely Spirit", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stench", name: "Stench", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stickyhold", name: "Sticky Hold", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "stormdrain", name: "Storm Drain", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "strongjaw", name: "Strong Jaw", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sturdy", name: "Sturdy", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "suctioncups", name: "Suction Cups", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "superluck", name: "Super Luck", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "supersweetsyrup", name: "Supersweet Syrup", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "supremeoverlord", name: "Supreme Overlord", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "surgesurfer", name: "Surge Surfer", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "swarm", name: "Swarm", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "sweetveil", name: "Sweet Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "swiftswim", name: "Swift Swim", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "swordofruin", name: "Sword of Ruin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "symbiosis", name: "Symbiosis", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "synchronize", name: "Synchronize", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "tabletsofruin", name: "Tablets of Ruin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "tangledfeet", name: "Tangled Feet", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "tanglinghair", name: "Tangling Hair", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "technician", name: "Technician", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "telepathy", name: "Telepathy", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "teraformzero", name: "Teraform Zero", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "terashell", name: "Tera Shell", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "terashift", name: "Tera Shift", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "teravolt", name: "Teravolt", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "thermalexchange", name: "Thermal Exchange", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "thickfat", name: "Thick Fat", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "tintedlens", name: "Tinted Lens", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "torrent", name: "Torrent", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "toughclaws", name: "Tough Claws", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "toxicboost", name: "Toxic Boost", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "toxicchain", name: "Toxic Chain", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "toxicdebris", name: "Toxic Debris", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "trace", name: "Trace", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "transistor", name: "Transistor", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "triage", name: "Triage", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "truant", name: "Truant", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "turboblaze", name: "Turboblaze", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "unaware", name: "Unaware", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "unburden", name: "Unburden", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "unnerve", name: "Unnerve", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "unseenfist", name: "Unseen Fist", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "vesselofruin", name: "Vessel of Ruin", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "victorystar", name: "Victory Star", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "vitalspirit", name: "Vital Spirit", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "voltabsorb", name: "Volt Absorb", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "wanderingspirit", name: "Wandering Spirit", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "waterabsorb", name: "Water Absorb", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "waterbubble", name: "Water Bubble", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "watercompaction", name: "Water Compaction", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "waterveil", name: "Water Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "weakarmor", name: "Weak Armor", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "wellbakedbody", name: "Well-Baked Body", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "whitesmoke", name: "White Smoke", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "wimpout", name: "Wimp Out", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "windpower", name: "Wind Power", flags: 0, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "windrider", name: "Wind Rider", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "wonderguard", name: "Wonder Guard", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_FAILSKILLSWAP | AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "wonderskin", name: "Wonder Skin", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "zenmode", name: "Zen Mode", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0 },
-    AbilityData { id: "zerotohero", name: "Zero to Hero", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0 },
+    AbilityData { id: "adaptability", name: "Adaptability", flags: 0, supported: true, cbs: &CB_AB_ADAPTABILITY, events: 0x4000000000, events_pre: 0x0 },
+    AbilityData { id: "aerilate", name: "Aerilate", flags: 0, supported: true, cbs: &CB_AB_AERILATE, events: 0x80020000, events_pre: 0x0 },
+    AbilityData { id: "aftermath", name: "Aftermath", flags: 0, supported: true, cbs: &CB_AB_AFTERMATH, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "airlock", name: "Air Lock", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "analytic", name: "Analytic", flags: 0, supported: true, cbs: &CB_AB_ANALYTIC, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "angerpoint", name: "Anger Point", flags: 0, supported: true, cbs: &CB_AB_ANGERPOINT, events: 0x40000000000, events_pre: 0x0 },
+    AbilityData { id: "angershell", name: "Anger Shell", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "anticipation", name: "Anticipation", flags: 0, supported: true, cbs: &CB_AB_ANTICIPATION, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "arenatrap", name: "Arena Trap", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "armortail", name: "Armor Tail", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_ARMORTAIL, events: 0x0, events_pre: 0x100000 },
+    AbilityData { id: "aromaveil", name: "Aroma Veil", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_AROMAVEIL, events: 0x0, events_pre: 0x20000000000000 },
+    AbilityData { id: "asoneglastrier", name: "As One (Glastrier)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "asonespectrier", name: "As One (Spectrier)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "aurabreak", name: "Aura Break", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "auraguard", name: "Aura Guard", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_AURAGUARD, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "baddreams", name: "Bad Dreams", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "ballfetch", name: "Ball Fetch", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "battery", name: "Battery", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "battlearmor", name: "Battle Armor", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_BATTLEARMOR, events: 0x40000000, events_pre: 0x0 },
+    AbilityData { id: "battlebond", name: "Battle Bond", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "beadsofruin", name: "Beads of Ruin", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "beastboost", name: "Beast Boost", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "berserk", name: "Berserk", flags: 0, supported: true, cbs: &CB_AB_BERSERK, events: 0x4000220000000000, events_pre: 0x0 },
+    AbilityData { id: "bigpecks", name: "Big Pecks", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_BIGPECKS, events: 0x100000000000000, events_pre: 0x0 },
+    AbilityData { id: "blaze", name: "Blaze", flags: 0, supported: true, cbs: &CB_AB_BLAZE, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "bulletproof", name: "Bulletproof", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_BULLETPROOF, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "cheekpouch", name: "Cheek Pouch", flags: 0, supported: true, cbs: &CB_AB_CHEEKPOUCH, events: 0x10000000000000000, events_pre: 0x0 },
+    AbilityData { id: "chillingneigh", name: "Chilling Neigh", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "chlorophyll", name: "Chlorophyll", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "clearbody", name: "Clear Body", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_CLEARBODY, events: 0x100000000000000, events_pre: 0x0 },
+    AbilityData { id: "cloudnine", name: "Cloud Nine", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "colorchange", name: "Color Change", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "comatose", name: "Comatose", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "commander", name: "Commander", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "competitive", name: "Competitive", flags: 0, supported: true, cbs: &CB_AB_COMPETITIVE, events: 0x200000000000000, events_pre: 0x0 },
+    AbilityData { id: "compoundeyes", name: "Compound Eyes", flags: 0, supported: true, cbs: &CB_AB_COMPOUNDEYES, events: 0x0, events_pre: 0x4000000 },
+    AbilityData { id: "contrary", name: "Contrary", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_CONTRARY, events: 0x80000000000000, events_pre: 0x0 },
+    AbilityData { id: "corrosion", name: "Corrosion", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "costar", name: "Costar", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "cottondown", name: "Cotton Down", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "cudchew", name: "Cud Chew", flags: 0, supported: true, cbs: &CB_AB_CUDCHEW, events: 0x10000000000000200, events_pre: 0x0 },
+    AbilityData { id: "curiousmedicine", name: "Curious Medicine", flags: 0, supported: true, cbs: &CB_AB_CURIOUSMEDICINE, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "cursedbody", name: "Cursed Body", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "cutecharm", name: "Cute Charm", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "damp", name: "Damp", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_DAMP, events: 0x0, events_pre: 0x20000100000 },
+    AbilityData { id: "dancer", name: "Dancer", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "darkaura", name: "Dark Aura", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "dauntlessshield", name: "Dauntless Shield", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "dazzling", name: "Dazzling", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "defeatist", name: "Defeatist", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "defiant", name: "Defiant", flags: 0, supported: true, cbs: &CB_AB_DEFIANT, events: 0x200000000000000, events_pre: 0x0 },
+    AbilityData { id: "deltastream", name: "Delta Stream", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "desolateland", name: "Desolate Land", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "disguise", name: "Disguise", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_BREAKABLE | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "download", name: "Download", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "dragonize", name: "Dragonize", flags: 0, supported: true, cbs: &CB_AB_DRAGONIZE, events: 0x80020000, events_pre: 0x0 },
+    AbilityData { id: "dragonsmaw", name: "Dragon's Maw", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "drizzle", name: "Drizzle", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "drought", name: "Drought", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "dryskin", name: "Dry Skin", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "earlybird", name: "Early Bird", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "eartheater", name: "Earth Eater", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_EARTHEATER, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "eelevate", name: "Eelevate", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_EELEVATE, events: 0x0, events_pre: 0x400000000000000000 },
+    AbilityData { id: "effectspore", name: "Effect Spore", flags: 0, supported: true, cbs: &CB_AB_EFFECTSPORE, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "electricsurge", name: "Electric Surge", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "electromorphosis", name: "Electromorphosis", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "embodyaspectcornerstone", name: "Embody Aspect (Cornerstone)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: true, cbs: &CB_AB_EMBODYASPECTCORNERSTONE, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "embodyaspecthearthflame", name: "Embody Aspect (Hearthflame)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: true, cbs: &CB_AB_EMBODYASPECTHEARTHFLAME, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "embodyaspectteal", name: "Embody Aspect (Teal)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: true, cbs: &CB_AB_EMBODYASPECTTEAL, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "embodyaspectwellspring", name: "Embody Aspect (Wellspring)", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: true, cbs: &CB_AB_EMBODYASPECTWELLSPRING, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "emergencyexit", name: "Emergency Exit", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "fairyaura", name: "Fairy Aura", flags: 0, supported: true, cbs: &CB_AB_FAIRYAURA, events: 0x11, events_pre: 0x80000000 },
+    AbilityData { id: "filter", name: "Filter", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FILTER, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "firemane", name: "Fire Mane", flags: 0, supported: true, cbs: &CB_AB_FIREMANE, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "flamebody", name: "Flame Body", flags: 0, supported: true, cbs: &CB_AB_FLAMEBODY, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "flareboost", name: "Flare Boost", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "flashfire", name: "Flash Fire", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FLASHFIRE, events: 0x800002, events_pre: 0x0 },
+    AbilityData { id: "flowergift", name: "Flower Gift", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "flowerveil", name: "Flower Veil", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FLOWERVEIL, events: 0x0, events_pre: 0x128000000000000 },
+    AbilityData { id: "fluffy", name: "Fluffy", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FLUFFY, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "forecast", name: "Forecast", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "forewarn", name: "Forewarn", flags: 0, supported: true, cbs: &CB_AB_FOREWARN, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "friendguard", name: "Friend Guard", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FRIENDGUARD, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "frisk", name: "Frisk", flags: 0, supported: true, cbs: &CB_AB_FRISK, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "fullmetalbody", name: "Full Metal Body", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "furcoat", name: "Fur Coat", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_FURCOAT, events: 0x200000000, events_pre: 0x0 },
+    AbilityData { id: "galewings", name: "Gale Wings", flags: 0, supported: true, cbs: &CB_AB_GALEWINGS, events: 0x2000, events_pre: 0x0 },
+    AbilityData { id: "galvanize", name: "Galvanize", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "gluttony", name: "Gluttony", flags: 0, supported: true, cbs: &CB_AB_GLUTTONY, events: 0x20000000011, events_pre: 0x0 },
+    AbilityData { id: "goodasgold", name: "Good as Gold", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_GOODASGOLD, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "gooey", name: "Gooey", flags: 0, supported: true, cbs: &CB_AB_GOOEY, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "gorillatactics", name: "Gorilla Tactics", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "grasspelt", name: "Grass Pelt", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "grassysurge", name: "Grassy Surge", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "grimneigh", name: "Grim Neigh", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "guarddog", name: "Guard Dog", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_GUARDDOG, events: 0x800100000000000000, events_pre: 0x0 },
+    AbilityData { id: "gulpmissile", name: "Gulp Missile", flags: AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "guts", name: "Guts", flags: 0, supported: true, cbs: &CB_AB_GUTS, events: 0x100000000, events_pre: 0x0 },
+    AbilityData { id: "hadronengine", name: "Hadron Engine", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "harvest", name: "Harvest", flags: 0, supported: true, cbs: &CB_AB_HARVEST, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "healer", name: "Healer", flags: 0, supported: true, cbs: &CB_AB_HEALER, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "heatproof", name: "Heatproof", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_HEATPROOF, events: 0x20000000000, events_pre: 0x500000000 },
+    AbilityData { id: "heavymetal", name: "Heavy Metal", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_HEAVYMETAL, events: 0x80000000000000000000, events_pre: 0x0 },
+    AbilityData { id: "honeygather", name: "Honey Gather", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "hospitality", name: "Hospitality", flags: 0, supported: true, cbs: &CB_AB_HOSPITALITY, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "hugepower", name: "Huge Power", flags: 0, supported: true, cbs: &CB_AB_HUGEPOWER, events: 0x100000000, events_pre: 0x0 },
+    AbilityData { id: "hungerswitch", name: "Hunger Switch", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "hustle", name: "Hustle", flags: 0, supported: true, cbs: &CB_AB_HUSTLE, events: 0x100000000, events_pre: 0x4000000 },
+    AbilityData { id: "hydration", name: "Hydration", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "hypercutter", name: "Hyper Cutter", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_HYPERCUTTER, events: 0x100000000000000, events_pre: 0x0 },
+    AbilityData { id: "icebody", name: "Ice Body", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "iceface", name: "Ice Face", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_BREAKABLE | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "icescales", name: "Ice Scales", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "illuminate", name: "Illuminate", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_ILLUMINATE, events: 0x100000000040000, events_pre: 0x0 },
+    AbilityData { id: "illusion", name: "Illusion", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "immunity", name: "Immunity", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_IMMUNITY, events: 0x8000000000100, events_pre: 0x0 },
+    AbilityData { id: "imposter", name: "Imposter", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "infiltrator", name: "Infiltrator", flags: 0, supported: true, cbs: &CB_AB_INFILTRATOR, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "innardsout", name: "Innards Out", flags: 0, supported: true, cbs: &CB_AB_INNARDSOUT, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "innerfocus", name: "Inner Focus", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_INNERFOCUS, events: 0x120000000000000, events_pre: 0x0 },
+    AbilityData { id: "insomnia", name: "Insomnia", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_INSOMNIA, events: 0x28000000000100, events_pre: 0x0 },
+    AbilityData { id: "intimidate", name: "Intimidate", flags: 0, supported: true, cbs: &CB_AB_INTIMIDATE, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "intrepidsword", name: "Intrepid Sword", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "ironbarbs", name: "Iron Barbs", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "ironfist", name: "Iron Fist", flags: 0, supported: true, cbs: &CB_AB_IRONFIST, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "justified", name: "Justified", flags: 0, supported: true, cbs: &CB_AB_JUSTIFIED, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "keeneye", name: "Keen Eye", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_KEENEYE, events: 0x100000000040000, events_pre: 0x0 },
+    AbilityData { id: "klutz", name: "Klutz", flags: 0, supported: true, cbs: &CB_AB_KLUTZ, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "leafguard", name: "Leaf Guard", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "levitate", name: "Levitate", flags: AF_BREAKABLE, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "libero", name: "Libero", flags: 0, supported: true, cbs: &CB_AB_LIBERO, events: 0x200000, events_pre: 0x0 },
+    AbilityData { id: "lightmetal", name: "Light Metal", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_LIGHTMETAL, events: 0x80000000000000000000, events_pre: 0x0 },
+    AbilityData { id: "lightningrod", name: "Lightning Rod", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_LIGHTNINGROD, events: 0x800000, events_pre: 0x1000000000000 },
+    AbilityData { id: "limber", name: "Limber", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_LIMBER, events: 0x8000000000100, events_pre: 0x0 },
+    AbilityData { id: "lingeringaroma", name: "Lingering Aroma", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "liquidooze", name: "Liquid Ooze", flags: 0, supported: true, cbs: &CB_AB_LIQUIDOOZE, events: 0x0, events_pre: 0x800000000000000 },
+    AbilityData { id: "liquidvoice", name: "Liquid Voice", flags: 0, supported: true, cbs: &CB_AB_LIQUIDVOICE, events: 0x20000, events_pre: 0x0 },
+    AbilityData { id: "longreach", name: "Long Reach", flags: 0, supported: true, cbs: &CB_AB_LONGREACH, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "magicbounce", name: "Magic Bounce", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MAGICBOUNCE, events: 0x800000, events_pre: 0x1000000 },
+    AbilityData { id: "magicguard", name: "Magic Guard", flags: 0, supported: true, cbs: &CB_AB_MAGICGUARD, events: 0x20000000000, events_pre: 0x0 },
+    AbilityData { id: "magician", name: "Magician", flags: 0, supported: true, cbs: &CB_AB_MAGICIAN, events: 0x400000000000, events_pre: 0x0 },
+    AbilityData { id: "magmaarmor", name: "Magma Armor", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MAGMAARMOR, events: 0x40000000000100, events_pre: 0x0 },
+    AbilityData { id: "magnetpull", name: "Magnet Pull", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "marvelscale", name: "Marvel Scale", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MARVELSCALE, events: 0x200000000, events_pre: 0x0 },
+    AbilityData { id: "megalauncher", name: "Mega Launcher", flags: 0, supported: true, cbs: &CB_AB_MEGALAUNCHER, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "megasol", name: "Mega Sol", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "merciless", name: "Merciless", flags: 0, supported: true, cbs: &CB_AB_MERCILESS, events: 0x20000000, events_pre: 0x0 },
+    AbilityData { id: "mimicry", name: "Mimicry", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "mindseye", name: "Mind's Eye", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "minus", name: "Minus", flags: 0, supported: true, cbs: &CB_AB_MINUS, events: 0x400000000, events_pre: 0x0 },
+    AbilityData { id: "mirrorarmor", name: "Mirror Armor", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MIRRORARMOR, events: 0x100000000000000, events_pre: 0x0 },
+    AbilityData { id: "mistysurge", name: "Misty Surge", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "moldbreaker", name: "Mold Breaker", flags: 0, supported: true, cbs: &CB_AB_MOLDBREAKER, events: 0x40011, events_pre: 0x0 },
+    AbilityData { id: "moody", name: "Moody", flags: 0, supported: true, cbs: &CB_AB_MOODY, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "motordrive", name: "Motor Drive", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MOTORDRIVE, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "moxie", name: "Moxie", flags: 0, supported: true, cbs: &CB_AB_MOXIE, events: 0x0, events_pre: 0x400000000000000000 },
+    AbilityData { id: "multiscale", name: "Multiscale", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_MULTISCALE, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "multitype", name: "Multitype", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "mummy", name: "Mummy", flags: 0, supported: true, cbs: &CB_AB_MUMMY, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "myceliummight", name: "Mycelium Might", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "naturalcure", name: "Natural Cure", flags: 0, supported: true, cbs: &CB_AB_NATURALCURE, events: 0x40, events_pre: 0x0 },
+    AbilityData { id: "neuroforce", name: "Neuroforce", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "neutralizinggas", name: "Neutralizing Gas", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "noability", name: "No Ability", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "noguard", name: "No Guard", flags: 0, supported: true, cbs: &CB_AB_NOGUARD, events: 0x0, events_pre: 0x8400000 },
+    AbilityData { id: "normalize", name: "Normalize", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "oblivious", name: "Oblivious", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_OBLIVIOUS, events: 0x140000000800100, events_pre: 0x0 },
+    AbilityData { id: "opportunist", name: "Opportunist", flags: 0, supported: true, cbs: &CB_AB_OPPORTUNIST, events: 0x202, events_pre: 0x6000400800000000010 },
+    AbilityData { id: "orichalcumpulse", name: "Orichalcum Pulse", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "overcoat", name: "Overcoat", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_OVERCOAT, events: 0x40000000800000, events_pre: 0x0 },
+    AbilityData { id: "overgrow", name: "Overgrow", flags: 0, supported: true, cbs: &CB_AB_OVERGROW, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "owntempo", name: "Own Tempo", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_OWNTEMPO, events: 0x120040000000100, events_pre: 0x0 },
+    AbilityData { id: "parentalbond", name: "Parental Bond", flags: 0, supported: true, cbs: &CB_AB_PARENTALBOND, events: 0x200000, events_pre: 0x80000000000 },
+    AbilityData { id: "pastelveil", name: "Pastel Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "perishbody", name: "Perish Body", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "pickpocket", name: "Pickpocket", flags: 0, supported: true, cbs: &CB_AB_PICKPOCKET, events: 0x200000000000, events_pre: 0x0 },
+    AbilityData { id: "pickup", name: "Pickup", flags: 0, supported: true, cbs: &CB_AB_PICKUP, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "piercingdrill", name: "Piercing Drill", flags: 0, supported: true, cbs: &CB_AB_PIERCINGDRILL, events: 0x2000000, events_pre: 0x0 },
+    AbilityData { id: "pixilate", name: "Pixilate", flags: 0, supported: true, cbs: &CB_AB_PIXILATE, events: 0x80020000, events_pre: 0x0 },
+    AbilityData { id: "plus", name: "Plus", flags: 0, supported: true, cbs: &CB_AB_PLUS, events: 0x400000000, events_pre: 0x0 },
+    AbilityData { id: "poisonheal", name: "Poison Heal", flags: 0, supported: true, cbs: &CB_AB_POISONHEAL, events: 0x20000000000, events_pre: 0x0 },
+    AbilityData { id: "poisonpoint", name: "Poison Point", flags: 0, supported: true, cbs: &CB_AB_POISONPOINT, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "poisonpuppeteer", name: "Poison Puppeteer", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "poisontouch", name: "Poison Touch", flags: 0, supported: true, cbs: &CB_AB_POISONTOUCH, events: 0x0, events_pre: 0x100000000000 },
+    AbilityData { id: "powerconstruct", name: "Power Construct", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "powerofalchemy", name: "Power of Alchemy", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "powerspot", name: "Power Spot", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "prankster", name: "Prankster", flags: 0, supported: true, cbs: &CB_AB_PRANKSTER, events: 0x2000, events_pre: 0x0 },
+    AbilityData { id: "pressure", name: "Pressure", flags: 0, supported: true, cbs: &CB_AB_PRESSURE, events: 0x80011, events_pre: 0x0 },
+    AbilityData { id: "primordialsea", name: "Primordial Sea", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "prismarmor", name: "Prism Armor", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "propellertail", name: "Propeller Tail", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "protean", name: "Protean", flags: 0, supported: true, cbs: &CB_AB_PROTEAN, events: 0x200000, events_pre: 0x0 },
+    AbilityData { id: "protosynthesis", name: "Protosynthesis", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "psychicsurge", name: "Psychic Surge", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "punkrock", name: "Punk Rock", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_PUNKROCK, events: 0x80000000, events_pre: 0x10000000000 },
+    AbilityData { id: "purepower", name: "Pure Power", flags: 0, supported: true, cbs: &CB_AB_PUREPOWER, events: 0x100000000, events_pre: 0x0 },
+    AbilityData { id: "purifyingsalt", name: "Purifying Salt", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_PURIFYINGSALT, events: 0x28000000000000, events_pre: 0x500000000 },
+    AbilityData { id: "quarkdrive", name: "Quark Drive", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "queenlymajesty", name: "Queenly Majesty", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_QUEENLYMAJESTY, events: 0x0, events_pre: 0x100000 },
+    AbilityData { id: "quickdraw", name: "Quick Draw", flags: 0, supported: true, cbs: &CB_AB_QUICKDRAW, events: 0x4000, events_pre: 0x0 },
+    AbilityData { id: "quickfeet", name: "Quick Feet", flags: 0, supported: true, cbs: &CB_AB_QUICKFEET, events: 0x1000000000, events_pre: 0x0 },
+    AbilityData { id: "raindish", name: "Rain Dish", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "rattled", name: "Rattled", flags: 0, supported: true, cbs: &CB_AB_RATTLED, events: 0x400100000000000, events_pre: 0x0 },
+    AbilityData { id: "receiver", name: "Receiver", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: true, cbs: &CB_AB_RECEIVER, events: 0x0, events_pre: 0x200000000000000000 },
+    AbilityData { id: "reckless", name: "Reckless", flags: 0, supported: true, cbs: &CB_AB_RECKLESS, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "refrigerate", name: "Refrigerate", flags: 0, supported: true, cbs: &CB_AB_REFRIGERATE, events: 0x80020000, events_pre: 0x0 },
+    AbilityData { id: "regenerator", name: "Regenerator", flags: 0, supported: true, cbs: &CB_AB_REGENERATOR, events: 0x40, events_pre: 0x0 },
+    AbilityData { id: "ripen", name: "Ripen", flags: 0, supported: true, cbs: &CB_AB_RIPEN, events: 0x14880000000000000, events_pre: 0x10000000000 },
+    AbilityData { id: "rivalry", name: "Rivalry", flags: 0, supported: true, cbs: &CB_AB_RIVALRY, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "rkssystem", name: "RKS System", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "rockhead", name: "Rock Head", flags: 0, supported: true, cbs: &CB_AB_ROCKHEAD, events: 0x20000000000, events_pre: 0x0 },
+    AbilityData { id: "rockypayload", name: "Rocky Payload", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "roughskin", name: "Rough Skin", flags: 0, supported: true, cbs: &CB_AB_ROUGHSKIN, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "runaway", name: "Run Away", flags: 0, supported: true, cbs: &CB_AB_RUNAWAY, events: 0x1800, events_pre: 0x0 },
+    AbilityData { id: "sandforce", name: "Sand Force", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sandrush", name: "Sand Rush", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sandspit", name: "Sand Spit", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sandstream", name: "Sand Stream", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sandveil", name: "Sand Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sapsipper", name: "Sap Sipper", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SAPSIPPER, events: 0x800000, events_pre: 0x1000000 },
+    AbilityData { id: "schooling", name: "Schooling", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "scrappy", name: "Scrappy", flags: 0, supported: true, cbs: &CB_AB_SCRAPPY, events: 0x100000000040000, events_pre: 0x0 },
+    AbilityData { id: "screencleaner", name: "Screen Cleaner", flags: 0, supported: true, cbs: &CB_AB_SCREENCLEANER, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "seedsower", name: "Seed Sower", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "serenegrace", name: "Serene Grace", flags: 0, supported: true, cbs: &CB_AB_SERENEGRACE, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "shadowshield", name: "Shadow Shield", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "shadowtag", name: "Shadow Tag", flags: 0, supported: true, cbs: &CB_AB_SHADOWTAG, events: 0x0, events_pre: 0x1800 },
+    AbilityData { id: "sharpness", name: "Sharpness", flags: 0, supported: true, cbs: &CB_AB_SHARPNESS, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "shedskin", name: "Shed Skin", flags: 0, supported: true, cbs: &CB_AB_SHEDSKIN, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "sheerforce", name: "Sheer Force", flags: 0, supported: true, cbs: &CB_AB_SHEERFORCE, events: 0x80040000, events_pre: 0x0 },
+    AbilityData { id: "shellarmor", name: "Shell Armor", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SHELLARMOR, events: 0x40000000, events_pre: 0x0 },
+    AbilityData { id: "shielddust", name: "Shield Dust", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SHIELDDUST, events: 0x80000000000, events_pre: 0x0 },
+    AbilityData { id: "shieldsdown", name: "Shields Down", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "simple", name: "Simple", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "skilllink", name: "Skill Link", flags: 0, supported: true, cbs: &CB_AB_SKILLLINK, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "slowstart", name: "Slow Start", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "slushrush", name: "Slush Rush", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "sniper", name: "Sniper", flags: 0, supported: true, cbs: &CB_AB_SNIPER, events: 0x10000000000, events_pre: 0x0 },
+    AbilityData { id: "snowcloak", name: "Snow Cloak", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "snowwarning", name: "Snow Warning", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "solarpower", name: "Solar Power", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "solidrock", name: "Solid Rock", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SOLIDROCK, events: 0x0, events_pre: 0x10000000000 },
+    AbilityData { id: "soulheart", name: "Soul-Heart", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "soundproof", name: "Soundproof", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SOUNDPROOF, events: 0x800000, events_pre: 0x1000000 },
+    AbilityData { id: "speedboost", name: "Speed Boost", flags: 0, supported: true, cbs: &CB_AB_SPEEDBOOST, events: 0x200, events_pre: 0x0 },
+    AbilityData { id: "spicyspray", name: "Spicy Spray", flags: 0, supported: true, cbs: &CB_AB_SPICYSPRAY, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "stakeout", name: "Stakeout", flags: 0, supported: true, cbs: &CB_AB_STAKEOUT, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "stall", name: "Stall", flags: 0, supported: true, cbs: &CB_AB_STALL, events: 0x4000, events_pre: 0x0 },
+    AbilityData { id: "stalwart", name: "Stalwart", flags: 0, supported: true, cbs: &CB_AB_STALWART, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "stamina", name: "Stamina", flags: 0, supported: true, cbs: &CB_AB_STAMINA, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "stancechange", name: "Stance Change", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "static", name: "Static", flags: 0, supported: true, cbs: &CB_AB_STATIC, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "steadfast", name: "Steadfast", flags: 0, supported: true, cbs: &CB_AB_STEADFAST, events: 0x4000000000000, events_pre: 0x0 },
+    AbilityData { id: "steamengine", name: "Steam Engine", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "steelworker", name: "Steelworker", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "steelyspirit", name: "Steely Spirit", flags: 0, supported: true, cbs: &CB_AB_STEELYSPIRIT, events: 0x0, events_pre: 0x80000000 },
+    AbilityData { id: "stench", name: "Stench", flags: 0, supported: true, cbs: &CB_AB_STENCH, events: 0x40000, events_pre: 0x0 },
+    AbilityData { id: "stickyhold", name: "Sticky Hold", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_STICKYHOLD, events: 0x80000000000000000, events_pre: 0x0 },
+    AbilityData { id: "stormdrain", name: "Storm Drain", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "strongjaw", name: "Strong Jaw", flags: 0, supported: true, cbs: &CB_AB_STRONGJAW, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "sturdy", name: "Sturdy", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_STURDY, events: 0x20000800000, events_pre: 0x0 },
+    AbilityData { id: "suctioncups", name: "Suction Cups", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SUCTIONCUPS, events: 0x800000000000000000, events_pre: 0x0 },
+    AbilityData { id: "superluck", name: "Super Luck", flags: 0, supported: true, cbs: &CB_AB_SUPERLUCK, events: 0x20000000, events_pre: 0x0 },
+    AbilityData { id: "supersweetsyrup", name: "Supersweet Syrup", flags: 0, supported: true, cbs: &CB_AB_SUPERSWEETSYRUP, events: 0x11, events_pre: 0x0 },
+    AbilityData { id: "supremeoverlord", name: "Supreme Overlord", flags: 0, supported: true, cbs: &CB_AB_SUPREMEOVERLORD, events: 0x80000013, events_pre: 0x0 },
+    AbilityData { id: "surgesurfer", name: "Surge Surfer", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "swarm", name: "Swarm", flags: 0, supported: true, cbs: &CB_AB_SWARM, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "sweetveil", name: "Sweet Veil", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_SWEETVEIL, events: 0x0, events_pre: 0x28000000000000 },
+    AbilityData { id: "swiftswim", name: "Swift Swim", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "swordofruin", name: "Sword of Ruin", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "symbiosis", name: "Symbiosis", flags: 0, supported: true, cbs: &CB_AB_SYMBIOSIS, events: 0x0, events_pre: 0x40000000000000000 },
+    AbilityData { id: "synchronize", name: "Synchronize", flags: 0, supported: true, cbs: &CB_AB_SYNCHRONIZE, events: 0x10000000000000, events_pre: 0x0 },
+    AbilityData { id: "tabletsofruin", name: "Tablets of Ruin", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "tangledfeet", name: "Tangled Feet", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_TANGLEDFEET, events: 0x4000000, events_pre: 0x0 },
+    AbilityData { id: "tanglinghair", name: "Tangling Hair", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "technician", name: "Technician", flags: 0, supported: true, cbs: &CB_AB_TECHNICIAN, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "telepathy", name: "Telepathy", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_TELEPATHY, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "teraformzero", name: "Teraform Zero", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "terashell", name: "Tera Shell", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "terashift", name: "Tera Shift", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "teravolt", name: "Teravolt", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "thermalexchange", name: "Thermal Exchange", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_THERMALEXCHANGE, events: 0x8100000000100, events_pre: 0x0 },
+    AbilityData { id: "thickfat", name: "Thick Fat", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_THICKFAT, events: 0x0, events_pre: 0x500000000 },
+    AbilityData { id: "tintedlens", name: "Tinted Lens", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "torrent", name: "Torrent", flags: 0, supported: true, cbs: &CB_AB_TORRENT, events: 0x500000000, events_pre: 0x0 },
+    AbilityData { id: "toughclaws", name: "Tough Claws", flags: 0, supported: true, cbs: &CB_AB_TOUGHCLAWS, events: 0x80000000, events_pre: 0x0 },
+    AbilityData { id: "toxicboost", name: "Toxic Boost", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "toxicchain", name: "Toxic Chain", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "toxicdebris", name: "Toxic Debris", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "trace", name: "Trace", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE, supported: true, cbs: &CB_AB_TRACE, events: 0x111, events_pre: 0x0 },
+    AbilityData { id: "transistor", name: "Transistor", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "triage", name: "Triage", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "truant", name: "Truant", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "turboblaze", name: "Turboblaze", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "unaware", name: "Unaware", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_UNAWARE, events: 0x0, events_pre: 0x2000000000 },
+    AbilityData { id: "unburden", name: "Unburden", flags: 0, supported: true, cbs: &CB_AB_UNBURDEN, events: 0xc0000000000000002, events_pre: 0x0 },
+    AbilityData { id: "unnerve", name: "Unnerve", flags: 0, supported: true, cbs: &CB_AB_UNNERVE, events: 0x13, events_pre: 0x4000000000000000 },
+    AbilityData { id: "unseenfist", name: "Unseen Fist", flags: 0, supported: true, cbs: &CB_AB_UNSEENFIST, events: 0x2000000, events_pre: 0x0 },
+    AbilityData { id: "vesselofruin", name: "Vessel of Ruin", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "victorystar", name: "Victory Star", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "vitalspirit", name: "Vital Spirit", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_VITALSPIRIT, events: 0x28000000000100, events_pre: 0x0 },
+    AbilityData { id: "voltabsorb", name: "Volt Absorb", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_VOLTABSORB, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "wanderingspirit", name: "Wandering Spirit", flags: 0, supported: true, cbs: &CB_AB_WANDERINGSPIRIT, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "waterabsorb", name: "Water Absorb", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_WATERABSORB, events: 0x800000, events_pre: 0x0 },
+    AbilityData { id: "waterbubble", name: "Water Bubble", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_WATERBUBBLE, events: 0x8000500000100, events_pre: 0x500000000 },
+    AbilityData { id: "watercompaction", name: "Water Compaction", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "waterveil", name: "Water Veil", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "weakarmor", name: "Weak Armor", flags: 0, supported: true, cbs: &CB_AB_WEAKARMOR, events: 0x100000000000, events_pre: 0x0 },
+    AbilityData { id: "wellbakedbody", name: "Well-Baked Body", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "whitesmoke", name: "White Smoke", flags: AF_BREAKABLE, supported: true, cbs: &CB_AB_WHITESMOKE, events: 0x100000000000000, events_pre: 0x0 },
+    AbilityData { id: "wimpout", name: "Wimp Out", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "windpower", name: "Wind Power", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "windrider", name: "Wind Rider", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "wonderguard", name: "Wonder Guard", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_FAILSKILLSWAP | AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "wonderskin", name: "Wonder Skin", flags: AF_BREAKABLE, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "zenmode", name: "Zen Mode", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    AbilityData { id: "zerotohero", name: "Zero to Hero", flags: AF_FAILROLEPLAY | AF_NORECEIVER | AF_NOENTRAIN | AF_NOTRACE | AF_FAILSKILLSWAP | AF_CANTSUPPRESS | AF_NOTRANSFORM, supported: false, cbs: &[], events: 0, events_pre: 0 },
 ];
 
 /// Item indices into `ITEMS`.
@@ -2229,171 +2883,171 @@ pub mod it {
 }
 
 pub static ITEMS: [ItemData; 167] = [
-    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "abomasite", name: "Abomasite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "absolite", name: "Absolite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "absolitez", name: "Absolite Z", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "aerodactylite", name: "Aerodactylite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "aggronite", name: "Aggronite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "airballoon", name: "Air Balloon", flags: 0, supported: true, cbs: &CB_IT_AIRBALLOON, events: 0x8000000100000000011 },
-    ItemData { id: "alakazite", name: "Alakazite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "altarianite", name: "Altarianite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "ampharosite", name: "Ampharosite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "aspearberry", name: "Aspear Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ASPEARBERRY, events: 0x8000000000000100 },
-    ItemData { id: "audinite", name: "Audinite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "babiriberry", name: "Babiri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_BABIRIBERRY, events: 0x8000010000000000 },
-    ItemData { id: "banettite", name: "Banettite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "barbaracite", name: "Barbaracite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "baxcalibrite", name: "Baxcalibrite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "beedrillite", name: "Beedrillite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "bigroot", name: "Big Root", flags: 0, supported: true, cbs: &CB_IT_BIGROOT, events: 0x800000000000000 },
-    ItemData { id: "bindingband", name: "Binding Band", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "blackbelt", name: "Black Belt", flags: 0, supported: true, cbs: &CB_IT_BLACKBELT, events: 0x80000000 },
-    ItemData { id: "blackglasses", name: "Black Glasses", flags: 0, supported: true, cbs: &CB_IT_BLACKGLASSES, events: 0x80000000 },
-    ItemData { id: "blastoisinite", name: "Blastoisinite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "blazikenite", name: "Blazikenite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "brightpowder", name: "Bright Powder", flags: 0, supported: true, cbs: &CB_IT_BRIGHTPOWDER, events: 0x4000000 },
-    ItemData { id: "cameruptite", name: "Cameruptite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "chandelurite", name: "Chandelurite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "charcoal", name: "Charcoal", flags: 0, supported: true, cbs: &CB_IT_CHARCOAL, events: 0x80000000 },
-    ItemData { id: "charizarditex", name: "Charizardite X", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "charizarditey", name: "Charizardite Y", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "chartiberry", name: "Charti Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHARTIBERRY, events: 0x8000010000000000 },
-    ItemData { id: "cheriberry", name: "Cheri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHERIBERRY, events: 0x8000000000000100 },
-    ItemData { id: "chesnaughtite", name: "Chesnaughtite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "chestoberry", name: "Chesto Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHESTOBERRY, events: 0x8000000000000100 },
-    ItemData { id: "chilanberry", name: "Chilan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHILANBERRY, events: 0x8000010000000000 },
-    ItemData { id: "chimechite", name: "Chimechite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "choicescarf", name: "Choice Scarf", flags: IF_CHOICE, supported: true, cbs: &CB_IT_CHOICESCARF, events: 0x1000040011 },
-    ItemData { id: "chopleberry", name: "Chople Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHOPLEBERRY, events: 0x8000010000000000 },
-    ItemData { id: "clefablite", name: "Clefablite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "cobaberry", name: "Coba Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COBABERRY, events: 0x8000010000000000 },
-    ItemData { id: "colburberry", name: "Colbur Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COLBURBERRY, events: 0x8000010000000000 },
-    ItemData { id: "crabominite", name: "Crabominite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "damprock", name: "Damp Rock", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "delphoxite", name: "Delphoxite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "dragalgite", name: "Dragalgite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "dragonfang", name: "Dragon Fang", flags: 0, supported: true, cbs: &CB_IT_DRAGONFANG, events: 0x80000000 },
-    ItemData { id: "dragoninite", name: "Dragoninite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "drampanite", name: "Drampanite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "eelektrossite", name: "Eelektrossite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "ejectbutton", name: "Eject Button", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "electricseed", name: "Electric Seed", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "emboarite", name: "Emboarite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "excadrite", name: "Excadrite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "expertbelt", name: "Expert Belt", flags: 0, supported: true, cbs: &CB_IT_EXPERTBELT, events: 0x10000000000 },
-    ItemData { id: "fairyfeather", name: "Fairy Feather", flags: 0, supported: true, cbs: &CB_IT_FAIRYFEATHER, events: 0x80000000 },
-    ItemData { id: "falinksite", name: "Falinksite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "feraligite", name: "Feraligite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "floettite", name: "Floettite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "focusband", name: "Focus Band", flags: 0, supported: true, cbs: &CB_IT_FOCUSBAND, events: 0x20000000000 },
-    ItemData { id: "focussash", name: "Focus Sash", flags: 0, supported: true, cbs: &CB_IT_FOCUSSASH, events: 0x20000000000 },
-    ItemData { id: "froslassite", name: "Froslassite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "galladite", name: "Galladite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "garchompite", name: "Garchompite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "garchompitez", name: "Garchompite Z", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "gardevoirite", name: "Gardevoirite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "gengarite", name: "Gengarite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "glalitite", name: "Glalitite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "glimmoranite", name: "Glimmoranite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "golisopite", name: "Golisopite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "golurkite", name: "Golurkite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "grassyseed", name: "Grassy Seed", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "greninjite", name: "Greninjite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "gyaradosite", name: "Gyaradosite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "habanberry", name: "Haban Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_HABANBERRY, events: 0x8000010000000000 },
-    ItemData { id: "hardstone", name: "Hard Stone", flags: 0, supported: true, cbs: &CB_IT_HARDSTONE, events: 0x80000000 },
-    ItemData { id: "hawluchanite", name: "Hawluchanite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "heatrock", name: "Heat Rock", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "heracronite", name: "Heracronite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "houndoominite", name: "Houndoominite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "icyrock", name: "Icy Rock", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "ironball", name: "Iron Ball", flags: 0, supported: true, cbs: &CB_IT_IRONBALL, events: 0x9000000000 },
-    ItemData { id: "kangaskhanite", name: "Kangaskhanite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "kasibberry", name: "Kasib Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KASIBBERRY, events: 0x8000010000000000 },
-    ItemData { id: "kebiaberry", name: "Kebia Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KEBIABERRY, events: 0x8000010000000000 },
-    ItemData { id: "kingsrock", name: "King's Rock", flags: 0, supported: true, cbs: &CB_IT_KINGSROCK, events: 0x40000 },
-    ItemData { id: "leek", name: "Leek", flags: 0, supported: true, cbs: &CB_IT_LEEK, events: 0x20000000 },
-    ItemData { id: "leftovers", name: "Leftovers", flags: 0, supported: true, cbs: &CB_IT_LEFTOVERS, events: 0x200 },
-    ItemData { id: "leppaberry", name: "Leppa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LEPPABERRY, events: 0x8000000000000100 },
-    ItemData { id: "lifeorb", name: "Life Orb", flags: 0, supported: true, cbs: &CB_IT_LIFEORB, events: 0x410000000000 },
-    ItemData { id: "lightball", name: "Light Ball", flags: 0, supported: true, cbs: &CB_IT_LIGHTBALL, events: 0x500000000 },
-    ItemData { id: "lightclay", name: "Light Clay", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "lopunnite", name: "Lopunnite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "lucarionite", name: "Lucarionite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "lucarionitez", name: "Lucarionite Z", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "lumberry", name: "Lum Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LUMBERRY, events: 0x8010000000000100 },
-    ItemData { id: "magnet", name: "Magnet", flags: 0, supported: true, cbs: &CB_IT_MAGNET, events: 0x80000000 },
-    ItemData { id: "malamarite", name: "Malamarite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "manectite", name: "Manectite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "mawilite", name: "Mawilite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "medichamite", name: "Medichamite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "meganiumite", name: "Meganiumite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "mentalherb", name: "Mental Herb", flags: 0, supported: true, cbs: &CB_IT_MENTALHERB, events: 0x100 },
-    ItemData { id: "meowsticite", name: "Meowsticite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "metagrossite", name: "Metagrossite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "metalcoat", name: "Metal Coat", flags: 0, supported: true, cbs: &CB_IT_METALCOAT, events: 0x80000000 },
-    ItemData { id: "metronome", name: "Metronome", flags: 0, supported: true, cbs: &CB_IT_METRONOME, events: 0x11 },
-    ItemData { id: "miracleseed", name: "Miracle Seed", flags: 0, supported: true, cbs: &CB_IT_MIRACLESEED, events: 0x80000000 },
-    ItemData { id: "mistyseed", name: "Misty Seed", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "muscleband", name: "Muscle Band", flags: 0, supported: true, cbs: &CB_IT_MUSCLEBAND, events: 0x80000000 },
-    ItemData { id: "mysticwater", name: "Mystic Water", flags: 0, supported: true, cbs: &CB_IT_MYSTICWATER, events: 0x80000000 },
-    ItemData { id: "nevermeltice", name: "Never-Melt Ice", flags: 0, supported: true, cbs: &CB_IT_NEVERMELTICE, events: 0x80000000 },
-    ItemData { id: "normalgem", name: "Normal Gem", flags: IF_GEM, supported: true, cbs: &CB_IT_NORMALGEM, events: 0x10000000 },
-    ItemData { id: "occaberry", name: "Occa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_OCCABERRY, events: 0x8000010000000000 },
-    ItemData { id: "oranberry", name: "Oran Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ORANBERRY, events: 0xc000000000000100 },
-    ItemData { id: "passhoberry", name: "Passho Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PASSHOBERRY, events: 0x8000010000000000 },
-    ItemData { id: "payapaberry", name: "Payapa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PAYAPABERRY, events: 0x8000010000000000 },
-    ItemData { id: "pechaberry", name: "Pecha Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PECHABERRY, events: 0x8000000000000100 },
-    ItemData { id: "persimberry", name: "Persim Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PERSIMBERRY, events: 0x8000000000000100 },
-    ItemData { id: "pidgeotite", name: "Pidgeotite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "pinsirite", name: "Pinsirite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "poisonbarb", name: "Poison Barb", flags: 0, supported: true, cbs: &CB_IT_POISONBARB, events: 0x80000000 },
-    ItemData { id: "psychicseed", name: "Psychic Seed", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "pyroarite", name: "Pyroarite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "quickclaw", name: "Quick Claw", flags: 0, supported: true, cbs: &CB_IT_QUICKCLAW, events: 0x4000 },
-    ItemData { id: "raichunitex", name: "Raichunite X", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "raichunitey", name: "Raichunite Y", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "rawstberry", name: "Rawst Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RAWSTBERRY, events: 0x8000000000000100 },
-    ItemData { id: "redcard", name: "Red Card", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "rindoberry", name: "Rindo Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RINDOBERRY, events: 0x8000010000000000 },
-    ItemData { id: "rockyhelmet", name: "Rocky Helmet", flags: 0, supported: true, cbs: &CB_IT_ROCKYHELMET, events: 0x100000000000 },
-    ItemData { id: "roseliberry", name: "Roseli Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ROSELIBERRY, events: 0x8000010000000000 },
-    ItemData { id: "sablenite", name: "Sablenite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "salamencite", name: "Salamencite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "sceptilite", name: "Sceptilite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "scizorite", name: "Scizorite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "scolipite", name: "Scolipite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "scopelens", name: "Scope Lens", flags: 0, supported: true, cbs: &CB_IT_SCOPELENS, events: 0x20000000 },
-    ItemData { id: "scovillainite", name: "Scovillainite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "scraftinite", name: "Scraftinite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "sharpbeak", name: "Sharp Beak", flags: 0, supported: true, cbs: &CB_IT_SHARPBEAK, events: 0x80000000 },
-    ItemData { id: "sharpedonite", name: "Sharpedonite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "shedshell", name: "Shed Shell", flags: 0, supported: true, cbs: &CB_IT_SHEDSHELL, events: 0x1800 },
-    ItemData { id: "shellbell", name: "Shell Bell", flags: 0, supported: true, cbs: &CB_IT_SHELLBELL, events: 0x400000000000 },
-    ItemData { id: "shucaberry", name: "Shuca Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SHUCABERRY, events: 0x8000010000000000 },
-    ItemData { id: "silkscarf", name: "Silk Scarf", flags: 0, supported: true, cbs: &CB_IT_SILKSCARF, events: 0x80000000 },
-    ItemData { id: "silverpowder", name: "Silver Powder", flags: 0, supported: true, cbs: &CB_IT_SILVERPOWDER, events: 0x80000000 },
-    ItemData { id: "sitrusberry", name: "Sitrus Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SITRUSBERRY, events: 0xc000000000000100 },
-    ItemData { id: "skarmorite", name: "Skarmorite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "slowbronite", name: "Slowbronite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "smoothrock", name: "Smooth Rock", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "softsand", name: "Soft Sand", flags: 0, supported: true, cbs: &CB_IT_SOFTSAND, events: 0x80000000 },
-    ItemData { id: "spelltag", name: "Spell Tag", flags: 0, supported: true, cbs: &CB_IT_SPELLTAG, events: 0x80000000 },
-    ItemData { id: "staraptite", name: "Staraptite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "starminite", name: "Starminite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "steelixite", name: "Steelixite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "swampertite", name: "Swampertite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "tangaberry", name: "Tanga Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_TANGABERRY, events: 0x8000010000000000 },
-    ItemData { id: "terrainextender", name: "Terrain Extender", flags: 0, supported: true, cbs: &[], events: 0 },
-    ItemData { id: "twistedspoon", name: "Twisted Spoon", flags: 0, supported: true, cbs: &CB_IT_TWISTEDSPOON, events: 0x80000000 },
-    ItemData { id: "tyranitarite", name: "Tyranitarite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "venusaurite", name: "Venusaurite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "victreebelite", name: "Victreebelite", flags: 0, supported: false, cbs: &[], events: 0 },
-    ItemData { id: "wacanberry", name: "Wacan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_WACANBERRY, events: 0x8000010000000000 },
-    ItemData { id: "whiteherb", name: "White Herb", flags: 0, supported: true, cbs: &CB_IT_WHITEHERB, events: 0x2020000800000000211 },
-    ItemData { id: "widelens", name: "Wide Lens", flags: 0, supported: true, cbs: &CB_IT_WIDELENS, events: 0x4000000 },
-    ItemData { id: "wiseglasses", name: "Wise Glasses", flags: 0, supported: true, cbs: &CB_IT_WISEGLASSES, events: 0x80000000 },
-    ItemData { id: "yacheberry", name: "Yache Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_YACHEBERRY, events: 0x8000010000000000 },
-    ItemData { id: "zoomlens", name: "Zoom Lens", flags: 0, supported: true, cbs: &CB_IT_ZOOMLENS, events: 0x4000000 },
+    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "abomasite", name: "Abomasite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "absolite", name: "Absolite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "absolitez", name: "Absolite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "aerodactylite", name: "Aerodactylite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "aggronite", name: "Aggronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "airballoon", name: "Air Balloon", flags: 0, supported: true, cbs: &CB_IT_AIRBALLOON, events: 0x8000000100000000011, events_pre: 0x0 },
+    ItemData { id: "alakazite", name: "Alakazite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "altarianite", name: "Altarianite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "ampharosite", name: "Ampharosite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "aspearberry", name: "Aspear Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ASPEARBERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "audinite", name: "Audinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "babiriberry", name: "Babiri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_BABIRIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "banettite", name: "Banettite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "barbaracite", name: "Barbaracite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "baxcalibrite", name: "Baxcalibrite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "beedrillite", name: "Beedrillite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "bigroot", name: "Big Root", flags: 0, supported: true, cbs: &CB_IT_BIGROOT, events: 0x800000000000000, events_pre: 0x0 },
+    ItemData { id: "bindingband", name: "Binding Band", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "blackbelt", name: "Black Belt", flags: 0, supported: true, cbs: &CB_IT_BLACKBELT, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "blackglasses", name: "Black Glasses", flags: 0, supported: true, cbs: &CB_IT_BLACKGLASSES, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "blastoisinite", name: "Blastoisinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "blazikenite", name: "Blazikenite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "brightpowder", name: "Bright Powder", flags: 0, supported: true, cbs: &CB_IT_BRIGHTPOWDER, events: 0x4000000, events_pre: 0x0 },
+    ItemData { id: "cameruptite", name: "Cameruptite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "chandelurite", name: "Chandelurite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "charcoal", name: "Charcoal", flags: 0, supported: true, cbs: &CB_IT_CHARCOAL, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "charizarditex", name: "Charizardite X", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "charizarditey", name: "Charizardite Y", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "chartiberry", name: "Charti Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHARTIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "cheriberry", name: "Cheri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHERIBERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "chesnaughtite", name: "Chesnaughtite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "chestoberry", name: "Chesto Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHESTOBERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "chilanberry", name: "Chilan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHILANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "chimechite", name: "Chimechite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "choicescarf", name: "Choice Scarf", flags: IF_CHOICE, supported: true, cbs: &CB_IT_CHOICESCARF, events: 0x1000040011, events_pre: 0x0 },
+    ItemData { id: "chopleberry", name: "Chople Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHOPLEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "clefablite", name: "Clefablite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "cobaberry", name: "Coba Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COBABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "colburberry", name: "Colbur Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COLBURBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "crabominite", name: "Crabominite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "damprock", name: "Damp Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "delphoxite", name: "Delphoxite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "dragalgite", name: "Dragalgite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "dragonfang", name: "Dragon Fang", flags: 0, supported: true, cbs: &CB_IT_DRAGONFANG, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "dragoninite", name: "Dragoninite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "drampanite", name: "Drampanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "eelektrossite", name: "Eelektrossite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "ejectbutton", name: "Eject Button", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "electricseed", name: "Electric Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "emboarite", name: "Emboarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "excadrite", name: "Excadrite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "expertbelt", name: "Expert Belt", flags: 0, supported: true, cbs: &CB_IT_EXPERTBELT, events: 0x10000000000, events_pre: 0x0 },
+    ItemData { id: "fairyfeather", name: "Fairy Feather", flags: 0, supported: true, cbs: &CB_IT_FAIRYFEATHER, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "falinksite", name: "Falinksite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "feraligite", name: "Feraligite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "floettite", name: "Floettite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "focusband", name: "Focus Band", flags: 0, supported: true, cbs: &CB_IT_FOCUSBAND, events: 0x20000000000, events_pre: 0x0 },
+    ItemData { id: "focussash", name: "Focus Sash", flags: 0, supported: true, cbs: &CB_IT_FOCUSSASH, events: 0x20000000000, events_pre: 0x0 },
+    ItemData { id: "froslassite", name: "Froslassite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "galladite", name: "Galladite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "garchompite", name: "Garchompite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "garchompitez", name: "Garchompite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "gardevoirite", name: "Gardevoirite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "gengarite", name: "Gengarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "glalitite", name: "Glalitite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "glimmoranite", name: "Glimmoranite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "golisopite", name: "Golisopite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "golurkite", name: "Golurkite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "grassyseed", name: "Grassy Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "greninjite", name: "Greninjite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "gyaradosite", name: "Gyaradosite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "habanberry", name: "Haban Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_HABANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "hardstone", name: "Hard Stone", flags: 0, supported: true, cbs: &CB_IT_HARDSTONE, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "hawluchanite", name: "Hawluchanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "heatrock", name: "Heat Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "heracronite", name: "Heracronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "houndoominite", name: "Houndoominite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "icyrock", name: "Icy Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "ironball", name: "Iron Ball", flags: 0, supported: true, cbs: &CB_IT_IRONBALL, events: 0x9000000000, events_pre: 0x0 },
+    ItemData { id: "kangaskhanite", name: "Kangaskhanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "kasibberry", name: "Kasib Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KASIBBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "kebiaberry", name: "Kebia Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KEBIABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "kingsrock", name: "King's Rock", flags: 0, supported: true, cbs: &CB_IT_KINGSROCK, events: 0x40000, events_pre: 0x0 },
+    ItemData { id: "leek", name: "Leek", flags: 0, supported: true, cbs: &CB_IT_LEEK, events: 0x20000000, events_pre: 0x0 },
+    ItemData { id: "leftovers", name: "Leftovers", flags: 0, supported: true, cbs: &CB_IT_LEFTOVERS, events: 0x200, events_pre: 0x0 },
+    ItemData { id: "leppaberry", name: "Leppa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LEPPABERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "lifeorb", name: "Life Orb", flags: 0, supported: true, cbs: &CB_IT_LIFEORB, events: 0x410000000000, events_pre: 0x0 },
+    ItemData { id: "lightball", name: "Light Ball", flags: 0, supported: true, cbs: &CB_IT_LIGHTBALL, events: 0x500000000, events_pre: 0x0 },
+    ItemData { id: "lightclay", name: "Light Clay", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "lopunnite", name: "Lopunnite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "lucarionite", name: "Lucarionite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "lucarionitez", name: "Lucarionite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "lumberry", name: "Lum Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LUMBERRY, events: 0x8010000000000100, events_pre: 0x0 },
+    ItemData { id: "magnet", name: "Magnet", flags: 0, supported: true, cbs: &CB_IT_MAGNET, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "malamarite", name: "Malamarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "manectite", name: "Manectite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "mawilite", name: "Mawilite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "medichamite", name: "Medichamite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "meganiumite", name: "Meganiumite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "mentalherb", name: "Mental Herb", flags: 0, supported: true, cbs: &CB_IT_MENTALHERB, events: 0x100, events_pre: 0x0 },
+    ItemData { id: "meowsticite", name: "Meowsticite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "metagrossite", name: "Metagrossite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "metalcoat", name: "Metal Coat", flags: 0, supported: true, cbs: &CB_IT_METALCOAT, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "metronome", name: "Metronome", flags: 0, supported: true, cbs: &CB_IT_METRONOME, events: 0x11, events_pre: 0x0 },
+    ItemData { id: "miracleseed", name: "Miracle Seed", flags: 0, supported: true, cbs: &CB_IT_MIRACLESEED, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "mistyseed", name: "Misty Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "muscleband", name: "Muscle Band", flags: 0, supported: true, cbs: &CB_IT_MUSCLEBAND, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "mysticwater", name: "Mystic Water", flags: 0, supported: true, cbs: &CB_IT_MYSTICWATER, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "nevermeltice", name: "Never-Melt Ice", flags: 0, supported: true, cbs: &CB_IT_NEVERMELTICE, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "normalgem", name: "Normal Gem", flags: IF_GEM, supported: true, cbs: &CB_IT_NORMALGEM, events: 0x0, events_pre: 0x10000000 },
+    ItemData { id: "occaberry", name: "Occa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_OCCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "oranberry", name: "Oran Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ORANBERRY, events: 0xc000000000000100, events_pre: 0x0 },
+    ItemData { id: "passhoberry", name: "Passho Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PASSHOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "payapaberry", name: "Payapa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PAYAPABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "pechaberry", name: "Pecha Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PECHABERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "persimberry", name: "Persim Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PERSIMBERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "pidgeotite", name: "Pidgeotite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "pinsirite", name: "Pinsirite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "poisonbarb", name: "Poison Barb", flags: 0, supported: true, cbs: &CB_IT_POISONBARB, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "psychicseed", name: "Psychic Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "pyroarite", name: "Pyroarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "quickclaw", name: "Quick Claw", flags: 0, supported: true, cbs: &CB_IT_QUICKCLAW, events: 0x4000, events_pre: 0x0 },
+    ItemData { id: "raichunitex", name: "Raichunite X", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "raichunitey", name: "Raichunite Y", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "rawstberry", name: "Rawst Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RAWSTBERRY, events: 0x8000000000000100, events_pre: 0x0 },
+    ItemData { id: "redcard", name: "Red Card", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "rindoberry", name: "Rindo Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RINDOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "rockyhelmet", name: "Rocky Helmet", flags: 0, supported: true, cbs: &CB_IT_ROCKYHELMET, events: 0x100000000000, events_pre: 0x0 },
+    ItemData { id: "roseliberry", name: "Roseli Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ROSELIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "sablenite", name: "Sablenite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "salamencite", name: "Salamencite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "sceptilite", name: "Sceptilite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "scizorite", name: "Scizorite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "scolipite", name: "Scolipite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "scopelens", name: "Scope Lens", flags: 0, supported: true, cbs: &CB_IT_SCOPELENS, events: 0x20000000, events_pre: 0x0 },
+    ItemData { id: "scovillainite", name: "Scovillainite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "scraftinite", name: "Scraftinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "sharpbeak", name: "Sharp Beak", flags: 0, supported: true, cbs: &CB_IT_SHARPBEAK, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "sharpedonite", name: "Sharpedonite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "shedshell", name: "Shed Shell", flags: 0, supported: true, cbs: &CB_IT_SHEDSHELL, events: 0x1800, events_pre: 0x0 },
+    ItemData { id: "shellbell", name: "Shell Bell", flags: 0, supported: true, cbs: &CB_IT_SHELLBELL, events: 0x400000000000, events_pre: 0x0 },
+    ItemData { id: "shucaberry", name: "Shuca Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SHUCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "silkscarf", name: "Silk Scarf", flags: 0, supported: true, cbs: &CB_IT_SILKSCARF, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "silverpowder", name: "Silver Powder", flags: 0, supported: true, cbs: &CB_IT_SILVERPOWDER, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "sitrusberry", name: "Sitrus Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SITRUSBERRY, events: 0xc000000000000100, events_pre: 0x0 },
+    ItemData { id: "skarmorite", name: "Skarmorite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "slowbronite", name: "Slowbronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "smoothrock", name: "Smooth Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "softsand", name: "Soft Sand", flags: 0, supported: true, cbs: &CB_IT_SOFTSAND, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "spelltag", name: "Spell Tag", flags: 0, supported: true, cbs: &CB_IT_SPELLTAG, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "staraptite", name: "Staraptite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "starminite", name: "Starminite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "steelixite", name: "Steelixite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "swampertite", name: "Swampertite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "tangaberry", name: "Tanga Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_TANGABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "terrainextender", name: "Terrain Extender", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "twistedspoon", name: "Twisted Spoon", flags: 0, supported: true, cbs: &CB_IT_TWISTEDSPOON, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "tyranitarite", name: "Tyranitarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "venusaurite", name: "Venusaurite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "victreebelite", name: "Victreebelite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
+    ItemData { id: "wacanberry", name: "Wacan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_WACANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "whiteherb", name: "White Herb", flags: 0, supported: true, cbs: &CB_IT_WHITEHERB, events: 0x20000000000000201, events_pre: 0x2000000800000000010 },
+    ItemData { id: "widelens", name: "Wide Lens", flags: 0, supported: true, cbs: &CB_IT_WIDELENS, events: 0x0, events_pre: 0x4000000 },
+    ItemData { id: "wiseglasses", name: "Wise Glasses", flags: 0, supported: true, cbs: &CB_IT_WISEGLASSES, events: 0x80000000, events_pre: 0x0 },
+    ItemData { id: "yacheberry", name: "Yache Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_YACHEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
+    ItemData { id: "zoomlens", name: "Zoom Lens", flags: 0, supported: true, cbs: &CB_IT_ZOOMLENS, events: 0x0, events_pre: 0x4000000 },
 ];

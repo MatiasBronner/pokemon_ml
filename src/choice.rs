@@ -32,6 +32,10 @@ impl Battle {
             ability: ab::NOABILITY,
             base_ability: ab::NOABILITY,
             ability_st: EffState::default(),
+            ability_boosts: [0; 7],
+            syrup_triggered: false,
+            was_attacked: false,
+            last_attack_damage: 0,
             item: it::NONE,
             item_st: EffState::default(),
             last_item: it::NONE,
@@ -66,6 +70,7 @@ impl Battle {
             effect_order: 0,
             next_uid: 0,
             event_mask: 0,
+            event_mask_pre: 0,
             event: Event::NONE,
             effect: Eff::None,
             effect_holder: None,
@@ -112,7 +117,8 @@ impl Battle {
                 if !item.supported {
                     return Err(Error::Unsupported(format!("item {}", item.name)));
                 }
-                b.event_mask |= ability.events | item.events;
+                b.event_mask |= ability.events | ability.events_pre | item.events | item.events_pre;
+                b.event_mask_pre |= ability.events_pre | item.events_pre;
                 let mut mon = blank_mon;
                 mon.species = set.species;
                 mon.types = sp.types;

@@ -3,7 +3,8 @@
 // engine replays the file from the same seed and must match at every step.
 //
 //   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID]
-//                     [--max-turns 250] [--policy switch] [--plain]
+//                     [--max-turns 250] [--policy switch] [--plain] [--check-legal]
+//                     [--abilities id,id] [--items id,id]
 //
 // --plain gives every Pokémon no ability, no item and no gender (the set-up the
 // engine's first version was checked with).
@@ -29,6 +30,12 @@ const MAX_TURNS = parseInt(args['max-turns'] || '250');
 const ONLY = args.only !== undefined ? parseInt(args.only) : null;
 const POLICY = args.policy || 'mixed';
 const PLAIN = !!args.plain;
+// --abilities a,b and --items x,y: make every battle a themed one over just these.
+const listArg = name => (typeof args[name] === 'string' ? args[name].split(',').filter(Boolean) : []);
+const FORCED_THEME = (args.abilities || args.items) ? { abilities: listArg('abilities'), items: listArg('items') } : null;
+// --check-legal: at every move request, also ask Showdown itself about every
+// conceivable choice and insist that `legalOptions` lists exactly the accepted ones.
+const CHECK_LEGAL = !!args['check-legal'];
 
 const pool = JSON.parse(fs.readFileSync(path.join(__dirname, 'pool.json'), 'utf8'));
 const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
@@ -93,8 +100,10 @@ function extras(rand, s) {
 	const r = rand();
 	if (pool.abilities.length && r >= 0.06) {
 		ability = (r < 0.5 && s.abilities.length) ? pick(rand, s.abilities) : pick(rand, pool.abilities);
+		if (theme && theme.abilities.length) ability = pick(rand, theme.abilities);
 	}
-	const item = (pool.items.length && rand() < 0.8) ? pick(rand, pool.items) : '';
+	let item = (pool.items.length && rand() < 0.8) ? pick(rand, pool.items) : '';
+	if (item && theme && theme.items.length) item = pick(rand, theme.items);
 	const gender = s.gender || (rand() < 0.5 ? 'M' : 'F');
 	return { ability, item, gender };
 }
@@ -116,7 +125,21 @@ function featuredSet(rand, moveId) {
 	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand), ...extras(rand, s) };
 }
 
+// A themed battle draws every ability and item from a handful, so that effects
+// meet themselves and each other far more often than under uniform sampling.
+let theme = null;
+function pickTheme(rand) {
+	theme = null;
+	if (FORCED_THEME) { theme = FORCED_THEME; return; }
+	if (PLAIN || rand() >= 0.3) return;
+	theme = {
+		abilities: Array.from({ length: 1 + Math.floor(rand() * 3) }, () => pick(rand, pool.abilities)),
+		items: Array.from({ length: 1 + Math.floor(rand() * 3) }, () => pick(rand, pool.items)),
+	};
+}
+
 function buildTeams(rand) {
+	pickTheme(rand);
 	const mode = rand();
 	const team = () => {
 		const out = [];
@@ -265,6 +288,39 @@ function legalOptions(battle, side) {
 	});
 }
 
+/** Cross-checks `legalOptions` against what `Side#choose` accepts (move requests only). */
+function checkLegal(battle, side, legal) {
+	const req = side.activeRequest;
+	if (!req || req.wait || req.forceSwitch) return;
+	const universe = ['pass'];
+	for (let m = 1; m <= 4; m++) for (const t of ['', ' 1', ' 2', ' -1', ' -2']) universe.push(`move ${m}${t}`);
+	for (let i = 1; i <= side.pokemon.length; i++) universe.push(`switch ${i}`);
+	for (let pos = 0; pos < 2; pos++) {
+		// Hold the other slot at something legal that cannot clash with a switch here.
+		const other = legal[1 - pos].find(o => !o.startsWith('switch')) || legal[1 - pos][0];
+		const accepted = [];
+		for (const opt of universe) {
+			if (opt.startsWith('switch') && opt === other) continue;
+			const input = pos === 0 ? `${opt}, ${other}` : `${other}, ${opt}`;
+			if (side.choose(input)) accepted.push(opt);
+			side.clearChoice();
+		}
+		const p = side.active[pos];
+		let want = legal[pos].filter(o => !(o.startsWith('switch') && o === other));
+		let got = accepted;
+		if (!p.fainted && !p.getMoves().length) {
+			// Out of usable moves: Showdown takes any move slot it listed and turns it into Struggle.
+			got = accepted.filter(o => !o.startsWith('move'));
+			if (accepted.some(o => o.startsWith('move'))) got.push('move 1');
+		}
+		want = want.slice().sort(); got = got.slice().sort();
+		if (want.join('|') !== got.join('|')) {
+			throw new Error(`legal choices differ for ${side.id} slot ${pos + 1} (${p.species.id}, ${p.ability}, ${p.item}): ` +
+				`listed [${want.join('; ')}], Showdown accepts [${got.join('; ')}]`);
+		}
+	}
+}
+
 function chooseFor(rand, options) {
 	if (options.some(opts => opts.includes('pass') && opts.length > 1)) {
 		// Fewer replacements than empty slots: hand the bench out at random, pass the rest.
@@ -348,6 +404,7 @@ function runCase(id) {
 	while (!battle.ended) {
 		if (battle.turn > MAX_TURNS) { out.truncated = true; break; }
 		const legal = battle.sides.map(side => legalOptions(battle, side));
+		if (CHECK_LEGAL) battle.sides.forEach((side, s) => checkLegal(battle, side, legal[s]));
 		const choices = legal.map(opts => chooseFor(rand, opts));
 		// Decide who is being asked before anyone answers: the last answer starts the next
 		// request, which would otherwise look like one this step still had to fill.

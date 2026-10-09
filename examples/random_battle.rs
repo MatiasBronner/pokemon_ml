@@ -6,24 +6,23 @@ use vgc_engine::data::SPECIES;
 use vgc_engine::{Battle, Error, PokemonSet};
 
 fn main() -> Result<(), Error> {
-    let set = PokemonSet::from_names;
+    let set = |species, moves: &[&str], nature, stat_points, ability, item| {
+        PokemonSet::from_names(species, moves, nature, stat_points)?.ability(ability)?.item(item)
+    };
     // The four Pokémon each side picked at team preview; the first two lead.
+    #[rustfmt::skip]
     let p1 = [
-        set("Garchomp", &["Earthquake", "Rock Slide", "Dragon Claw", "Protect"], "Jolly", [0, 32, 0, 0, 2, 32])?,
-        set("Sylveon", &["Hyper Voice", "Moonblast", "Calm Mind", "Protect"], "Modest", [32, 0, 2, 32, 0, 0])?,
-        set("Arcanine", &["Flare Blitz", "Extreme Speed", "Will-O-Wisp", "Protect"], "Adamant", [32, 32, 0, 0, 2, 0])?,
-        set("Milotic", &["Scald", "Ice Beam", "Recover", "Icy Wind"], "Bold", [32, 0, 32, 2, 0, 0])?,
+        set("Garchomp", &["Earthquake", "Rock Slide", "Dragon Claw", "Protect"], "Jolly", [0, 32, 0, 0, 2, 32], "Rough Skin", "Choice Scarf")?,
+        set("Sylveon", &["Hyper Voice", "Moonblast", "Calm Mind", "Protect"], "Modest", [32, 0, 2, 32, 0, 0], "Pixilate", "Leftovers")?,
+        set("Arcanine", &["Flare Blitz", "Extreme Speed", "Will-O-Wisp", "Protect"], "Adamant", [32, 32, 0, 0, 2, 0], "Intimidate", "Sitrus Berry")?,
+        set("Milotic", &["Scald", "Ice Beam", "Recover", "Icy Wind"], "Bold", [32, 0, 32, 2, 0, 0], "Competitive", "Rocky Helmet")?,
     ];
+    #[rustfmt::skip]
     let p2 = [
-        set("Dragonite", &["Extreme Speed", "Iron Head", "Dragon Dance", "Protect"], "Adamant", [32, 32, 0, 0, 2, 0])?,
-        set("Gardevoir", &["Psychic", "Dazzling Gleam", "Thunder Wave", "Protect"], "Timid", [0, 0, 2, 32, 0, 32])?,
-        set(
-            "Excadrill",
-            &["High Horsepower", "Iron Head", "Rock Slide", "Swords Dance"],
-            "Jolly",
-            [0, 32, 2, 0, 0, 32],
-        )?,
-        set("Rotom-Wash", &["Hydro Pump", "Thunderbolt", "Will-O-Wisp", "Protect"], "Calm", [32, 0, 0, 2, 32, 0])?,
+        set("Dragonite", &["Extreme Speed", "Iron Head", "Dragon Dance", "Protect"], "Adamant", [32, 32, 0, 0, 2, 0], "Multiscale", "Lum Berry")?,
+        set("Gardevoir", &["Psychic", "Dazzling Gleam", "Thunder Wave", "Protect"], "Timid", [0, 0, 2, 32, 0, 32], "Trace", "Focus Sash")?,
+        set("Excadrill", &["High Horsepower", "Iron Head", "Rock Slide", "Swords Dance"], "Jolly", [0, 32, 2, 0, 0, 32], "Mold Breaker", "Life Orb")?,
+        set("Rotom-Wash", &["Hydro Pump", "Thunderbolt", "Will-O-Wisp", "Protect"], "Calm", [32, 0, 0, 2, 32, 0], "Levitate", "Mystic Water")?,
     ];
     let mut battle = Battle::new([&p1, &p2], [2026, 10, 8, 1])?;
 

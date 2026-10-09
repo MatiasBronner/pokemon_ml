@@ -2,9 +2,13 @@
 //! and reports the first place this engine disagrees. Used by the `difftest`
 //! binary and by the fixture test in `tests/`.
 
-use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather};
+use crate::data::{
+    ABILITIES, Gender, IF_CHOICE, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather, ab, it,
+};
+use crate::observer::Observer;
 use crate::position::BattleState;
-use crate::state::{Cond, NO_SPECIES, Res, Trapped};
+use crate::shown::{ItemShown, ShownMon, ShownSide};
+use crate::state::{ACTIVE, Cond, NO_SPECIES, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -606,7 +610,7 @@ fn loose(st: &BattleState, at_move_request: bool) -> BattleState {
     s.pseudo_weather.iter_mut().for_each(strip);
     for side in &mut s.sides {
         side.conditions.iter_mut().for_each(strip);
-        side.slot_conditions.iter_mut().flatten().for_each(strip);
+        side.slot_conditions.iter_mut().flatten().for_each(|c| c.order = 0);
         for (place, m) in side.pokemon.iter_mut().enumerate() {
             m.speed = 0;
             m.status_extra.order = 0;
@@ -782,6 +786,244 @@ pub fn check_case_with(c: &Case, mode: Rebuild) -> Outcome {
         // The final position too (usually a finished battle).
         if let Err(mut out) = rebuild(&b, mode) {
             out.insert(0, "rebuilding the final position failed".to_string());
+            return Outcome::Fail(out);
+        }
+    }
+    Outcome::Pass(c.steps.len())
+}
+
+/// What `check_shown` found over a set of battles: every way the engine's
+/// idea of what has been shown differed from what the log says, and every
+/// time the log's reader believed something untrue, each with how often and
+/// where it first happened.
+///
+/// One untrue belief is expected and kept apart, in `expected`. A Pokémon
+/// locked in by a Choice item that is made to use another move fails with a
+/// `move` line like that of any move that failed. When that is the second
+/// turn of a move Copycat borrowed, the log credits it with a move it does
+/// not have, and so does the engine.
+#[derive(Default, Debug)]
+pub struct ShownTally {
+    pub decisions: usize,
+    pub mismatches: std::collections::BTreeMap<String, (usize, String)>,
+    pub untrue: std::collections::BTreeMap<String, (usize, String)>,
+    pub expected: std::collections::BTreeMap<String, (usize, String)>,
+}
+
+impl ShownTally {
+    fn note(map: &mut std::collections::BTreeMap<String, (usize, String)>, key: String, at: &str) {
+        let e = map.entry(key).or_insert_with(|| (0, at.to_string()));
+        e.0 += 1;
+    }
+}
+
+fn shown_mon_diffs(what: &str, ours: &ShownMon, theirs: &ShownMon, out: &mut Vec<String>) {
+    let mut field = |name: &str, a: String, b: String| {
+        if a != b {
+            out.push(format!("{what} {name}: engine {a}, log {b}"));
+        }
+    };
+    field("id", ours.id.to_string(), theirs.id.to_string());
+    field("species", ours.species.clone(), theirs.species.clone());
+    field("gender", ours.gender.clone(), theirs.gender.clone());
+    field("status", ours.status.clone(), theirs.status.clone());
+    field("fainted", ours.fainted.to_string(), theirs.fainted.to_string());
+    field("transformed", ours.transformed.to_string(), theirs.transformed.to_string());
+    field("item", format!("{:?}", ours.item), format!("{:?}", theirs.item));
+    field("item lost", ours.item_lost.clone(), theirs.item_lost.clone());
+    field("ability", format!("{:?}", ours.ability), format!("{:?}", theirs.ability));
+    field("base ability", format!("{:?}", ours.base_ability), format!("{:?}", theirs.base_ability));
+    if (ours.hp, ours.bar) != (theirs.hp, theirs.bar) {
+        out.push(format!("{what} hp differs"));
+    }
+    for m in &theirs.moves {
+        if !ours.moves.contains(m) {
+            out.push(format!("{what} move {m}: only in the log"));
+        }
+    }
+    for m in &ours.moves {
+        if !theirs.moves.contains(m) {
+            out.push(format!("{what} move {m}: only in the engine"));
+        }
+    }
+}
+
+fn shown_diffs(ours: &ShownSide, theirs: &ShownSide) -> Vec<String> {
+    let mut out = Vec::new();
+    if ours.unseen != theirs.unseen {
+        out.push(format!("unseen: engine {}, log {}", ours.unseen, theirs.unseen));
+    }
+    if ours.left != theirs.left {
+        out.push(format!("left: engine {}, log {}", ours.left, theirs.left));
+    }
+    for (a, b) in ours.active.iter().zip(&theirs.active) {
+        match (a, b) {
+            (Some(a), Some(b)) => shown_mon_diffs("active", a, b, &mut out),
+            (None, None) => {}
+            (a, _) => {
+                out.push(format!("active: {} only in the engine", if a.is_some() { "someone" } else { "nobody" }))
+            }
+        }
+    }
+    if ours.bench.len() != theirs.bench.len() {
+        out.push(format!("bench: engine has {}, log {}", ours.bench.len(), theirs.bench.len()));
+    }
+    for (a, b) in ours.bench.iter().zip(&theirs.bench) {
+        shown_mon_diffs("bench", a, b, &mut out);
+    }
+    out
+}
+
+/// Sets the engine's records of what has been shown to the log reader's.
+fn adopt_shown(b: &mut Battle, obs: &Observer) -> Result<(), String> {
+    for side in 0..2 {
+        let filed = obs.filed_records(side);
+        let s = &mut b.sides[side];
+        if filed.len() != s.n_seen as usize {
+            return Err(format!("the engine has shown {} Pokémon of side {side}, the log {}", s.n_seen, filed.len()));
+        }
+        for rec in filed {
+            let Some(a) = (0..s.n as usize).find(|&a| s.shown[a].seen == rec.seen) else {
+                return Err("the orders of appearance differ".to_string());
+            };
+            s.shown[a] = rec;
+        }
+        for pos in 0..ACTIVE.min(s.n as usize) {
+            let idx = s.order[pos] as usize;
+            let m = &mut s.team[idx];
+            match (obs.live_record(side, pos), m.is_active && m.live.seen != 0) {
+                (Some(rec), true) => m.live = rec,
+                (None, false) => {}
+                _ => return Err("who is on the field differs".to_string()),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// What `untrue_beliefs` puts in front of the one belief that is expected to be untrue:
+/// see [`ShownTally`].
+const CHOICE_LOCK: &str = "choice lock: ";
+
+/// Whether what the log reader believes about the Pokémon of an honest
+/// battle (one without Illusion) is true of them.
+fn untrue_beliefs(b: &Battle, out: &mut Vec<String>) {
+    for side in 0..2 {
+        let s = &b.sides[side];
+        for a in 0..s.n as usize {
+            let m = &s.team[a];
+            let live = m.is_active && m.live.seen != 0;
+            let rec = if live { &m.live } else { &s.shown[a] };
+            if rec.seen == 0 {
+                continue;
+            }
+            let own =
+                if m.transformed { &m.base_moves[..m.base_n_moves as usize] } else { &m.moves[..m.n_moves as usize] };
+            // See `ShownTally::expected`.
+            let choice = |i: u16| ITEMS[i as usize].flags & IF_CHOICE != 0;
+            let locked = choice(m.item) || matches!(rec.item, ItemShown::Lost(i) if choice(i));
+            for &mv in rec.moves() {
+                if !own.iter().any(|slot| slot.id == mv) {
+                    let how = if locked { CHOICE_LOCK } else { "" };
+                    out.push(format!("{how}move {}: not one of its own", MOVES[mv as usize].id));
+                }
+            }
+            match rec.item {
+                ItemShown::Holds(i) if m.item != i => {
+                    out.push(format!("item {}: it holds {}", ITEMS[i as usize].id, ITEMS[m.item as usize].id))
+                }
+                ItemShown::Lost(i) if m.item != it::NONE => {
+                    out.push(format!("item {}: lost, but it holds {}", ITEMS[i as usize].id, ITEMS[m.item as usize].id))
+                }
+                _ => {}
+            }
+            let name = |x: u16| ABILITIES[x as usize].id;
+            let current = if live || m.fainted { m.ability } else { m.base_ability };
+            if rec.ability != crate::shown::UNKNOWN && rec.ability != current && !m.fainted {
+                out.push(format!("ability {}: it has {}", name(rec.ability), name(current)));
+            }
+            if rec.base_ability != crate::shown::UNKNOWN && rec.base_ability != m.base_ability {
+                out.push(format!("base ability {}: it is {}", name(rec.base_ability), name(m.base_ability)));
+            }
+        }
+    }
+}
+
+/// Replays a battle recorded with its log (`gen_cases.js --log`) and checks,
+/// at every decision, that what the engine says has been shown is what a
+/// reader of the log makes of it. Differences are counted in `tally` and the
+/// engine's records set to the log's, so that one missing rule is counted
+/// where it applies rather than at every decision after it.
+pub fn check_shown(c: &Case, tally: &mut ShownTally) -> Outcome {
+    check_shown_with(c, Rebuild::No, tally)
+}
+
+/// [`check_shown`], also rebuilding the battle from its exported position
+/// before every decision (see [`Rebuild`]): what has been shown is part of
+/// a position and has to survive the trip.
+pub fn check_shown_with(c: &Case, mode: Rebuild, tally: &mut ShownTally) -> Outcome {
+    let sets: Result<Vec<Vec<PokemonSet>>, String> =
+        c.teams.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
+    let sets = match sets {
+        Ok(s) => s,
+        Err(e) => return Outcome::Fail(vec![e]),
+    };
+    trace::take();
+    let mut b = match Battle::new([&sets[0], &sets[1]], c.seed) {
+        Ok(b) => b,
+        Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
+        Err(e) => return Outcome::Fail(vec![e.to_string()]),
+    };
+    if c.initial.log.is_empty() {
+        return Outcome::Fail(vec!["the battle was recorded without its log (gen_cases.js --log)".to_string()]);
+    }
+    let honest = !sets.iter().flatten().any(|set| set.ability == ab::ILLUSION);
+    let mut obs = Observer::new();
+    let mut compare = |b: &mut Battle, obs: &mut Observer, log: &[String], at: String| -> Result<(), Vec<String>> {
+        obs.lines(log).map_err(|e| vec![format!("{at}: the log could not be read: {e}")])?;
+        for side in 0..2 {
+            for d in shown_diffs(&b.shown(side), &obs.shown(side)) {
+                ShownTally::note(&mut tally.mismatches, d, &at);
+            }
+        }
+        adopt_shown(b, obs).map_err(|e| vec![format!("{at}: {e}")])?;
+        if honest {
+            let mut untrue = Vec::new();
+            untrue_beliefs(b, &mut untrue);
+            for u in untrue {
+                let map = if u.starts_with(CHOICE_LOCK) { &mut tally.expected } else { &mut tally.untrue };
+                ShownTally::note(map, u, &at);
+            }
+        }
+        tally.decisions += 1;
+        Ok(())
+    };
+    if !diff(&b, &c.initial).is_empty() {
+        return Outcome::Fail(vec!["state differs after the opening switch-ins".to_string()]);
+    }
+    if let Err(out) = compare(&mut b, &mut obs, &c.initial.log, format!("case {} at the start", c.id)) {
+        return Outcome::Fail(out);
+    }
+    for (i, step) in c.steps.iter().enumerate() {
+        if mode != Rebuild::No {
+            match rebuild(&b, mode) {
+                Ok(rebuilt) => b = rebuilt,
+                Err(mut out) => {
+                    out.insert(0, format!("rebuilding the position failed at decision {i}"));
+                    return Outcome::Fail(out);
+                }
+            }
+        }
+        let (Some(p1), Some(p2)) = (Choice::parse_side(&step.choices[0]), Choice::parse_side(&step.choices[1])) else {
+            return Outcome::Fail(vec![format!("unreadable choice at decision {i}")]);
+        };
+        if let Err(e) = b.choose([p1, p2]) {
+            return Outcome::Fail(vec![format!("engine rejected the choice at decision {i}"), e.to_string()]);
+        }
+        if !diff(&b, &step.after).is_empty() {
+            return Outcome::Fail(vec![format!("state differs at decision {i}")]);
+        }
+        if let Err(out) = compare(&mut b, &mut obs, &step.after.log, format!("case {} decision {i}", c.id)) {
             return Outcome::Fail(out);
         }
     }

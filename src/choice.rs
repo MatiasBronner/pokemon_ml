@@ -75,6 +75,7 @@ impl Battle {
             n_damaged_by: 0,
             locked_move: NO_MOVE,
             speed: 0,
+            live: crate::shown::NOTHING_SHOWN,
         }
     }
 
@@ -90,6 +91,8 @@ impl Battle {
             fainted_last_turn: false,
             conds: SideConds::new(SideCond::FIRST),
             slot_conds: [SlotConds::new(SlotCond::FIRST); ACTIVE],
+            shown: [crate::shown::NOTHING_SHOWN; MAX_TEAM],
+            n_seen: 0,
         };
         let nobody = MonRef { side: 0, idx: 0 };
         Battle {

@@ -6,6 +6,8 @@
 #   scripts/targeted.sh [dir]              record every batch into dir (default: a temp dir) and replay it
 #   ONLY=darts scripts/targeted.sh [dir]   only the batches whose name contains "darts"
 #   JOBS=4 scripts/targeted.sh [dir]       record that many batches at a time (default 2)
+#   SHOWN=1 scripts/targeted.sh [dir]      also record Showdown's log and check what each side has been
+#                                          shown against it (files are about fifty times larger)
 #
 # Keep the directory to hand the batches to the mutation test:
 #   scripts/targeted.sh corpus && scripts/mutation_test.py corpus/*.jsonl
@@ -82,13 +84,21 @@ damp-aftermath|300|9931|--abilities damp,aftermath --moves closecombat,doubleedg
 leaf-guard-yawn|300|9932|--abilities leafguard,drought,noability --moves yawn,sunnyday,raindance
 freeze|800|9933|--abilities magmaarmor,synchronize,moldbreaker,noability --items lumberry,aspearberry --moves icebeam,blizzard,freezedry,icepunch,triattack,skillswap
 own-tempo|300|9934|--abilities owntempo,moldbreaker,noability --moves confuseray,swagger,dynamicpunch,skillswap,hurricane
+said-aloud|400|9940|--abilities limber,insomnia,vitalspirit,immunity,waterbubble,thermalexchange,magmaarmor,purifyingsalt,leafguard,overcoat,moldbreaker,noability --moves thunderwave,sleeppowder,toxic,willowisp,glare,stunspore,poisonpowder,yawn,hypnosis,sing,sunnyday,icebeam --items lumberry
+heal-bell-deaf|200|9941|--species chimecho --moves healbell,toxic,thunderwave --abilities soundproof,goodasgold,noability
+gravity-grounds|200|9942|--moves gravity,fly,bounce,highjumpkick,magnetrise --moves-per 3
+octolock-blocked|200|9943|--moves octolock,protect,icywind --abilities clearbody,whitesmoke,bigpecks,noability --moves-per 3
+symbiosis-resist-berry|300|9944|--abilities symbiosis,noability --items yacheberry,chilanberry,occaberry,passhoberry,shucaberry,damprock --moves icebeam,doubleedge,flamethrower,surf,earthquake,protect
+ability-swapped-mid-hit|300|9945|--abilities wanderingspirit,mummy,poisontouch,noability --moves doublehit,doubleedge,closecombat,uturn,protect --items pechaberry,lumberry
+fling-eaten-first|200|9946|--moves fling,protect --abilities spicyspray,noability --items lumberry,rawstberry --moves-per 2
+healing-wish-ally-switch|600|9949|--moves healingwish,allyswitch,fakeout --moves-per 3
 EOF
 }
 
 record() {
   IFS='|' read -r name n seed args <<<"$1"
   # shellcheck disable=SC2086
-  node oracle/gen_cases.js --n "$n" --seed "$seed" $args --out "$2/$name.jsonl" >"$2/$name.gen.log" 2>&1 ||
+  node oracle/gen_cases.js --n "$n" --seed "$seed" $args ${SHOWN:+--log} --out "$2/$name.jsonl" >"$2/$name.gen.log" 2>&1 ||
     { echo "$name: recording failed: $(grep -m 1 '^Error' "$2/$name.gen.log" || tail -n 1 "$2/$name.gen.log")" >&2; exit 255; }
 }
 export -f record
@@ -99,5 +109,9 @@ status=0
 while IFS='|' read -r name _; do
   line="$(./target/release/difftest "$OUT/$name.jsonl" --quiet | tail -n 1)" || status=1
   printf '%-26s %s\n' "$name" "$line"
+  if [ -n "${SHOWN:-}" ]; then
+    line="$(./target/release/difftest "$OUT/$name.jsonl" --shown | tail -n 1)" || status=1
+    printf '%-26s %s\n' "" "$line"
+  fi
 done < <(batches | grep -- "${ONLY:-}")
 exit $status

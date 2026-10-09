@@ -131,6 +131,15 @@ impl Battle {
         }
     }
 
+    /// A `cant|pokemon|reason|Move` line: the move `who` was about to use is named.
+    #[track_caller]
+    fn show_attempted(&mut self, who: Option<MonRef>) {
+        if let (Eff::Move(mi), Some(who)) = (self.event.effect, who) {
+            let id = self.am[mi as usize].id;
+            self.show_move(who, id);
+        }
+    }
+
     /// Flags of the move the running event is about (0 if it is not about a move).
     pub(crate) fn event_move_flags(&self) -> u32 {
         match self.event.effect {
@@ -264,7 +273,11 @@ impl Battle {
                 if let Eff::Move(mi) = self.event.effect {
                     let am = &self.am[mi as usize];
                     if !self.ignoring_item(holder) && am.id + 1 != locked && am.id != mv::STRUGGLE {
-                        // Fails, and no PP is lost.
+                        // Fails, and no PP is lost. Showdown writes the `move` line itself here,
+                        // and nothing tells it from any other move that failed, so the move is
+                        // shown all the same: even when this is the second turn of a move
+                        // Copycat borrowed, which is not the Pokémon's own.
+                        self.show_attempted(Some(holder));
                         return FALSE;
                     }
                 }
@@ -440,6 +453,8 @@ impl Battle {
                 if let Eff::Move(mi) = e.effect {
                     let am = &self.am[mi as usize];
                     if am.category == Category::Status && am.d().id != "mefirst" {
+                        // `cant|attacker|move: Taunt|Move`
+                        self.show_attempted(Some(holder));
                         return FALSE;
                     }
                 }
@@ -525,6 +540,8 @@ impl Battle {
                 if let Eff::Move(mi) = e.effect {
                     let am = &self.am[mi as usize];
                     if am.id + 1 == locked && am.flags & F_CANTUSETWICE == 0 {
+                        // `cant|attacker|Disable|Move`
+                        self.show_attempted(Some(holder));
                         return FALSE;
                     }
                 }
@@ -596,6 +613,8 @@ impl Battle {
             // onBeforeMove(pokemon, target, move) and onModifyMove(move, pokemon)
             (VolKind::Healblock, Ev::BeforeMove | Ev::ModifyMove) => {
                 if self.event_move_flags() & F_HEAL != 0 {
+                    // `cant|pokemon|move: Heal Block|Move`
+                    self.show_attempted(Some(holder));
                     return FALSE;
                 }
                 Res::Undef
@@ -830,13 +849,21 @@ impl Battle {
                 Res::Undef
             }
 
-            // ---- Chilly Reception: onBeforeMove only announces the move.
-            (VolKind::Chillyreception, Ev::BeforeMove) => Res::Undef,
+            // ---- Chilly Reception: onBeforeMove(source, target, move) announces the move before
+            // anything can stop it: `-prepare|source|Chilly Reception|[premajor]`
+            (VolKind::Chillyreception, Ev::BeforeMove) => {
+                if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].id == mv::CHILLYRECEPTION) {
+                    self.show_move(holder, mv::CHILLYRECEPTION);
+                }
+                Res::Undef
+            }
 
             // ---- Fling: onUpdate(pokemon). The thrown item is gone, whether or not it hit anything.
             (VolKind::Fling, Ev::Update) => {
                 let item = self.mon(holder).item;
                 self.set_item(holder, it::NONE, None, Eff::None);
+                // `-enditem|pokemon|Item|[from] move: Fling`
+                self.show_item_lost(holder, item);
                 let m = self.mon_mut(holder);
                 m.last_item = item;
                 m.used_item_this_turn = true;
@@ -1232,7 +1259,12 @@ impl Battle {
             }
 
             // ---- Focus Punch's focus. `data` is set once it is lost.
-            (VolKind::Focuspunch | VolKind::Beakblast, Ev::Start) => Res::Undef,
+            // onStart(pokemon): `-singleturn|pokemon|move: Focus Punch`, at the start of the turn,
+            // says which move it has chosen.
+            (VolKind::Focuspunch | VolKind::Beakblast, Ev::Start) => {
+                self.show_move(holder, if kind == VolKind::Focuspunch { mv::FOCUSPUNCH } else { mv::BEAKBLAST });
+                Res::Undef
+            }
             // onHit(pokemon, source, move): any damaging move breaks it.
             (VolKind::Focuspunch, Ev::Hit) => {
                 if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].category != Category::Status) {
@@ -1366,6 +1398,8 @@ impl Battle {
                 };
                 let id = self.am[mi as usize].id;
                 if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {
+                    // `cant|attacker|move: Imprison|Move`
+                    self.show_attempted(e.target);
                     return FALSE;
                 }
                 Res::Undef
@@ -1974,6 +2008,8 @@ impl Battle {
             // onBeforeMove(pokemon, target, move) and onModifyMove(move, pokemon, target)
             (Pseudo::Gravity, Ev::BeforeMove | Ev::ModifyMove) => {
                 if self.event_move_flags() & F_GRAVITY != 0 {
+                    // `cant|pokemon|move: Gravity|Move`
+                    self.show_attempted(e.target);
                     return FALSE;
                 }
                 Res::Undef

@@ -14,11 +14,13 @@ pub mod format;
 mod items;
 mod movecbs;
 mod moves;
+pub mod observer;
 pub mod position;
 pub mod replay;
 #[rustfmt::skip]
 mod tables;
 pub mod rng;
+pub mod shown;
 pub mod state;
 pub mod trace;
 

@@ -196,6 +196,8 @@ impl Battle {
         if self.get_locked_move(pokemon).is_some() {
             source_effect = Eff::Vol(VolKind::Lockedmove);
         } else if self.deduct_pp(pokemon, a.move_id, 1) == 0 && a.move_id != mv::STRUGGLE {
+            // `cant|pokemon|nopp|Move`
+            self.show_move(pokemon, a.move_id);
             self.clear_active_move(true);
             self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
@@ -310,6 +312,18 @@ impl Battle {
         }
         if self.mon(pokemon).fainted {
             return FALSE;
+        }
+        // The `move` line. A move used outright is the Pokémon's own, and so is one Sleep Talk
+        // picks or a Round sung after another; one borrowed by Copycat is not, and the later
+        // turns of a move it is locked into say nothing new. A bounced move names the ability
+        // that bounced it.
+        match source_effect {
+            Eff::None => self.show_move(pokemon, self.am[m].id),
+            Eff::Move(s) if matches!(self.am[s as usize].id, id if id == mv::SLEEPTALK || id == self.am[m].id) => {
+                self.show_move(pokemon, self.am[m].id)
+            }
+            Eff::Ability(a) => self.show_ability(pokemon, a),
+            _ => {}
         }
         let Some(chosen) = target else {
             return FALSE;
@@ -616,7 +630,8 @@ impl Battle {
 
         // Step 2: type immunity.
         for i in 0..n {
-            res[i] = Res::Bool(self.run_immunity(targets[i], mi));
+            let message = !self.am[mi as usize].smart_target;
+            res[i] = Res::Bool(self.run_immunity_ex(targets[i], mi, message));
         }
         self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
@@ -1395,7 +1410,7 @@ impl Battle {
         }
         let m = mi as usize;
         let me = Eff::Move(mi);
-        if !self.run_immunity(target, mi) {
+        if !self.run_immunity_ex(target, mi, true) {
             return FALSE;
         }
         if self.am[m].d().ohko != Ohko::No {
@@ -1559,6 +1574,11 @@ impl Battle {
         dmg = self.run_event(Ev::ModifyDamage, Some(user), Some(target), me, Res::Num(dmg as i32)).num() as u32;
         if self.am[m].hit_data[slot].bypass_protect {
             dmg = modify(dmg, 1024);
+            // `-ability|pokemon|Piercing Drill`: the ability that got the move through.
+            let through = self.mon(user).ability;
+            if matches!(through, ab::PIERCINGDRILL | ab::UNSEENFIST) {
+                self.show_ability(user, through);
+            }
         }
         if dmg == 0 {
             return Res::Num(1);

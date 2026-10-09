@@ -10,7 +10,10 @@ matches Showdown before anything is trained on it.
 modelled**: all 510 moves in the Champions learnsets, 225 abilities, 85 held
 items and 82 Mega Evolutions, each checked against Showdown as described
 below. Any team that is legal in the format can be played, from turn 1 or
-[from any position in the middle of a battle](#starting-from-the-middle-of-a-battle).
+[from any position in the middle of a battle](#starting-from-the-middle-of-a-battle),
+and the engine keeps track of
+[what each player has been shown](#what-each-side-has-been-shown) of the
+other's team.
 
 ## Quick start
 
@@ -195,6 +198,77 @@ What the validator does not do, where Showdown's does:
 - **Picking four of the six.** `Battle::new` takes the Pokémon picked; team
   preview is not modelled.
 
+## What each side has been shown
+
+The engine knows every move, item and ability on both sides. A player does
+not, and neither may a policy that is going to play real games.
+`Battle::shown` reports what the battle has made public about one side:
+
+```rust
+let theirs = battle.shown(1);                // side 1 as everyone watching knows it
+for mon in theirs.active.iter().flatten() {  // on the field; `bench` has those seen and withdrawn
+    mon.species;    // "garchomp", and "garchompmega" once it has Mega Evolved
+    mon.hp;         // 73: a whole percentage, the way Showdown shows a foe's HP
+    mon.status;     // "par"
+    mon.moves;      // ["earthquake", "protect"]: the ones it has used
+    mon.item;       // Some("lifeorb") once the orb has hurt it; None until an item is shown
+    mon.ability;    // Some("roughskin") once that has gone off
+}
+theirs.unseen;      // how many of the Pokémon they brought have not appeared yet
+```
+
+What a player knows is then their own side in full and `shown` of the other;
+`shown` of their own side is what the opponent knows about them.
+
+"Shown" means what Pokémon Showdown's battle log says, line for line:
+
+- **Moves**: used, or named some other way: stopped by Taunt or Disable
+  (`cant`), a Focus Punch tightening its focus, read by Forewarn, drained by
+  Spite, topped up by a Leppa Berry. A move borrowed with Copycat is not the
+  Pokémon's own and is not counted; one picked by Sleep Talk is. Nor are the
+  moves of a Pokémon that has transformed.
+- **Items**: named when they act (Life Orb, Leftovers, Rocky Helmet, an Air
+  Balloon on entry), when they are used up or eaten, and when they are
+  knocked off, stolen, swapped or found by Frisk. An item that has gone is
+  remembered as lost. A Mega Evolution names its stone.
+- **Abilities**: announced on entry (Intimidate, Drizzle) or named when they
+  do something. Replacements are followed (Skill Swap, Mummy, Trace, Worry
+  Seed, Transform), along with the ability the Pokémon returns to when it
+  leaves the field. A Mega's ability is known from the Mega.
+- **HP and status** as shown to the opponent; for a Pokémon on the bench, as
+  they were when it left.
+- **Illusion**: what a disguised Pokémon shows is credited to the Pokémon it
+  passes for, and moves over to the real one if the disguise breaks.
+
+Nothing is worked out. Less damage than expected does not reveal an Assault
+Vest, moving first does not reveal a Choice Scarf, and a Frisk that finds
+nothing does not reveal an empty hand; that kind of inference is left to
+whoever uses the record. Other limits: PP is not counted, and a disguise that
+is never broken is never corrected. Stat stages, volatile conditions, weather
+and side conditions are public and are in the `Battle` itself, not repeated
+here, though their timers are not public (the turns a Reflect has left give
+away a Light Clay); packing all of it into one view for a policy is part of
+designing the observation, which is the next piece of work.
+
+What has been shown is part of a position: `to_state` writes it down for
+every Pokémon (`PokemonState::shown`) and `from_state` takes it back, so a
+search that starts in the middle of a battle keeps it. A position written by
+hand that says nothing about it starts with nothing shown but who is on the
+field.
+
+`observer::Observer` is the same bookkeeping done from the other end: it
+reads Showdown's log, as a program playing on Showdown receives it, and
+returns the same `ShownSide`. The engine is checked against it (see
+[How it is checked](#how-it-is-checked)), and it is the reader a Showdown
+client will need.
+
+**Open Team Sheets.** Showdown's Champions formats ask both players for open
+team sheets in a best-of-one (they apply if both agree) and force them in a
+best-of-three. A sheet gives every Pokémon's species, item, ability, moves
+and nature. With sheets open, what stays hidden is the stat points and which
+four of the six were brought, so this record matters most where sheets are
+closed, as they are whenever either player declines.
+
 ## How it is checked
 
 `oracle/gen_cases.js` plays random battles in Pokémon Showdown's own simulator
@@ -216,6 +290,7 @@ Results for the code in this repository, against Showdown commit `ad7ca5d`
 | Check | Battles | Decisions | Diverged |
 |---|---|---|---|
 | Everything modelled now | 51,000 | 1,210,052 | 0 |
+| Fresh battles, after the last fix (Healing Wish, below) | 20,000 | 447,681 | 0 |
 | Recorded before two-turn moves, pivoting, forced switches and forme changes existed | 16,900 | 364,631 | 0 |
 | Recorded before Fake Out, Substitute and the volatile conditions existed | 19,300 | 385,071 | 0 |
 | Recorded before weather and the other field effects existed | 5,500 | 101,656 | 0 |
@@ -259,7 +334,7 @@ How the battles are made up:
   `--items` build batches around such a combination; about 30,000 of the
   battles in the first three rows are of this kind.
 
-Two further checks:
+Further checks:
 
 - **Legal choices.** The recorder lists legal choices from the Pokémon's real
   state rather than from the request Showdown sends the player, because the
@@ -297,17 +372,56 @@ Two further checks:
   conditions onto recorded positions; of 60,000, `from_state` refused about
   one in six (a Choice lock that names no move) and every one it accepted
   could be played on without the engine tripping.
+- **What has been shown.** Here the engine is checked against a second
+  program rather than against Showdown's state, because Showdown keeps no
+  record of what a player knows; it only sends the log. `observer` reads
+  that log and keeps its own account, and `difftest --shown` requires the
+  engine's account to equal it, for both sides, at every decision of battles
+  recorded with their logs (`gen_cases.js --log`): 22,350 battles, 587,066
+  decisions, no difference. The two are written from
+  opposite ends, the engine at the place each mechanic happens and the reader
+  from the text alone, so a rule missing from either shows up. Three things
+  keep the pair from being wrong together:
+  - *Who a line is about.* A line naming an ability or item mentions one or
+    two Pokémon and Showdown has no single rule for which of them has it.
+    `gen_cases.js --holders` asked Showdown, on every such line of about
+    20,000 battles, which Pokémon really had the thing; the reader's table
+    was drawn up from the answers.
+  - *Truth.* In battles without Illusion, everything the reader believes
+    about a Pokémon's moves, item and ability is compared with the real
+    Pokémon. Nothing it believed was false, with one exception that is
+    Showdown's doing (see below).
+  - *Coverage.* The engine records something in 146 places. Every one was
+    reached in those battles, and 139 were at some point the first to reveal
+    something, so that taking any of them out would have shown as a
+    difference; the other seven can only repeat what an earlier line said
+    (the move a Disable names has been used already). Every move, item and
+    ability in the game was shown somewhere, except four abilities: Battle
+    Bond, Ice Face and Shields Down, which belong to formes the game lacks,
+    and Stance Change, which no line names.
+
+  `difftest --shown --by-hand` also carries the record through an exported
+  position at every decision of the same battles, with no difference. Fresh
+  battles were the real test, and are the reason not to read "no difference"
+  as "finished". The first 50,000 played after the rules had settled turned
+  up four gaps in them, each of which now has a batch of its own in
+  `scripts/targeted.sh`: Big Pecks and Clear Body blocking Octolock's drops
+  in silence; Symbiosis handing over an item between the two lines a
+  damage-halving berry gets; Poison Touch poisoning after Wandering Spirit
+  had already replaced it; and a Fling whose line names no item, because the
+  Lum Berry being thrown was eaten on the way. The 40,000 after that turned
+  up none.
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
   replays recorded battles. A second mode switches off one callback at a time
-  (one ability's reaction to one event, one move's script). All 413
+  (one ability's reaction to one event, one move's script). All 415
   hand-written bugs and all 602 switched-off callbacks are caught. Another 15
   callbacks, and eight hand-written bugs that were tried, change nothing
   that can be observed in Champions (Ripen doubling the stat changes of
   berries, where no berry in the game changes stats); the script lists each
   with its reason. Random battles are not enough for this: with 3,000
-  general battles, 86 of the 1,015 bugs were only caught by a batch built
+  general battles, 88 of the 1,017 bugs were only caught by a batch built
   around the effect, such as Sleep Talk on a Pokémon that also knows Rest
   and Meteor Beam, or Dragon Darts into a Protect beside a Berserk Pokémon
   at just over half HP. `scripts/targeted.sh` records all such batches.
@@ -324,7 +438,12 @@ Fire type getting no thaw from Burn Up. They were found by reading Showdown's
 source for every place that names a newly modelled move, and by batches
 built around the pairing. Both are now routine for anything added, and the
 mutation tests above say which pairings the recorded battles cover; but it is
-the kind of error most likely to remain.
+the kind of error most likely to remain. A sixth turned up later, in 70,000
+fresh battles played to check what each side has been shown: a Healing Wish
+left waiting on a position stops working for Pokémon that switch in once
+Ally Switch has moved a healthy one onto it. That one is a slip of
+Showdown's (it is in the list further down) and took two battles in those
+70,000 to show.
 
 ### Running it yourself
 
@@ -333,13 +452,14 @@ scripts/setup-oracle.sh            # clone and build the pinned Showdown commit 
 scripts/fuzz.sh 2000               # 2,000 fresh battles, random seed
 TRACE=1 scripts/fuzz.sh 300 42     # also compare every RNG draw
 REBUILD=1 scripts/fuzz.sh 2000     # also rebuild the battle from its position at every decision
+SHOWN=1 scripts/fuzz.sh 2000       # also check what each side has been shown against Showdown's log
 ```
 
 The mutation test needs recorded battles to replay: the batches built around
 particular effects, and a few thousand general ones.
 
 ```sh
-scripts/targeted.sh corpus                                              # 55 batches, about 17,000 battles
+scripts/targeted.sh corpus                                              # 63 batches, about 19,000 battles
 node oracle/gen_cases.js --n 3000 --seed 9500 --out corpus/general.jsonl
 scripts/mutation_test.py corpus/*.jsonl --handlers                      # slow: a rebuild per injected bug
 ```
@@ -357,6 +477,11 @@ against Showdown's (each labelled with its call stack) and marks the first one
 that differs, followed by Showdown's log for the turn. To hammer on particular
 effects, `gen_cases.js --abilities intimidate,defiant --items whiteherb` makes
 every battle a themed one over just those.
+
+`SHOWN=1 scripts/targeted.sh corpus` records the same batches with their
+logs (about 3.5 GB) and runs `difftest --shown` on each. When that reports a
+difference it names the field, the two values and the first battle and
+decision where it happened.
 
 ## How abilities, items and conditions work
 
@@ -442,9 +567,11 @@ Not modelled:
   lacks (Ice Face, Gulp Missile, Shields Down, Battle Bond, Tera Shell, the
   four Embody Aspects); they do nothing, exactly as in Showdown.
   `oracle/coverage.json` lists these under `dormant_parts`.
-- The battle log. The engine tracks state, not messages, so abilities that
-  only announce something (Frisk, Anticipation) have no visible effect;
-  Forewarn still makes its random draw.
+- The battle log as text. The engine tracks state, not messages. What the
+  messages reveal is tracked (see
+  [What each side has been shown](#what-each-side-has-been-shown)): Frisk
+  shows the items it finds and Forewarn the move it picks, and Anticipation
+  shows itself.
 
 ### Showdown behaviour worth knowing about
 
@@ -468,6 +595,38 @@ reproduced here:
   accepted. `legal_choices` applies the same rule.
 - A Pokémon revived into its own active slot comes back through a switch
   queued at the end of the turn's remaining actions.
+- Healing Wish waits on its position until a Pokémon it can help arrives.
+  If Ally Switch moves a healthy Pokémon onto that position first, the wish
+  stops working for Pokémon that switch in there, and only heals one that
+  another Ally Switch brings. (Running the wish's handler for the swap
+  leaves a Pokémon recorded as the wish's target, and the code that handles
+  switch-ins then takes the wish for a condition of that Pokémon which it no
+  longer has.)
+
+And in what the log gives away:
+
+- In Champions, Regenerator and Natural Cure are written into the log when
+  a Pokémon is withdrawn, as lines the client does not display but every
+  program reading the log receives. Both abilities count as shown the first
+  time they act; a human opponent would not have noticed.
+- Stance Change and Hunger Switch change the Pokémon's forme without the
+  line naming the ability, unlike in Showdown's other formats.
+- Big Pecks, Clear Body and White Smoke say nothing when the drop they block
+  is Octolock's.
+- A Pokémon locked in by a Choice item that is made to use another move
+  fails with a `move` line like that of any move that failed. When that is
+  the second turn of a move borrowed with Copycat (it borrows Fly, and the
+  scarf stops the descent), the log credits it with a move it does not
+  have. `shown` repeats this, since it reports what the log says; it is the
+  one thing in it known to be untrue.
+- When two allies swap abilities (Skill Swap on a partner), the log does not
+  name the abilities. When the swap was a Wandering Spirit's, set off by its
+  own partner hitting it, that much can still be read from the line, since
+  no move called Skill Swap was used; `shown` does read it.
+- An ability can act once more after it has been replaced, when it had
+  already begun: Poison Touch poisons through the same hit whose contact
+  swapped it for Wandering Spirit or Mummy, and the line names it as the
+  attacker's. `shown` goes by the replacement.
 
 ## Layout
 
@@ -482,6 +641,8 @@ src/movecbs.rs     script callbacks of moves (onTry, onHit, basePowerCallback, .
 src/choice.rs      Battle::new, legal choices, submitting choices
 src/position.rs    a position as data: Battle::to_state, Battle::from_state, JSON
 src/format.rs      a regulation as data: Format, the team validator, random legal teams
+src/shown.rs       what the battle has shown of each Pokémon: Battle::shown
+src/observer.rs    the same, read from Showdown's log
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
 src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
@@ -499,6 +660,7 @@ tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
 tests/position.rs  positions written by hand: defaults, timers, switches in the middle of a turn
 tests/format.rs    legal and illegal teams, a second regulation, fixtures of teams judged by Showdown
+tests/shown.rs     what each side has been shown, as examples; a fixture of battles recorded with their logs
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -520,7 +682,8 @@ Xeon:
 | The same with Substitute, Encore and the other volatile conditions in play | about 3,600 | about 79,000 |
 | The same with every move in play (two-turn moves, pivoting, forme changes) | about 3,500 | about 80,000 |
 
-Nothing has been tuned beyond skipping events that nobody in the battle
+Keeping the record of what each side has been shown costs nothing that can
+be measured. Nothing has been tuned beyond skipping events that nobody in the battle
 listens to, and it shows: the last batch of mechanics cost 15 to 30% on the
 same teams (the first row was about 10,000 before it), from a larger state
 and more bookkeeping per action rather than from any one hot spot, and the
@@ -531,19 +694,25 @@ likely first steps when speed starts to matter.
 
 ## What comes next
 
-1. **Sampling hidden information** into a position: the opponent's
+1. **Team preview**: bringing six and picking four, as a decision the engine
+   asks for.
+2. **The observation and the action space**: one view of the battle for a
+   policy (its own side, `shown` of the other, the public field) and the
+   encoding of choices. What goes into it depends on the model that will
+   read it.
+3. **Python bindings and batched stepping** for training.
+4. **Sampling hidden information** into a position: the opponent's
    unrevealed moves, items, abilities, spreads and bench, drawn from a prior
    (usage statistics, or the bot's own model) and consistent with what has
-   been seen.
-2. **Python bindings and batched stepping** for training.
-3. **Team preview** (picking four of six), and tracking what each player has
-   been shown, which a policy needs before it can be trained.
-4. **Searching for teams**: the regulation file gives the space of legal
+   been shown.
+5. **A Showdown client** that feeds the log to `observer` and plays the
+   policy's choices.
+6. **Searching for teams**: the regulation file gives the space of legal
    teams and steps that stay inside it; scoring a team needs a pool of
    opponents and a policy to play it, so this follows the bot.
-5. **Speed.** The per-Pokémon listener cache described above, then
+7. **Speed.** The per-Pokémon listener cache described above, then
    profiling.
-6. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
+8. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
    moving the pin, `node oracle/gen_data.js` regenerates the tables, a
    missing callback body panics with its name, and `scripts/fuzz.sh` finds
    behaviour changes.

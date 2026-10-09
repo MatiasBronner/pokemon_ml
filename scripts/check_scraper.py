@@ -4,14 +4,15 @@
     scripts/check_scraper.py [teams]
 
 Asks the engine for random legal teams (`teamcheck --sample`), writes a
-tournament page and one paste page per team into a cache the way a browser
-would have saved them, runs the scraper on that cache and `teampool` on its
-output, and requires every team to come back as it went in.
+tournament page and, for each team, the answer vrpastes.com's data service
+gives for a paste, into a cache as the scraper would have kept them. Then it
+runs the scraper on that cache and `teampool` on its output, and requires
+every team to come back as it went in.
 
-The paste pages are laid out five different ways, because the real site is
-script-driven and how it delivers a sheet can change: as plain text, as
-separate elements with no punctuation, inside a script as text, inside a
-script as data, and as text with a copy in a script.
+The answers have the shape of the real ones (checked against the service in
+October 2026): a title and a list of Pokémon with species, item, ability,
+moves and nature among much else. Some are given without natures, some with stat
+points, and two cannot be had at all, which must be left out and said so.
 """
 import html
 import json
@@ -24,52 +25,31 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, 'scripts'))
 import scrape_teams  # noqa: E402
 
-
-def export(team, natures):
-    """A team in Showdown's export format, as an open team sheet has it: no stat points."""
-    blocks = []
-    for mon in team:
-        lines = [mon['species'] + (' @ ' + mon['item'] if mon['item'] else ''), 'Ability: ' + mon['ability'], 'Level: 50']
-        if natures:
-            lines.append(mon['nature'] + ' Nature')
-        lines += ['- ' + m for m in mon['moves']]
-        blocks.append('\n'.join(lines))
-    return '\n\n'.join(blocks)
+# Nothing listens here: a paste missing from the cache is refused at once, without a network.
+BACKEND = 'http://127.0.0.1:9'
 
 
-def shell(title, body, scripts=''):
+def shell(title, body):
     return (f'<!DOCTYPE html><html><head><title>{html.escape(title)}</title><style>.x{{color:red}}</style></head>'
-            f'<body><nav><a href="/">VR Pastes - Victory Road</a><span>Beta</span></nav>{body}{scripts}</body></html>')
+            f'<body><nav><a href="/">Victory Road</a></nav>{body}</body></html>')
 
 
-def flight(text):
-    """Text the way a Next.js page carries it in a script: quoted, inside a quoted chunk."""
-    return '<script>self.__next_f.push([1,' + json.dumps('7:["$","div",null,{"paste":' + json.dumps(text) + '}]\n') + '])</script>'
-
-
-def paste_page(layout, title, team, natures):
-    text = export(team, natures)
-    if layout == 0:  # plain text, names wrapped in spans
-        marked = html.escape(text).replace(' @ ', ' @ <span class="item">').replace('\n', '</span>\n')
-        return shell(title, f'<main><pre>{marked}</pre></main>')
-    if layout == 1:  # one element per fact, streamed into a hidden block
-        cards = ''
-        for mon in team:
-            cards += f'<article><img alt="{html.escape(mon["species"])}" src="/s.png"><h3>{html.escape(mon["species"])}</h3>'
-            cards += f'<p class="item">{html.escape(mon["item"])}</p><p>{html.escape(mon["ability"])}</p>'
-            cards += (f'<p>{mon["nature"]}</p>' if natures else '')
-            cards += '<ul>' + ''.join(f'<li>{html.escape(m)}</li>' for m in mon['moves']) + '</ul></article>'
-        return shell(title, f'<main><template id="B:0"></template></main><div hidden id="S:0">{cards}</div>')
-    if layout == 2:  # only inside a script, as text
-        return shell(title, '<main></main>', flight(text))
-    if layout == 3:  # only inside a script, as data
-        data = [{'species': m['species'], 'item': m['item'], 'ability': m['ability'], 'moves': m['moves'],
-                 **({'nature': m['nature']} if natures else {})} for m in team]
-        chunk = '7:["$","div",null,{"team":' + json.dumps(data) + '}]\n'
-        return shell(title, '<main></main>', '<script>self.__next_f.push([1,' + json.dumps(chunk) + '])</script>')
-    # text on the page and again in a script, after a strip of the six Pokémon
-    strip = ''.join(f'<img alt="{html.escape(m["species"])}"><span>{html.escape(m["species"])}</span>' for m in team)
-    return shell(title, f'<header>{strip}</header><main><pre>{html.escape(text)}</pre></main>', flight(text))
+def answer(pid, title, team, natures, points):
+    """What the data service says for a paste."""
+    mons = []
+    for mon in team:
+        entry = {'name': mon['species'], 'species': mon['species'], 'item': mon['item'], 'ability': mon['ability'],
+                 'moves': mon['moves'], 'type1': 'Normal', 'image': mon['species'].lower(),
+                 'baseStats': {'hp': 80, 'atk': 80, 'def': 80, 'spa': 80, 'spd': 80, 'spe': 80},
+                 'movesWithTypes': [{'name': m, 'type': 'Normal', 'translation': m} for m in mon['moves']],
+                 'speciesTranslation': mon['species'], 'itemTranslation': mon['item'], 'abilityTranslation': mon['ability']}
+        if natures:
+            entry.update(nature=mon['nature'], natureTranslation=mon['nature'])
+        if points:
+            entry['evs'] = mon['evs']
+        mons.append(entry)
+    return {'id': pid, 'is_public': True, 'is_encrypted': False, 'title': title, 'format': 'VGC Regulation Set M-C',
+            'teams': mons, 'hasPassword': False, 'createdAt': 1790575151}
 
 
 def main():
@@ -87,10 +67,17 @@ def main():
             pid = f'Fake{i:04d}'
             host = 'https://www.vrpastes.com/' if i % 2 else 'https://vrpastes.com/'
             player = f"Player O'Num{i}" if i % 7 == 0 else f'Player Num{i}'
-            title = f"{player}'s 2099 Nowhere Regional Championships OTS – VR Pastes"
-            page = paste_page(i % 5, title, team, natures=i % 3 != 0)
-            with open(scrape_teams.cache_path('https://www.vrpastes.com/' + pid, cache), 'w', encoding='utf-8') as f:
-                f.write(page)
+            title = f"{player}'s 2099 Nowhere Regional Championships OTS"
+            kept = scrape_teams.cache_path(f'{BACKEND}/api/paste/{pid}?lang=english', cache)
+            with open(kept, 'w', encoding='utf-8') as f:
+                # Two pastes with no team kept for them: one an answer that is no team, one something else
+                # altogether. The scraper asks again for both, and here gets no answer.
+                if i == n - 4:
+                    json.dump({'error': 'Password required', 'hasPassword': True}, f)
+                elif i == n - 5:
+                    f.write('<html><body>Not Found</body></html>')
+                else:
+                    json.dump(answer(pid, title, team, natures=i % 3 != 0, points=i % 9 == 1), f)
             sprites = ''.join('<img src="https://victoryroad.pro/wp-content/uploads/sprites/gen9-champions/'
                               + m['species'].lower().replace(' ', '-').replace("'", '').replace('.', '') + '.png">' for m in team)
             section = 'Senior Division' if i >= n - 3 else 'Top Cut' if i < 8 else 'Swiss rounds'
@@ -105,7 +92,7 @@ def main():
 
         raw = os.path.join(tmp, 'raw', 'nowhere.json')
         scraped = subprocess.run([sys.executable, os.path.join(REPO, 'scripts', 'scrape_teams.py'), url, '--out', raw,
-                                  '--cache', cache, '--delay', '0'], capture_output=True, text=True)
+                                  '--cache', cache, '--delay', '0', '--backend', BACKEND], capture_output=True, text=True)
         print(scraped.stdout.strip())
         assert scraped.returncode == 0, scraped.stderr
         out = os.path.join(tmp, 'nowhere.json')
@@ -119,18 +106,39 @@ def main():
         assert [r['placing'] for r in rows_read] == list(range(1, n + 1)), 'placings'
         assert rows_read[0]['country'] == 'ESP' and rows_read[3]['record'] == '10-3', rows_read[3]
         assert rows_read[-1]['section'] == 'Senior Division' and rows_read[0]['section'] == 'Top Cut'
-        assert len(pool['teams']) == n, f'{len(pool["teams"])} of {n} teams came back'
-        for i, (sent, got) in enumerate(zip(teams, pool['teams'])):
+        gone = [n - 5, n - 4]
+        assert [i for i, r in enumerate(rows_read) if 'error' in r] == gone, 'the two pastes that cannot be had'
+        assert f'{n - 2} of {n} sheets list six' in scraped.stdout
+        assert len(pool['teams']) == n - 2, f'{len(pool["teams"])} of {n - 2} teams came back'
+        for got in pool['teams']:
+            i = got['placing'] - 1
+            sent = teams[i]
+            assert i not in gone
             assert got['player'] == (f"Player O'Num{i}" if i % 7 == 0 else f'Player Num{i}'), got['player']
-            assert got['placing'] == i + 1 and got['spreads_guessed']
-            assert got['natures_guessed'] == (i % 3 == 0)
+            assert got['spreads_guessed'] == (i % 9 != 1) and got['natures_guessed'] == (i % 3 == 0)
             for a, b in zip(sent, got['team']):
                 same = (a['species'], a['item'], a['ability'], a['moves']) == (b['species'], b['item'], b['ability'], b['moves'])
-                assert same, f'team {i} (layout {i % 5}): sent {a}, got {b}'
+                assert same, f'team {i}: sent {a}, got {b}'
                 assert i % 3 == 0 or a['nature'] == b['nature'] or {a['nature'], b['nature']} <= {
                     'Hardy', 'Docile', 'Serious', 'Bashful', 'Quirky'}, (a['nature'], b['nature'])
                 assert sum(b['evs'].values()) == 66
-    print(f'all {n} teams came back as they went in, from five page layouts')
+                assert i % 9 != 1 or a['evs'] == b['evs'], f'team {i}: stat points sent {a["evs"]}, got {b["evs"]}'
+
+        # A site that answers with no teams at all must stop both steps, not leave an empty pool behind.
+        empty = os.path.join(tmp, 'empty')
+        os.makedirs(os.path.join(empty, 'cache'))
+        with open(scrape_teams.cache_path(url, os.path.join(empty, 'cache')), 'w', encoding='utf-8') as f:
+            f.write(shell('2099 Nowhere', f'<article>{body}</article>'))
+        raw = os.path.join(empty, 'raw.json')
+        scraped = subprocess.run([sys.executable, os.path.join(REPO, 'scripts', 'scrape_teams.py'), url, '--out', raw,
+                                  '--cache', os.path.join(empty, 'cache'), '--delay', '0', '--backend', BACKEND, '--top', '3'],
+                                 capture_output=True, text=True)
+        assert scraped.returncode != 0 and 'No team came back' in scraped.stderr, scraped.stderr
+        out = os.path.join(empty, 'pool.json')
+        pooled = subprocess.run([os.path.join(REPO, 'target', 'release', 'teampool'), raw, '--out', out],
+                                capture_output=True, text=True)
+        assert pooled.returncode != 0 and not os.path.exists(out), pooled.stdout
+    print(f'all {n - 2} teams came back as they went in; the two that could not be had, and an empty answer, were said so')
 
 
 if __name__ == '__main__':

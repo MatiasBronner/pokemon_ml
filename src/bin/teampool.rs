@@ -177,6 +177,13 @@ fn main() {
     }
     println!("  {} distinct teams", distinct.len());
 
+    if pool.teams.is_empty() {
+        // An empty pool is of no use to anyone, and a file of one looks like a result.
+        eprintln!(
+            "no team could be used, so no pool was written. The sheets in {path} are under \"sheet\" for each team."
+        );
+        std::process::exit(1);
+    }
     let out = out.unwrap_or_else(|| {
         // teams/raw/x.json -> teams/x.json
         let p = std::path::Path::new(&path);
@@ -186,7 +193,7 @@ fn main() {
     std::fs::write(&out, pool.to_json()).unwrap_or_else(|e| panic!("cannot write {out}: {e}"));
     println!("wrote {out}");
 
-    if play > 0 && !pool.teams.is_empty() {
+    if play > 0 {
         let sampler = Sampler::new(&pool).expect("the pool was just checked");
         let how = if vary { Variation::default() } else { Variation::NONE };
         let mut rng = Rng::from_words([seed, 2, 3, 4]);

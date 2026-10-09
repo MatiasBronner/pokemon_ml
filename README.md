@@ -209,9 +209,12 @@ python3 scripts/scrape_teams.py https://victoryroad.pro/2027-frankfurt/     # ->
 cargo run --release --bin teampool -- teams/raw/2027-frankfurt.json --play 1000   # -> teams/2027-frankfurt.json
 ```
 
-The scraper reads the results tables, follows each row's team-sheet link
-(to vrpastes.com) and saves where the team placed, who played it and the text
-of its sheet. It fetches one page a second and keeps what it has fetched, so
+The scraper reads the results tables, takes each row's team-sheet link
+(to vrpastes.com) and saves where the team placed, who played it and its sheet
+in Showdown's export format. A paste's page is an empty frame that a script
+fills in once it is open in a browser, so the scraper asks the site's data
+service for the team, as that script does. It makes one request a second and
+keeps what it has fetched, so
 it can be stopped and run again. `teampool` reads each sheet
 (`teams::read_sheet`), checks the team against the regulation, writes the
 legal ones out and says which it left out and why; `--section` and `--top`
@@ -255,15 +258,13 @@ Two things to know about what comes out:
   team it did this to is marked `spreads_guessed`. Real spreads are finer,
   which is one reason the sampler moves points around; a paste that does
   give stat points is taken at its word.
-- **The scraper has not been run against the live sites from where it was
-  written**, which had no route to them. It is written not to depend on how
-  the paste site lays out a sheet: it gathers every short line of text the
-  page carries, in its markup and in its scripts, and `read_sheet` picks the
-  team out by the names it knows. `scripts/check_scraper.py` checks that on a
-  made-up tournament whose sheets are laid out five different ways. If the
-  site delivers its sheets only after the page has loaded, the scraper will
-  report teams left out for having no sheet, and will need to be taught where
-  they come from; the pages it fetched are kept in `teams/raw/cache` to look at.
+- **The scraper depends on one address that is not Victory Road's to keep
+  stable**: the data service the paste site's script talks to
+  (`BACKEND` in the script, `--backend` to override). If it moves, the scraper
+  stops and says that no team came back, rather than writing empty sheets,
+  and `teampool` will not write a pool with no teams in it.
+  `scripts/check_scraper.py` checks both steps without a network, on a
+  made-up tournament whose answers have the shape of the real ones.
 
 ## What each side has been shown
 

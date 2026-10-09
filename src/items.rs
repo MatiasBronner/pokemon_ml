@@ -103,8 +103,15 @@ impl Battle {
             // second is the holder; the stone cannot be taken from a Pokémon
             // whose base species it belongs to.
             debug_assert!(ev == Ev::TakeItem && pre == Pre::On);
-            let base = SPECIES[self.mon(holder).base_species as usize].base_species;
-            let own = ITEMS[item as usize].mega.iter().any(|&(from, _)| SPECIES[from as usize].id == base);
+            let d = &ITEMS[item as usize];
+            let species = self.mon(holder).base_species;
+            let own = if d.flags & IF_MEGA_BY_FORME != 0 {
+                // A few stones go by the exact forme instead: the ones they evolve and the Megas they make.
+                d.mega.iter().any(|&(from, to)| from == species || to == species)
+            } else {
+                let base = SPECIES[species as usize].base_species;
+                d.mega.iter().any(|&(from, _)| SPECIES[from as usize].id == base)
+            };
             return Res::Bool(!own);
         }
         if let Some(t) = type_booster(item) {
@@ -159,6 +166,33 @@ impl Battle {
             };
         }
 
+        // The terrain seeds: used up, for a stat boost, while their terrain is up.
+        let seed = match item {
+            it::ELECTRICSEED => Some(Terrain::Electricterrain),
+            it::GRASSYSEED => Some(Terrain::Grassyterrain),
+            it::MISTYSEED => Some(Terrain::Mistyterrain),
+            it::PSYCHICSEED => Some(Terrain::Psychicterrain),
+            _ => None,
+        };
+        if let Some(terrain) = seed {
+            return match ev {
+                // onStart(pokemon)
+                Ev::Start => {
+                    if !self.ignoring_item(holder) && self.is_terrain(terrain) {
+                        self.use_item(holder, None, Eff::None);
+                    }
+                    Res::Undef
+                }
+                // onTerrainChange(pokemon)
+                Ev::TerrainChange => {
+                    if self.is_terrain(terrain) {
+                        self.use_item(holder, None, Eff::None);
+                    }
+                    Res::Undef
+                }
+                _ => unreachable!("no body for item {} {ev:?}", ITEMS[item as usize].id),
+            };
+        }
         match (item, ev, pre) {
             // ---- Air Balloon (the levitation itself is in `is_grounded`)
             (it::AIRBALLOON, Ev::Start, Pre::On) => Res::Undef,
@@ -253,6 +287,13 @@ impl Battle {
                 let (Some(target), Some(mi)) = (e.target, self.event_move()) else {
                     return Res::Undef;
                 };
+                // (When something else already grounds the holder, that rule decides.)
+                if self.has_vol_named(target, "ingrain")
+                    || self.has_vol_named(target, "smackdown")
+                    || self.field.pseudo.has(Pseudo::Gravity)
+                {
+                    return Res::Undef;
+                }
                 if self.am[mi as usize].typ == Type::Ground && self.has_type(target, Type::Flying) {
                     return Res::Num(0);
                 }
@@ -345,7 +386,7 @@ impl Battle {
             // onUpdate(pokemon)
             (it::LUMBERRY, Ev::Update, Pre::On) => {
                 let m = self.mon(holder);
-                if m.status != Status::None || m.volatiles.has(VolKind::Confusion) {
+                if m.status != Status::None || self.vols(holder).has(VolKind::Confusion) {
                     self.eat_item(holder, false, None, Eff::None);
                 }
                 Res::Undef
@@ -359,15 +400,13 @@ impl Battle {
 
             // ---- Mental Herb: onUpdate(pokemon)
             (it::MENTALHERB, Ev::Update, Pre::On) => {
-                let afflicted =
-                    |b: &Battle, name: &str| b.mon(holder).volatiles.as_slice().iter().any(|v| v.kind.id() == name);
+                let afflicted = |b: &Battle, name: &str| b.vols(holder).as_slice().iter().any(|v| v.kind.id() == name);
                 if MENTAL_HERB.iter().any(|name| afflicted(self, name)) {
                     if !self.use_item(holder, None, Eff::None) {
                         return Res::Undef;
                     }
                     for name in MENTAL_HERB {
-                        let kind =
-                            self.mon(holder).volatiles.as_slice().iter().map(|v| v.kind).find(|k| k.id() == name);
+                        let kind = self.vols(holder).as_slice().iter().map(|v| v.kind).find(|k| k.id() == name);
                         if let Some(k) = kind {
                             self.remove_volatile(holder, k);
                         }
@@ -437,7 +476,7 @@ impl Battle {
 
             // ---- Persim Berry
             (it::PERSIMBERRY, Ev::Update, Pre::On) => {
-                if self.mon(holder).volatiles.has(VolKind::Confusion) {
+                if self.vols(holder).has(VolKind::Confusion) {
                     self.eat_item(holder, false, None, Eff::None);
                 }
                 Res::Undef
@@ -550,6 +589,7 @@ impl Battle {
                 boosts: None,
                 volatile: Some(VolKind::Flinch),
                 self_boosts: None,
+                on_hit: false,
             };
             am.n_secs += 1;
         }

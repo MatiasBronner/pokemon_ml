@@ -1,51 +1,22 @@
 {
  "abilities": {
   "legal": 225,
-  "modelled": 181,
+  "modelled": 210,
   "not_modelled": {
    "battlebond": "forme changes",
-   "chlorophyll": "weather",
-   "cloudnine": "weather",
    "cursedbody": "the Disable volatile",
    "cutecharm": "the Attract volatile",
    "disguise": "forme changes",
-   "drizzle": "weather",
-   "drought": "weather",
-   "dryskin": "weather",
-   "electricsurge": "terrain",
    "electromorphosis": "the Charge volatile",
    "emergencyexit": "switching out mid-turn",
-   "forecast": "weather",
-   "grasspelt": "terrain",
-   "grassysurge": "terrain",
    "gulpmissile": "forme changes",
    "hungerswitch": "forme changes",
-   "hydration": "weather",
-   "icebody": "weather",
-   "iceface": "weather",
+   "iceface": "forme changes",
    "illusion": "Illusion and Transform",
    "imposter": "Illusion and Transform",
-   "leafguard": "weather",
-   "megasol": "weather",
-   "mimicry": "terrain",
-   "psychicsurge": "terrain",
-   "raindish": "weather",
-   "sandforce": "weather",
-   "sandrush": "weather",
-   "sandspit": "weather",
-   "sandstream": "weather",
-   "sandveil": "weather",
-   "seedsower": "terrain",
    "shieldsdown": "forme changes",
-   "slushrush": "weather",
-   "snowcloak": "weather",
-   "snowwarning": "weather",
-   "solarpower": "weather",
    "stancechange": "forme changes",
-   "surgesurfer": "terrain",
-   "swiftswim": "weather",
    "terashell": "forme changes",
-   "toxicdebris": "entry hazards",
    "zerotohero": "forme changes"
   },
   "dormant_parts": {
@@ -61,19 +32,13 @@
    "frisk": "only writes to the battle log",
    "gluttony": "only matters for pinch berries, which are not in Champions",
    "guarddog": "its block on being forced out (forced switches are not modelled)",
-   "harvest": "always succeeding in sun (weather is not modelled)",
    "heavymetal": "weight is only read by moves that are not modelled",
-   "infiltrator": "bypasses Substitute and screens, which are not modelled",
+   "infiltrator": "bypasses Substitute, which is not modelled (screens, Safeguard and Aurora Veil are)",
    "insomnia": "its Yawn block (Yawn is not modelled)",
    "lightmetal": "weight is only read by moves that are not modelled",
-   "magicbounce": "bouncing moves that target a side (none modelled)",
    "oblivious": "its Attract and Taunt immunity (neither is modelled)",
-   "overcoat": "its weather-damage immunity (weather is not modelled)",
    "parentalbond": "its Secret Power special case (not in Champions)",
    "purifyingsalt": "its Yawn block (Yawn is not modelled)",
-   "sapsipper": "absorbing Grass moves that target a side (none modelled)",
-   "screencleaner": "removes screens, which are not modelled",
-   "soundproof": "blocking sound moves that target a side (none modelled)",
    "stickyhold": "its Knock Off block (Knock Off is not modelled)",
    "sturdy": "its one-hit-KO immunity (those moves are not modelled)",
    "suctioncups": "blocks being forced out (forced switches are not modelled)",
@@ -83,44 +48,23 @@
  },
  "items": {
   "held_items": 85,
-  "modelled": 79,
+  "modelled": 83,
   "not_modelled": {
    "ejectbutton": "switching out mid-turn",
-   "electricseed": "terrain",
-   "grassyseed": "terrain",
-   "mistyseed": "terrain",
-   "psychicseed": "terrain",
    "redcard": "forced switching"
   },
   "mega_stones": 81,
   "megas": 82,
-  "megas_modelled": 72,
-  "megas_not_modelled": {
-   "abomasnowmega": "its ability snowwarning needs weather",
-   "charizardmegay": "its ability drought needs weather",
-   "froslassmega": "its ability snowwarning needs weather",
-   "garchompmega": "its ability sandforce needs weather",
-   "houndoommega": "its ability solarpower needs weather",
-   "meganiummega": "its ability megasol needs weather",
-   "raichumegax": "its ability electricsurge needs terrain",
-   "steelixmega": "its ability sandforce needs weather",
-   "swampertmega": "its ability swiftswim needs weather",
-   "tyranitarmega": "its ability sandstream needs weather"
-  },
+  "megas_modelled": 82,
+  "megas_not_modelled": {},
   "dormant_parts": {
    "bigroot": "boosting Leech Seed, Ingrain, Aqua Ring and Strength Sap (only draining moves are modelled)",
    "bindingband": "boosts binding moves, which are not modelled",
-   "damprock": "extends rain (weather is not modelled)",
-   "heatrock": "extends sun (weather is not modelled)",
-   "icyrock": "extends snow (weather is not modelled)",
-   "lightclay": "extends screens, which are not modelled",
-   "mentalherb": "cures Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled",
-   "smoothrock": "extends sandstorm (weather is not modelled)",
-   "terrainextender": "extends terrain, which is not modelled"
+   "mentalherb": "cures Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled"
   }
  },
  "learnable_moves": 510,
- "supported_learnable_moves": 238,
+ "supported_learnable_moves": 284,
  "supported": [
   "accelerock",
   "acidarmor",
@@ -139,17 +83,20 @@
   "armorcannon",
   "aromaticmist",
   "aurasphere",
+  "auroraveil",
   "babydolleyes",
   "bite",
   "bitterblade",
   "bittermalice",
   "blazekick",
+  "blizzard",
   "bodypress",
   "bodyslam",
   "bonerush",
   "boomburst",
   "bravebird",
   "breakingswipe",
+  "brickbreak",
   "brutalswing",
   "bugbuzz",
   "bulkup",
@@ -167,6 +114,7 @@
   "cosmicpower",
   "cottonguard",
   "cottonspore",
+  "courtchange",
   "crabhammer",
   "crosschop",
   "crosspoison",
@@ -176,6 +124,7 @@
   "darkpulse",
   "dazzlinggleam",
   "decorate",
+  "defog",
   "detect",
   "discharge",
   "doubleedge",
@@ -196,10 +145,13 @@
   "earthpower",
   "earthquake",
   "eerieimpulse",
+  "electricterrain",
   "electroweb",
   "energyball",
+  "expandingforce",
   "extrasensory",
   "extremespeed",
+  "fairylock",
   "faketears",
   "featherdance",
   "fierydance",
@@ -218,14 +170,20 @@
   "frostbreath",
   "gigadrain",
   "glare",
+  "grassyglide",
+  "grassyterrain",
+  "gravity",
+  "growth",
   "gunkshot",
   "hammerarm",
+  "haze",
   "headlongrush",
   "headsmash",
   "heatwave",
   "highhorsepower",
   "hornleech",
   "howl",
+  "hurricane",
   "hydropump",
   "hypervoice",
   "hypnosis",
@@ -234,6 +192,7 @@
   "icehammer",
   "icepunch",
   "iceshard",
+  "icespinner",
   "iciclecrash",
   "iciclespear",
   "icywind",
@@ -248,11 +207,14 @@
   "leafstorm",
   "leechlife",
   "lifedew",
+  "lightscreen",
   "liquidation",
   "lowsweep",
   "luminacrash",
   "lunge",
   "machpunch",
+  "magicroom",
+  "magneticflux",
   "makeitrain",
   "matchagotcha",
   "megahorn",
@@ -260,7 +222,11 @@
   "metalsound",
   "meteormash",
   "milkdrink",
+  "mistyterrain",
   "moonblast",
+  "moonlight",
+  "morningsun",
+  "mortalspin",
   "mountaingale",
   "muddywater",
   "mudshot",
@@ -285,19 +251,27 @@
   "powerwhip",
   "protect",
   "psychic",
+  "psychicfangs",
+  "psychicterrain",
   "psychocut",
   "psyshieldbash",
   "psyshock",
   "pyroball",
   "quickattack",
   "quiverdance",
+  "raindance",
+  "rapidspin",
   "razorshell",
   "recover",
+  "reflect",
+  "risingvoltage",
   "rockblast",
   "rockpolish",
   "rockslide",
   "rocktomb",
   "sacredsword",
+  "safeguard",
+  "sandstorm",
   "scald",
   "scaryface",
   "scorchingsands",
@@ -319,32 +293,45 @@
   "sludgewave",
   "smartstrike",
   "snarl",
+  "snowscape",
   "spicyextract",
+  "spikes",
   "spiritbreak",
+  "stealthrock",
+  "steelroller",
   "steelwing",
+  "stickyweb",
   "stoneedge",
   "stormthrow",
   "stringshot",
   "strugglebug",
   "stunspore",
+  "sunnyday",
   "superpower",
   "surf",
   "swagger",
   "sweetkiss",
   "sweetscent",
   "swordsdance",
+  "synthesis",
   "tailslap",
+  "tailwind",
   "tearfullook",
   "teeterdance",
+  "terrainpulse",
+  "thunder",
   "thunderbolt",
   "thunderfang",
   "thunderpunch",
   "thunderwave",
   "tickle",
+  "tidyup",
   "torchsong",
   "toxic",
+  "toxicspikes",
   "toxicthread",
   "trailblaze",
+  "trickroom",
   "triplearrows",
   "tropkick",
   "twinbeam",
@@ -353,8 +340,11 @@
   "waterfall",
   "waterpulse",
   "wavecrash",
+  "weatherball",
   "wildcharge",
   "willowisp",
+  "wish",
+  "wonderroom",
   "woodhammer",
   "xscissor",
   "zapcannon",
@@ -377,29 +367,23 @@
   "allyswitch": [
    "fn:onPrepareHit",
    "fn:onHit",
-   "key:condition"
+   "condition"
   ],
   "aquaring": [
-   "key:condition",
-   "volatile:aquaring"
+   "volatile:aquaring",
+   "condition"
   ],
   "assurance": [
    "fn:basePowerCallback"
   ],
   "attract": [
-   "key:condition",
    "fn:onTryImmunity",
-   "volatile:attract"
+   "volatile:attract",
+   "condition"
   ],
   "aurawheel": [
    "fn:onTry",
    "fn:onModifyType"
-  ],
-  "auroraveil": [
-   "key:sideCondition",
-   "fn:onTry",
-   "key:condition",
-   "target:allySide"
   ],
   "avalanche": [
    "fn:basePowerCallback"
@@ -409,11 +393,10 @@
    "fn:onMoveFail"
   ],
   "banefulbunker": [
-   "key:stallingMove",
    "fn:onPrepareHit",
    "fn:onHit",
-   "key:condition",
-   "volatile:banefulbunker"
+   "volatile:banefulbunker",
+   "condition"
   ],
   "barbbarrage": [
    "fn:onBasePower"
@@ -425,8 +408,8 @@
   ],
   "beakblast": [
    "fn:priorityChargeCallback",
-   "key:condition",
-   "fn:onAfterMove"
+   "fn:onAfterMove",
+   "condition"
   ],
   "beatup": [
    "fn:basePowerCallback",
@@ -446,19 +429,13 @@
    "flag:recharge",
    "self.volatileStatus"
   ],
-  "blizzard": [
-   "fn:onModifyMove"
-  ],
   "block": [
    "fn:onHit"
   ],
   "bounce": [
    "fn:onTryMove",
-   "key:condition",
+   "condition",
    "flag:charge"
-  ],
-  "brickbreak": [
-   "fn:onTryHit"
   ],
   "bugbite": [
    "fn:onHit"
@@ -475,14 +452,12 @@
    "fn:onAfterSubDamage"
   ],
   "charge": [
-   "key:condition",
-   "volatile:charge"
+   "volatile:charge",
+   "condition"
   ],
   "chillyreception": [
    "fn:priorityChargeCallback",
-   "key:condition",
-   "target:all",
-   "weather",
+   "condition",
    "selfSwitch"
   ],
   "circlethrow": [
@@ -516,12 +491,8 @@
    "fn:damageCallback",
    "fn:beforeTurnCallback",
    "fn:onTry",
-   "key:condition",
-   "target:scripted"
-  ],
-  "courtchange": [
-   "fn:onHitField",
-   "target:all"
+   "target:scripted",
+   "condition"
   ],
   "covet": [
    "fn:onAfterHit"
@@ -530,19 +501,16 @@
    "fn:onModifyMove",
    "fn:onTryHit",
    "fn:onHit",
-   "key:condition"
-  ],
-  "defog": [
-   "fn:onHit"
+   "condition"
   ],
   "destinybond": [
    "fn:onPrepareHit",
-   "key:condition",
-   "volatile:destinybond"
+   "volatile:destinybond",
+   "condition"
   ],
   "dig": [
    "fn:onTryMove",
-   "key:condition",
+   "condition",
    "flag:charge"
   ],
   "direclaw": [
@@ -550,12 +518,12 @@
   ],
   "disable": [
    "fn:onTryHit",
-   "key:condition",
-   "volatile:disable"
+   "volatile:disable",
+   "condition"
   ],
   "dive": [
    "fn:onTryMove",
-   "key:condition",
+   "condition",
    "flag:charge"
   ],
   "doubleshock": [
@@ -563,8 +531,8 @@
    "self.onHit"
   ],
   "dragoncheer": [
-   "key:condition",
-   "volatile:dragoncheer"
+   "volatile:dragoncheer",
+   "condition"
   ],
   "dragondarts": [
    "key:smartTarget"
@@ -575,15 +543,10 @@
   "eeriespell": [
    "sec.onHit"
   ],
-  "electricterrain": [
-   "key:terrain",
-   "key:condition",
-   "target:all"
-  ],
   "electrify": [
    "fn:onTryHit",
-   "key:condition",
-   "volatile:electrify"
+   "volatile:electrify",
+   "condition"
   ],
   "electroball": [
    "fn:basePowerCallback"
@@ -593,19 +556,18 @@
    "flag:charge"
   ],
   "encore": [
-   "key:condition",
-   "volatile:encore"
+   "volatile:encore",
+   "condition"
   ],
   "endeavor": [
    "fn:damageCallback",
    "fn:onTryImmunity"
   ],
   "endure": [
-   "key:stallingMove",
    "fn:onPrepareHit",
    "fn:onHit",
-   "key:condition",
-   "volatile:endure"
+   "volatile:endure",
+   "condition"
   ],
   "entrainment": [
    "fn:onTryHit",
@@ -614,20 +576,11 @@
   "eruption": [
    "fn:basePowerCallback"
   ],
-  "expandingforce": [
-   "fn:onBasePower",
-   "fn:onModifyMove"
-  ],
   "explosion": [
    "key:selfdestruct"
   ],
   "facade": [
    "fn:onBasePower"
-  ],
-  "fairylock": [
-   "key:pseudoWeather",
-   "key:condition",
-   "target:all"
   ],
   "fakeout": [
    "fn:onTry",
@@ -661,32 +614,32 @@
   ],
   "fling": [
    "fn:onPrepareHit",
-   "key:condition"
+   "condition"
   ],
   "flipturn": [
    "selfSwitch"
   ],
   "fly": [
    "fn:onTryMove",
-   "key:condition",
+   "condition",
    "flag:charge"
   ],
   "flyingpress": [
    "fn:onEffectiveness"
   ],
   "focusenergy": [
-   "key:condition",
-   "volatile:focusenergy"
+   "volatile:focusenergy",
+   "condition"
   ],
   "focuspunch": [
    "fn:priorityChargeCallback",
    "fn:beforeMoveCallback",
-   "key:condition"
+   "condition"
   ],
   "followme": [
    "fn:onTry",
-   "key:condition",
-   "volatile:followme"
+   "volatile:followme",
+   "condition"
   ],
   "forestscurse": [
    "fn:onHit"
@@ -705,8 +658,8 @@
   ],
   "gastroacid": [
    "fn:onTryHit",
-   "key:condition",
-   "volatile:gastroacid"
+   "volatile:gastroacid",
+   "condition"
   ],
   "gigaimpact": [
    "flag:recharge",
@@ -716,31 +669,15 @@
    "flag:cantusetwice"
   ],
   "glaiverush": [
-   "key:condition",
+   "condition",
    "self.volatileStatus"
   ],
   "grassknot": [
    "fn:basePowerCallback",
    "fn:onTryHit"
   ],
-  "grassyglide": [
-   "fn:onModifyPriority"
-  ],
-  "grassyterrain": [
-   "key:terrain",
-   "key:condition",
-   "target:all"
-  ],
   "gravapple": [
    "fn:onBasePower"
-  ],
-  "gravity": [
-   "key:pseudoWeather",
-   "key:condition",
-   "target:all"
-  ],
-  "growth": [
-   "fn:onModifyMove"
   ],
   "guardsplit": [
    "fn:onHit"
@@ -757,10 +694,6 @@
   "hardpress": [
    "fn:basePowerCallback"
   ],
-  "haze": [
-   "fn:onHitField",
-   "target:all"
-  ],
   "healbell": [
    "fn:onHit",
    "target:allyTeam"
@@ -768,8 +701,8 @@
   "healingwish": [
    "fn:onTryHit",
    "key:selfdestruct",
-   "key:slotCondition",
-   "key:condition"
+   "slotCondition:healingwish",
+   "condition"
   ],
   "healpulse": [
    "fn:onHit"
@@ -784,8 +717,8 @@
   ],
   "helpinghand": [
    "fn:onTryHit",
-   "key:condition",
-   "volatile:helpinghand"
+   "volatile:helpinghand",
+   "condition"
   ],
   "hex": [
    "fn:basePowerCallback"
@@ -797,9 +730,6 @@
   "horndrill": [
    "key:ohko"
   ],
-  "hurricane": [
-   "fn:onModifyMove"
-  ],
   "hydrocannon": [
    "flag:recharge",
    "self.volatileStatus"
@@ -808,14 +738,9 @@
    "flag:recharge",
    "self.volatileStatus"
   ],
-  "icespinner": [
-   "fn:onAfterHit",
-   "fn:onAfterSubDamage"
-  ],
   "imprison": [
-   "key:condition",
    "volatile:imprison",
-   "flag:mustpressure"
+   "condition"
   ],
   "infernalparade": [
    "fn:basePowerCallback"
@@ -824,8 +749,8 @@
    "volatile:partiallytrapped"
   ],
   "ingrain": [
-   "key:condition",
-   "volatile:ingrain"
+   "volatile:ingrain",
+   "condition"
   ],
   "instruct": [
    "fn:onHit"
@@ -834,11 +759,10 @@
    "fn:onHit"
   ],
   "kingsshield": [
-   "key:stallingMove",
    "fn:onPrepareHit",
    "fn:onHit",
-   "key:condition",
-   "volatile:kingsshield"
+   "volatile:kingsshield",
+   "condition"
   ],
   "knockoff": [
    "fn:onBasePower",
@@ -854,22 +778,17 @@
    "fn:basePowerCallback"
   ],
   "leechseed": [
-   "key:condition",
    "fn:onTryImmunity",
-   "volatile:leechseed"
+   "volatile:leechseed",
+   "condition"
   ],
   "lightofruin": [
    "key:tags"
   ],
-  "lightscreen": [
-   "key:sideCondition",
-   "key:condition",
-   "target:allySide"
-  ],
   "lockon": [
    "fn:onTryHit",
    "fn:onHit",
-   "key:condition"
+   "condition"
   ],
   "lowkick": [
    "fn:basePowerCallback",
@@ -878,19 +797,10 @@
   "magicpowder": [
    "fn:onHit"
   ],
-  "magicroom": [
-   "key:pseudoWeather",
-   "key:condition",
-   "target:all"
-  ],
-  "magneticflux": [
-   "fn:onHitSide",
-   "target:allySide"
-  ],
   "magnetrise": [
    "fn:onTry",
-   "key:condition",
-   "volatile:magnetrise"
+   "volatile:magnetrise",
+   "condition"
   ],
   "meanlook": [
    "fn:onHit"
@@ -913,50 +823,34 @@
    "flag:charge"
   ],
   "minimize": [
-   "key:condition",
-   "volatile:minimize"
+   "volatile:minimize",
+   "condition"
   ],
   "mirrorcoat": [
    "fn:damageCallback",
    "fn:beforeTurnCallback",
    "fn:onTry",
-   "key:condition",
-   "target:scripted"
+   "target:scripted",
+   "condition"
   ],
   "mistyexplosion": [
    "key:selfdestruct",
    "fn:onBasePower"
-  ],
-  "mistyterrain": [
-   "key:terrain",
-   "key:condition",
-   "target:all"
-  ],
-  "moonlight": [
-   "fn:onHit"
-  ],
-  "morningsun": [
-   "fn:onHit"
-  ],
-  "mortalspin": [
-   "fn:onAfterHit",
-   "fn:onAfterSubDamage"
   ],
   "nightshade": [
    "damage:level"
   ],
   "noretreat": [
    "fn:onTry",
-   "key:condition",
-   "volatile:noretreat"
+   "volatile:noretreat",
+   "condition"
   ],
   "octolock": [
    "fn:onTryImmunity",
-   "key:condition",
-   "volatile:octolock"
+   "volatile:octolock",
+   "condition"
   ],
   "outrage": [
-   "target:randomNormal",
    "self.volatileStatus"
   ],
   "painsplit": [
@@ -971,17 +865,15 @@
   ],
   "perishsong": [
    "fn:onHitField",
-   "key:condition",
-   "target:all"
+   "condition"
   ],
   "petaldance": [
-   "target:randomNormal",
    "self.volatileStatus"
   ],
   "phantomforce": [
    "key:breaksProtect",
    "fn:onTryMove",
-   "key:condition",
+   "condition",
    "flag:charge"
   ],
   "pluck": [
@@ -1006,22 +898,14 @@
    "fn:onHit"
   ],
   "powertrick": [
-   "key:condition",
-   "volatile:powertrick"
+   "volatile:powertrick",
+   "condition"
   ],
   "powertrip": [
    "fn:basePowerCallback"
   ],
-  "psychicfangs": [
-   "fn:onTryHit"
-  ],
   "psychicnoise": [
    "sec.volatile=healblock"
-  ],
-  "psychicterrain": [
-   "key:terrain",
-   "key:condition",
-   "target:all"
   ],
   "psychup": [
    "fn:onHit"
@@ -1030,43 +914,28 @@
    "fn:onHit"
   ],
   "quickguard": [
-   "key:sideCondition",
    "fn:onTry",
    "fn:onHitSide",
-   "key:condition",
-   "target:allySide"
+   "sideCondition:quickguard",
+   "condition"
   ],
   "ragefist": [
    "fn:basePowerCallback"
   ],
   "ragepowder": [
    "fn:onTry",
-   "key:condition",
-   "volatile:ragepowder"
+   "volatile:ragepowder",
+   "condition"
   ],
   "ragingbull": [
    "fn:onTryHit",
    "fn:onModifyType"
   ],
   "ragingfury": [
-   "target:randomNormal",
    "self.volatileStatus"
-  ],
-  "raindance": [
-   "target:all",
-   "weather"
-  ],
-  "rapidspin": [
-   "fn:onAfterHit",
-   "fn:onAfterSubDamage"
   ],
   "recycle": [
    "fn:onHit"
-  ],
-  "reflect": [
-   "key:sideCondition",
-   "key:condition",
-   "target:allySide"
   ],
   "reflecttype": [
    "fn:onHit"
@@ -1080,12 +949,9 @@
   ],
   "revivalblessing": [
    "fn:onTryHit",
-   "key:slotCondition",
-   "key:condition",
+   "slotCondition:revivalblessing",
+   "condition",
    "selfSwitch"
-  ],
-  "risingvoltage": [
-   "fn:basePowerCallback"
   ],
   "roar": [
    "key:forceSwitch"
@@ -1099,25 +965,16 @@
    "fn:onHit"
   ],
   "roost": [
-   "key:condition",
+   "condition",
    "self.volatileStatus"
   ],
   "round": [
    "fn:basePowerCallback",
    "fn:onTry"
   ],
-  "safeguard": [
-   "key:sideCondition",
-   "key:condition",
-   "target:allySide"
-  ],
   "saltcure": [
-   "key:condition",
+   "condition",
    "sec.volatile=saltcure"
-  ],
-  "sandstorm": [
-   "target:all",
-   "weather"
   ],
   "sandtomb": [
    "volatile:partiallytrapped"
@@ -1165,8 +1022,8 @@
    "key:callsMove"
   ],
   "smackdown": [
-   "key:condition",
-   "volatile:smackdown"
+   "volatile:smackdown",
+   "condition"
   ],
   "snaptrap": [
    "volatile:partiallytrapped"
@@ -1177,10 +1034,6 @@
   "snore": [
    "key:sleepUsable",
    "fn:onTry"
-  ],
-  "snowscape": [
-   "target:all",
-   "weather"
   ],
   "soak": [
    "fn:onHit"
@@ -1202,18 +1055,11 @@
   "speedswap": [
    "fn:onHit"
   ],
-  "spikes": [
-   "key:sideCondition",
-   "key:condition",
-   "target:foeSide",
-   "flag:mustpressure"
-  ],
   "spikyshield": [
-   "key:stallingMove",
    "fn:onPrepareHit",
    "fn:onHit",
-   "key:condition",
-   "volatile:spikyshield"
+   "volatile:spikyshield",
+   "condition"
   ],
   "spiritshackle": [
    "sec.onHit"
@@ -1226,30 +1072,14 @@
    "fn:onTry",
    "fn:onAfterMove"
   ],
-  "stealthrock": [
-   "key:sideCondition",
-   "key:condition",
-   "target:foeSide",
-   "flag:mustpressure"
-  ],
   "steelbeam": [
    "key:mindBlownRecoil",
    "fn:onMoveFail"
   ],
-  "steelroller": [
-   "fn:onTry",
-   "fn:onHit",
-   "fn:onAfterSubDamage"
-  ],
-  "stickyweb": [
-   "key:sideCondition",
-   "key:condition",
-   "target:foeSide"
-  ],
   "stockpile": [
    "fn:onTry",
-   "key:condition",
-   "volatile:stockpile"
+   "volatile:stockpile",
+   "condition"
   ],
   "stompingtantrum": [
    "fn:basePowerCallback"
@@ -1272,15 +1102,11 @@
   "substitute": [
    "fn:onTryHit",
    "fn:onHit",
-   "key:condition",
-   "volatile:substitute"
+   "volatile:substitute",
+   "condition"
   ],
   "suckerpunch": [
    "fn:onTry"
-  ],
-  "sunnyday": [
-   "target:all",
-   "weather"
   ],
   "supercellslam": [
    "key:hasCrashDamage",
@@ -1297,62 +1123,36 @@
    "fn:onTryImmunity",
    "fn:onHit"
   ],
-  "synthesis": [
-   "fn:onHit"
-  ],
   "syrupbomb": [
-   "key:condition",
+   "condition",
    "sec.volatile=syrupbomb"
   ],
-  "tailwind": [
-   "key:sideCondition",
-   "key:condition",
-   "target:allySide"
-  ],
   "taunt": [
-   "key:condition",
-   "volatile:taunt"
+   "volatile:taunt",
+   "condition"
   ],
   "teatime": [
-   "fn:onHitField",
-   "target:all"
+   "fn:onHitField"
   ],
   "temperflare": [
    "fn:basePowerCallback"
-  ],
-  "terrainpulse": [
-   "fn:onModifyType",
-   "fn:onModifyMove"
   ],
   "thief": [
    "fn:onAfterHit"
   ],
   "thrash": [
-   "target:randomNormal",
    "self.volatileStatus"
   ],
   "throatchop": [
-   "key:condition",
+   "condition",
    "sec.onHit"
-  ],
-  "thunder": [
-   "fn:onModifyMove"
-  ],
-  "tidyup": [
-   "fn:onHit"
   ],
   "topsyturvy": [
    "fn:onHit"
   ],
   "torment": [
-   "key:condition",
-   "volatile:torment"
-  ],
-  "toxicspikes": [
-   "key:sideCondition",
-   "key:condition",
-   "target:foeSide",
-   "flag:mustpressure"
+   "volatile:torment",
+   "condition"
   ],
   "transform": [
    "fn:onHit"
@@ -1367,11 +1167,6 @@
   "trickortreat": [
    "fn:onHit"
   ],
-  "trickroom": [
-   "key:pseudoWeather",
-   "key:condition",
-   "target:all"
-  ],
   "tripleaxel": [
    "fn:basePowerCallback",
    "key:multiaccuracy"
@@ -1381,8 +1176,7 @@
   ],
   "uproar": [
    "fn:onTryHit",
-   "key:condition",
-   "target:randomNormal",
+   "condition",
    "self.volatileStatus"
   ],
   "uturn": [
@@ -1400,10 +1194,6 @@
   "waterspout": [
    "fn:basePowerCallback"
   ],
-  "weatherball": [
-   "fn:onModifyType",
-   "fn:onModifyMove"
-  ],
   "whirlpool": [
    "volatile:partiallytrapped"
   ],
@@ -1411,20 +1201,10 @@
    "key:forceSwitch"
   ],
   "wideguard": [
-   "key:sideCondition",
    "fn:onTry",
    "fn:onHitSide",
-   "key:condition",
-   "target:allySide"
-  ],
-  "wish": [
-   "key:slotCondition",
-   "key:condition"
-  ],
-  "wonderroom": [
-   "key:pseudoWeather",
-   "key:condition",
-   "target:all"
+   "sideCondition:wideguard",
+   "condition"
   ],
   "worryseed": [
    "fn:onTryImmunity",
@@ -1436,52 +1216,38 @@
   ],
   "yawn": [
    "fn:onTryHit",
-   "key:condition",
-   "volatile:yawn"
+   "volatile:yawn",
+   "condition"
   ]
  },
  "blocking_reasons": {
-  "key:condition": 75,
-  "fn:onHit": 63,
-  "fn:onTry": 30,
-  "fn:basePowerCallback": 29,
-  "fn:onTryHit": 26,
-  "target:all": 18,
+  "fn:onHit": 57,
+  "condition": 56,
+  "fn:basePowerCallback": 28,
+  "fn:onTry": 28,
+  "fn:onTryHit": 24,
   "self.volatileStatus": 14,
   "fn:onTryMove": 13,
-  "fn:onBasePower": 11,
-  "key:sideCondition": 11,
-  "fn:onModifyMove": 10,
+  "fn:onBasePower": 10,
   "flag:charge": 10,
   "fn:onPrepareHit": 8,
-  "fn:onAfterHit": 8,
-  "target:allySide": 8,
   "selfSwitch": 8,
   "flag:recharge": 7,
   "fn:onTryImmunity": 7,
   "fn:damageCallback": 7,
   "volatile:partiallytrapped": 7,
-  "fn:onAfterSubDamage": 7,
   "sec.onHit": 7,
   "key:selfdestruct": 6,
-  "target:randomNormal": 5,
-  "weather": 5,
-  "key:pseudoWeather": 5,
-  "key:stallingMove": 4,
-  "key:terrain": 4,
+  "fn:onAfterHit": 5,
   "key:forceSwitch": 4,
-  "fn:onModifyType": 4,
   "target:scripted": 4,
-  "fn:onHitField": 4,
   "self.onHit": 4,
-  "target:foeSide": 4,
-  "flag:mustpressure": 4,
   "key:ohko": 4,
   "fn:onMoveFail": 4,
+  "fn:onModifyMove": 3,
   "fn:priorityChargeCallback": 3,
   "fn:onAfterMove": 3,
-  "key:slotCondition": 3,
-  "fn:onHitSide": 3,
+  "fn:onAfterSubDamage": 3,
   "key:hasCrashDamage": 3,
   "key:sleepUsable": 2,
   "key:callsMove": 2,
@@ -1494,9 +1260,11 @@
   "damage:level": 2,
   "fn:onEffectiveness": 2,
   "key:multiaccuracy": 2,
+  "fn:onHitField": 2,
+  "fn:onHitSide": 2,
+  "fn:onModifyType": 2,
   "fn:onModifyTarget": 2,
   "volatile:endure": 1,
-  "fn:onModifyPriority": 1,
   "volatile:helpinghand": 1,
   "volatile:ingrain": 1,
   "volatile:leechseed": 1,
@@ -1516,9 +1284,12 @@
   "volatile:followme": 1,
   "ignoreImmunity": 1,
   "flag:futuremove": 1,
+  "slotCondition:healingwish": 1,
   "volatile:imprison": 1,
   "volatile:disable": 1,
   "volatile:taunt": 1,
+  "sideCondition:quickguard": 1,
+  "sideCondition:wideguard": 1,
   "volatile:destinybond": 1,
   "volatile:minimize": 1,
   "volatile:torment": 1,
@@ -1537,6 +1308,7 @@
   "volatile:octolock": 1,
   "volatile:noretreat": 1,
   "key:smartTarget": 1,
+  "slotCondition:revivalblessing": 1,
   "sec.volatile=saltcure": 1,
   "flag:cantusetwice": 1,
   "sec.volatile=syrupbomb": 1

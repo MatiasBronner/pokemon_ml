@@ -2,8 +2,9 @@
 //! generated from Pokémon Showdown's Champions data by `oracle/gen_data.js`.
 
 pub use crate::tables::{
-    ABILITIES, BOOST_ORDERS, ITEMS, MOVES, N_VOLATILES, SPECIES, STATUS_CONDS, STATUS_IMMUNE, TYPE_CHART, VOL_CONDS,
-    VolKind, ab, it,
+    ABILITIES, BOOST_ORDERS, ITEMS, MOVES, N_PSEUDO, N_SIDE_CONDS, N_SLOT_CONDS, N_VOLATILES, PSEUDO_CONDS, Pseudo,
+    SIDE_CONDS, SLOT_CONDS, SPECIES, STATUS_CONDS, STATUS_IMMUNE, SideCond, SlotCond, TERRAIN_CONDS, TYPE_CHART,
+    Terrain, VOL_CONDS, VolKind, WEATHER_CONDS, Weather, ab, it, mv,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -126,15 +127,6 @@ impl Target {
     }
 }
 
-/// Moves whose behaviour comes from script callbacks in Showdown and is
-/// written by hand in the engine.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Special {
-    None,
-    Protect,
-    Struggle,
-}
-
 // Move flags (Showdown's `move.flags`). Only the ones some modelled effect reads.
 pub const F_PROTECT: u32 = 1 << 0;
 pub const F_POWDER: u32 = 1 << 1;
@@ -159,6 +151,18 @@ pub const F_FUTUREMOVE: u32 = 1 << 19;
 pub const F_METRONOME: u32 = 1 << 20;
 pub const F_NOPARENTALBOND: u32 = 1 << 21;
 pub const F_FAILCOPYCAT: u32 = 1 << 22;
+pub const F_MUSTPRESSURE: u32 = 1 << 23;
+pub const F_GRAVITY: u32 = 1 << 24;
+pub const F_NONSKY: u32 = 1 << 25;
+pub const F_MINIMIZE: u32 = 1 << 26;
+pub const F_FAILENCORE: u32 = 1 << 27;
+pub const F_NOSLEEPTALK: u32 = 1 << 28;
+pub const F_FAILINSTRUCT: u32 = 1 << 29;
+pub const F_FAILMIMIC: u32 = 1 << 30;
+pub const F_CANTUSETWICE: u32 = 1 << 31;
+// These two only matter to moves that are not in Champions (Assist, Me First).
+pub const F_NOASSIST: u32 = 0;
+pub const F_FAILMEFIRST: u32 = 0;
 
 /// Stat stage changes in the order atk, def, spa, spd, spe, accuracy, evasion.
 pub type Boosts = [i8; 7];
@@ -179,6 +183,8 @@ pub struct Secondary {
     pub boosts: Option<Boosts>,
     pub volatile: Option<VolKind>,
     pub self_boosts: Option<Boosts>,
+    /// The secondary has a script callback of its own (written by hand, keyed by the move).
+    pub on_hit: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -202,8 +208,17 @@ pub struct MoveData {
     pub boost_order: u8,
     pub status: Status,
     pub volatile: Option<VolKind>,
+    /// Volatile the user gains (`self.volatileStatus`).
+    pub self_volatile: Option<VolKind>,
+    pub side_condition: Option<SideCond>,
+    pub slot_condition: Option<SlotCond>,
+    pub pseudo_weather: Option<Pseudo>,
+    pub weather: Weather,
+    pub terrain: Terrain,
     pub self_boosts: Option<Boosts>,
     pub self_chance: u8,
+    /// The `self` block has a script callback of its own.
+    pub self_on_hit: bool,
     pub secondaries: &'static [Secondary],
     pub drain: (u8, u8),
     pub recoil: (u8, u8),
@@ -220,7 +235,13 @@ pub struct MoveData {
     pub ignore_evasion: bool,
     pub thaws_target: bool,
     pub ignore_immunity: bool,
-    pub special: Special,
+    /// A protecting move, whose success rate drops with consecutive use.
+    pub stalling_move: bool,
+    /// Struggle's recoil: a quarter of the user's max HP, not blockable.
+    pub struggle_recoil: bool,
+    /// Bit set of the events this move has a script callback of its own for
+    /// (`onTry`, `onHit`, `basePowerCallback`, ...); the bodies are in `movecbs.rs`.
+    pub events: u128,
     /// Whether the engine models every effect of this move.
     pub supported: bool,
 }
@@ -344,6 +365,36 @@ pub enum Ev {
     CheckShow,
     SetAbility,
     LockMove,
+    // Lifecycle of conditions on the field and on a side.
+    FieldStart,
+    FieldEnd,
+    FieldRestart,
+    FieldResidual,
+    SideStart,
+    SideEnd,
+    SideRestart,
+    SideResidual,
+    Copy,
+    Swap,
+    Type,
+    // Script callbacks of moves (`onTry`, `basePowerCallback`, ...).
+    Try,
+    TryHitField,
+    TryImmunity,
+    HitField,
+    HitSide,
+    AfterHit,
+    MoveFail,
+    ModifyTarget,
+    BasePowerCallback,
+    DamageCallback,
+    BeforeMoveCallback,
+    BeforeTurnCallback,
+    PriorityChargeCallback,
+    // Not Showdown events: the `onHit` of a move's `self` block and of one of
+    // its secondaries, which need a name to be filed under.
+    SelfHit,
+    SecondaryHit,
 }
 
 impl Ev {
@@ -420,6 +471,9 @@ pub const IF_BERRY: u8 = 1 << 0;
 pub const IF_GEM: u8 = 1 << 1;
 pub const IF_CHOICE: u8 = 1 << 2;
 pub const IF_IGNORE_KLUTZ: u8 = 1 << 3;
+/// A Mega Stone that goes by exact forme: it cannot be taken from the formes it
+/// evolves or from the Megas it makes (Floettite, Meowsticite).
+pub const IF_MEGA_BY_FORME: u8 = 1 << 4;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ItemData {
@@ -432,9 +486,11 @@ pub struct ItemData {
     pub events_pre: u128,
     /// For a Mega Stone: (species that can use it, the Mega it becomes), as indices into `SPECIES`.
     pub mega: &'static [(u16, u16)],
+    /// Stat changes the holder gets when the item is used up.
+    pub boosts: Option<Boosts>,
 }
 
-/// A status or volatile condition.
+/// A status, a volatile, or a condition on a side, a position or the field.
 #[derive(Clone, Copy, Debug)]
 pub struct CondData {
     pub id: &'static str,
@@ -442,9 +498,15 @@ pub struct CondData {
     pub duration: u8,
     /// Can be added to a Pokémon with no HP left.
     pub affects_fainted: bool,
+    /// Not passed on by Baton Pass.
+    pub no_copy: bool,
+    /// The duration is computed when the condition starts (`durationCallback`).
+    pub duration_cb: bool,
     pub cbs: &'static [CbInfo],
-    /// Bit set of the events in `cbs` (conditions only listen with prefix `On`).
+    /// Bit set of the events `cbs` listens to with prefix `On`.
     pub events: u128,
+    /// Bit set of the events `cbs` listens to with any other prefix.
+    pub events_pre: u128,
 }
 
 /// Natures as (raised stat, lowered stat) using stat indices 1..=5; (0, 0) is neutral.

@@ -60,7 +60,7 @@ fn absorb_heal(ability: u16) -> Option<Type> {
     Some(match ability {
         ab::EARTHEATER => Type::Ground,
         ab::VOLTABSORB => Type::Electric,
-        ab::WATERABSORB => Type::Water,
+        ab::WATERABSORB | ab::DRYSKIN => Type::Water,
         _ => return None,
     })
 }
@@ -223,6 +223,293 @@ impl Battle {
         }
 
         match (ability, ev, pre) {
+            // ================================================= weather abilities
+            // ---- Drizzle, Drought, Sand Stream, Snow Warning: onStart(source)
+            (ab::DRIZZLE, Ev::Start, Pre::On) => {
+                self.set_weather(Weather::Raindance, None, Eff::None);
+                Res::Undef
+            }
+            (ab::DROUGHT, Ev::Start, Pre::On) => {
+                self.set_weather(Weather::Sunnyday, None, Eff::None);
+                Res::Undef
+            }
+            (ab::SANDSTREAM, Ev::Start, Pre::On) => {
+                self.set_weather(Weather::Sandstorm, None, Eff::None);
+                Res::Undef
+            }
+            (ab::SNOWWARNING, Ev::Start, Pre::On) => {
+                self.set_weather(Weather::Snowscape, None, Eff::None);
+                Res::Undef
+            }
+            // ---- Sand Spit: onDamagingHit(damage, target, source, move)
+            (ab::SANDSPIT, Ev::DamagingHit, Pre::On) => {
+                self.set_weather(Weather::Sandstorm, None, Eff::None);
+                Res::Undef
+            }
+
+            // ---- Cloud Nine, Air Lock. `ability_st.a` is `abilityState.ending`:
+            // set while the ability is on its way out, so that it no longer suppresses.
+            // onSwitchIn(pokemon) runs onStart(pokemon)
+            (ab::CLOUDNINE | ab::AIRLOCK, Ev::SwitchIn | Ev::Start, Pre::On) => {
+                self.mon_mut(holder).ability_st.a = 0;
+                self.each_event_from(Ev::WeatherChange, Eff::Ability(ability));
+                Res::Undef
+            }
+            // onEnd(pokemon)
+            (ab::CLOUDNINE | ab::AIRLOCK, Ev::End, Pre::On) => {
+                self.mon_mut(holder).ability_st.a = 1;
+                self.each_event_from(Ev::WeatherChange, Eff::Ability(ability));
+                Res::Undef
+            }
+
+            // ---- Speed doubled in a weather: onModifySpe(spe, pokemon)
+            (ab::CHLOROPHYLL, Ev::ModifySpe, Pre::On) => {
+                if self.effective_weather(holder) == Weather::Sunnyday {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            (ab::SWIFTSWIM, Ev::ModifySpe, Pre::On) => {
+                if self.effective_weather(holder) == Weather::Raindance {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            (ab::SANDRUSH, Ev::ModifySpe, Pre::On) => {
+                if self.is_weather(Weather::Sandstorm) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            (ab::SLUSHRUSH, Ev::ModifySpe, Pre::On) => {
+                if self.is_weather(Weather::Snowscape) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            // ---- Sandstorm immunity: onImmunity(type, pokemon)
+            (ab::SANDRUSH | ab::SANDFORCE | ab::SANDVEIL, Ev::Immunity, Pre::On) => {
+                if e.imm == Some(Imm::Weather(Weather::Sandstorm)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // ---- Ice Body, Snow Cloak: onImmunity only covers hail, which is not in Champions.
+            (ab::ICEBODY | ab::SNOWCLOAK, Ev::Immunity, Pre::On) => Res::Undef,
+            // ---- Sand Force: onBasePower(basePower, attacker, defender, move)
+            (ab::SANDFORCE, Ev::BasePower, Pre::On) => {
+                if self.is_weather(Weather::Sandstorm) && matches!(mtype, Some(Type::Rock | Type::Ground | Type::Steel))
+                {
+                    return self.chain_modify(5325, 4096);
+                }
+                Res::Undef
+            }
+            // ---- Sand Veil, Snow Cloak: onModifyAccuracy(accuracy)
+            (ab::SANDVEIL, Ev::ModifyAccuracy, Pre::On) => {
+                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Sandstorm) {
+                    return self.chain_modify(3277, 4096);
+                }
+                Res::Undef
+            }
+            (ab::SNOWCLOAK, Ev::ModifyAccuracy, Pre::On) => {
+                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Snowscape) {
+                    return self.chain_modify(3277, 4096);
+                }
+                Res::Undef
+            }
+
+            // ---- Dry Skin (its onTryHit is the Water Absorb one)
+            // onSourceBasePower(basePower, attacker, defender, move)
+            (ab::DRYSKIN, Ev::BasePower, Pre::Source) => {
+                if mtype == Some(Type::Fire) {
+                    return self.chain_modify(5, 4);
+                }
+                Res::Undef
+            }
+            // onWeather(target, source, effect)
+            (ab::DRYSKIN, Ev::Weather, Pre::On) => {
+                let Eff::Weather(w) = e.effect else {
+                    return Res::Undef;
+                };
+                if self.effective_weather(holder) != w {
+                    return Res::Undef;
+                }
+                let eighth = div1(self.mon(holder).max_hp() as u32, 8);
+                if w == Weather::Raindance {
+                    self.heal(eighth, None, None, Eff::None);
+                } else if w == Weather::Sunnyday {
+                    self.damage(eighth, Some(holder), Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+            // ---- Rain Dish: onWeather(target, source, effect)
+            (ab::RAINDISH, Ev::Weather, Pre::On) => {
+                let Eff::Weather(w) = e.effect else {
+                    return Res::Undef;
+                };
+                if self.effective_weather(holder) == w && w == Weather::Raindance {
+                    let amount = div1(self.mon(holder).max_hp() as u32, 16);
+                    self.heal(amount, None, None, Eff::None);
+                }
+                Res::Undef
+            }
+            // ---- Ice Body: onWeather(target, source, effect)
+            (ab::ICEBODY, Ev::Weather, Pre::On) => {
+                if e.effect == Eff::Weather(Weather::Snowscape) {
+                    let amount = div1(self.mon(holder).max_hp() as u32, 16);
+                    self.heal(amount, None, None, Eff::None);
+                }
+                Res::Undef
+            }
+            // ---- Solar Power
+            // onModifySpA(spa, pokemon)
+            (ab::SOLARPOWER, Ev::ModifySpA, Pre::On) => {
+                if self.effective_weather(holder) == Weather::Sunnyday {
+                    return self.chain_modify(3, 2);
+                }
+                Res::Undef
+            }
+            // onWeather(target, source, effect)
+            (ab::SOLARPOWER, Ev::Weather, Pre::On) => {
+                let Eff::Weather(w) = e.effect else {
+                    return Res::Undef;
+                };
+                if self.effective_weather(holder) == w && w == Weather::Sunnyday {
+                    let d = div1(self.mon(holder).max_hp() as u32, 8);
+                    self.damage(d, Some(holder), Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+            // ---- Hydration: onResidual(pokemon)
+            (ab::HYDRATION, Ev::Residual, Pre::On) => {
+                if self.mon(holder).status != Status::None && self.effective_weather(holder) == Weather::Raindance {
+                    self.cure_status(holder);
+                }
+                Res::Undef
+            }
+            // ---- Leaf Guard
+            // onSetStatus(status, target, source, effect)
+            (ab::LEAFGUARD, Ev::SetStatus, Pre::On) => {
+                if self.effective_weather(holder) == Weather::Sunnyday {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onTryAddVolatile(status, target): Yawn in the sun
+            (ab::LEAFGUARD, Ev::TryAddVolatile, Pre::On) => {
+                if e.vol.is_some_and(|v| v.id() == "yawn") && self.effective_weather(holder) == Weather::Sunnyday {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
+            // ---- Mega Sol: onWeatherModifyDamage(damage, attacker, defender, move).
+            // It runs Sunny Day's handler as its own and returns the damage it was
+            // given, which ends the event before the real weather has a say.
+            (ab::MEGASOL, Ev::WeatherModifyDamage, Pre::On) => {
+                self.sun_modify_damage();
+                relay
+            }
+            // ---- Forecast
+            // onStart(pokemon)
+            (ab::FORECAST, Ev::Start, Pre::On) => {
+                let ev = Event::new(Ev::WeatherChange, Some(holder), None, Eff::None);
+                self.single_event_ex(
+                    Ev::WeatherChange,
+                    Ev::WeatherChange,
+                    Pre::On,
+                    Eff::Ability(ability),
+                    Some(Holder::Mon(holder)),
+                    ev,
+                    Res::Undef,
+                    false,
+                );
+                Res::Undef
+            }
+            // onWeatherChange(pokemon)
+            (ab::FORECAST, Ev::WeatherChange, Pre::On) => {
+                let m = self.mon(holder);
+                if SPECIES[m.base_species as usize].base_species != "castform" {
+                    return Res::Undef;
+                }
+                let want = match self.effective_weather(holder) {
+                    Weather::Sunnyday => "castformsunny",
+                    Weather::Raindance => "castformrainy",
+                    Weather::Snowscape => "castformsnowy",
+                    _ => "castform",
+                };
+                if self.mon(holder).is_active && SPECIES[self.mon(holder).species as usize].id != want {
+                    if let Some(forme) = species_id(want) {
+                        // A temporary forme change: types and stats, not the ability.
+                        self.set_species(holder, forme);
+                    }
+                }
+                Res::Undef
+            }
+
+            // ================================================= terrain abilities
+            // ---- Electric / Grassy / Psychic Surge: onStart(source)
+            (ab::ELECTRICSURGE, Ev::Start, Pre::On) => {
+                self.set_terrain(Terrain::Electricterrain, None, Eff::None);
+                Res::Undef
+            }
+            (ab::GRASSYSURGE, Ev::Start, Pre::On) => {
+                self.set_terrain(Terrain::Grassyterrain, None, Eff::None);
+                Res::Undef
+            }
+            (ab::PSYCHICSURGE, Ev::Start, Pre::On) => {
+                self.set_terrain(Terrain::Psychicterrain, None, Eff::None);
+                Res::Undef
+            }
+            // ---- Seed Sower: onDamagingHit(damage, target, source, move)
+            (ab::SEEDSOWER, Ev::DamagingHit, Pre::On) => {
+                self.set_terrain(Terrain::Grassyterrain, None, Eff::None);
+                Res::Undef
+            }
+            // ---- Grass Pelt: onModifyDef(pokemon)
+            (ab::GRASSPELT, Ev::ModifyDef, Pre::On) => {
+                if self.is_terrain(Terrain::Grassyterrain) {
+                    return self.chain_modify(3, 2);
+                }
+                Res::Undef
+            }
+            // ---- Surge Surfer: onModifySpe(spe)
+            (ab::SURGESURFER, Ev::ModifySpe, Pre::On) => {
+                if self.is_terrain(Terrain::Electricterrain) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            // ---- Mimicry
+            // onStart(pokemon)
+            (ab::MIMICRY, Ev::Start, Pre::On) => {
+                let ev = Event::new(Ev::TerrainChange, Some(holder), None, Eff::None);
+                self.single_event_ex(
+                    Ev::TerrainChange,
+                    Ev::TerrainChange,
+                    Pre::On,
+                    Eff::Ability(ability),
+                    Some(Holder::Mon(holder)),
+                    ev,
+                    Res::Undef,
+                    false,
+                );
+                Res::Undef
+            }
+            // onTerrainChange(pokemon): take the terrain's type, or the species' own without one.
+            (ab::MIMICRY, Ev::TerrainChange, Pre::On) => {
+                let types = match self.field.terrain.kind {
+                    Terrain::Electricterrain => [Type::Electric, Type::None],
+                    Terrain::Grassyterrain => [Type::Grass, Type::None],
+                    Terrain::Mistyterrain => [Type::Fairy, Type::None],
+                    Terrain::Psychicterrain => [Type::Psychic, Type::None],
+                    Terrain::None => SPECIES[self.mon(holder).base_species as usize].types,
+                };
+                if self.mon(holder).types != types {
+                    self.mon_mut(holder).types = types;
+                }
+                Res::Undef
+            }
+
             // ---- Adaptability: onModifySTAB(stab, source, target, move)
             (ab::ADAPTABILITY, Ev::ModifySTAB, Pre::On) => {
                 if let (Some(t), Some(source)) = (mtype, e.target) {
@@ -268,8 +555,28 @@ impl Battle {
             (ab::ANTICIPATION | ab::FRISK | ab::PRESSURE | ab::MOLDBREAKER | ab::FAIRYAURA, Ev::Start, Pre::On) => {
                 Res::Undef
             }
-            // ---- Screen Cleaner: onStart removes screens, of which there are none yet.
-            (ab::SCREENCLEANER, Ev::Start, Pre::On) => Res::Undef,
+            // ---- Screen Cleaner: onStart(pokemon). Both sides lose their screens.
+            (ab::SCREENCLEANER, Ev::Start, Pre::On) => {
+                for cond in [SideCond::Reflect, SideCond::Lightscreen, SideCond::Auroraveil] {
+                    for side in [holder.side as usize, 1 - holder.side as usize] {
+                        self.remove_side_condition(side, cond);
+                    }
+                }
+                Res::Undef
+            }
+            // ---- Toxic Debris: onDamagingHit(damage, target, source, move).
+            // A physical hit scatters Toxic Spikes on the attacker's side.
+            (ab::TOXICDEBRIS, Ev::DamagingHit, Pre::On) => {
+                let (Some(target), Some(source)) = (e.target, e.source) else {
+                    return Res::Undef;
+                };
+                let side = if self.is_ally(source, target) { 1 - source.side as usize } else { source.side as usize };
+                let layers = self.sides[side].conds.get(SideCond::Toxicspikes).map(|c| c.data);
+                if mcat == Some(Category::Physical) && layers.is_none_or(|l| l < 2) {
+                    self.add_side_condition(side, SideCond::Toxicspikes, Some(target), Eff::None);
+                }
+                Res::Undef
+            }
             // ---- Embody Aspect: onStart only acts on a Terastallized Ogerpon; Champions has no Terastallization.
             (
                 ab::EMBODYASPECTCORNERSTONE
@@ -292,7 +599,16 @@ impl Battle {
                 let (Some(m), Some(aimed_at)) = (mi, e.source) else {
                     return Res::Undef;
                 };
-                if self.is_ally(aimed_at, holder) && self.am[m as usize].priority > 0 {
+                let am = &self.am[m as usize];
+                // Moves aimed at the foe's side or at the whole field are let through
+                // (Perish Song being the exception that is stopped).
+                let all = am.target == Target::All;
+                if am.target == Target::FoeSide
+                    || (all && !matches!(am.d().id, "perishsong" | "flowershield" | "rototiller"))
+                {
+                    return Res::Undef;
+                }
+                if (self.is_ally(aimed_at, holder) || all) && am.priority > 0 {
                     return FALSE;
                 }
                 Res::Undef
@@ -700,9 +1016,9 @@ impl Battle {
                 Res::Undef
             }
 
-            // ---- Harvest: onResidual(pokemon). (In sun it always works; there is no weather yet.)
+            // ---- Harvest: onResidual(pokemon). In sun it always works (and no roll is made).
             (ab::HARVEST, Ev::Residual, Pre::On) => {
-                if self.chance(1, 2, "harvest") {
+                if self.is_weather(Weather::Sunnyday) || self.chance(1, 2, "harvest") {
                     let m = self.mon(holder);
                     if m.hp > 0 && m.item == it::NONE && ITEMS[m.last_item as usize].flags & IF_BERRY != 0 {
                         let item = m.last_item;
@@ -890,7 +1206,11 @@ impl Battle {
                     return Res::Undef;
                 };
                 let am = &self.am[m as usize];
-                if target == source || am.has_bounced || am.flags & F_REFLECTABLE == 0 {
+                if target == source
+                    || am.has_bounced
+                    || am.flags & F_REFLECTABLE == 0
+                    || self.is_semi_invulnerable(target)
+                {
                     return Res::Undef;
                 }
                 let id = am.id;
@@ -900,8 +1220,42 @@ impl Battle {
                 self.use_move(bounced, target, Some(source), Eff::None);
                 Res::Null
             }
-            // onAllyTryHitSide: nothing modelled targets a side.
-            (ab::MAGICBOUNCE | ab::SAPSIPPER | ab::SOUNDPROOF, Ev::TryHitSide, Pre::Ally) => Res::Undef,
+            // onAllyTryHitSide(target, source, move): a move aimed at the holder's side.
+            (ab::MAGICBOUNCE, Ev::TryHitSide, Pre::Ally) => {
+                let (Some(m), Some(target), Some(source)) = (mi, e.target, e.source) else {
+                    return Res::Undef;
+                };
+                let am = &self.am[m as usize];
+                if self.is_ally(target, source)
+                    || am.has_bounced
+                    || am.flags & F_REFLECTABLE == 0
+                    || self.is_semi_invulnerable(target)
+                {
+                    return Res::Undef;
+                }
+                let id = am.id;
+                let bounced = self.new_am(id);
+                self.am[bounced as usize].has_bounced = true;
+                self.am[bounced as usize].prankster_boosted = false;
+                self.use_move(bounced, holder, Some(source), Eff::None);
+                // So that a second Magic Bounce on the side does not bounce it again.
+                self.am[m as usize].has_bounced = true;
+                Res::Null
+            }
+            (ab::SAPSIPPER, Ev::TryHitSide, Pre::Ally) => {
+                let (Some(target), Some(source)) = (e.target, e.source) else {
+                    return Res::Undef;
+                };
+                if source == holder || !self.is_ally(target, source) {
+                    return Res::Undef;
+                }
+                if mtype == Some(Type::Grass) {
+                    self.boost1(ATK, 1, Some(holder), None, Eff::None);
+                }
+                Res::Undef
+            }
+            // Soundproof's version only writes to the log.
+            (ab::SOUNDPROOF, Ev::TryHitSide, Pre::Ally) => Res::Undef,
 
             // ---- Magic Guard: onDamage(damage, target, source, effect)
             (ab::MAGICGUARD, Ev::Damage, Pre::On) => {
@@ -920,7 +1274,7 @@ impl Battle {
                 let s = self.mon(source);
                 if !am.has_hit_targets
                     || s.item != it::NONE
-                    || s.volatiles.has(VolKind::Gem)
+                    || self.vols(source).has(VolKind::Gem)
                     || am.category == Category::Status
                 {
                     return Res::Undef;
@@ -1165,7 +1519,7 @@ impl Battle {
             // ---- Overcoat
             // onImmunity(type, pokemon)
             (ab::OVERCOAT, Ev::Immunity, Pre::On) => {
-                if e.imm == Some(Imm::Powder) {
+                if matches!(e.imm, Some(Imm::Powder | Imm::Weather(Weather::Sandstorm))) {
                     return FALSE;
                 }
                 Res::Undef
@@ -1181,7 +1535,7 @@ impl Battle {
             // ---- Own Tempo
             // onUpdate(pokemon)
             (ab::OWNTEMPO, Ev::Update, Pre::On) => {
-                if self.mon(holder).volatiles.has(VolKind::Confusion) {
+                if self.vols(holder).has(VolKind::Confusion) {
                     self.remove_volatile(holder, VolKind::Confusion);
                 }
                 Res::Undef
@@ -1458,8 +1812,7 @@ impl Battle {
             // ---- Rock Head: onDamage(damage, target, source, effect)
             (ab::ROCKHEAD, Ev::Damage, Pre::On) => {
                 if e.effect == Eff::Recoil {
-                    let struggling =
-                        self.active_move.is_some_and(|m| self.am[m as usize].d().special == Special::Struggle);
+                    let struggling = self.active_move.is_some_and(|m| self.am[m as usize].id == mv::STRUGGLE);
                     if !struggling {
                         return Res::Null;
                     }
@@ -1748,7 +2101,11 @@ impl Battle {
                 let (Some(target), Some(source)) = (e.target, e.source) else {
                     return Res::Undef;
                 };
-                if source == target || matches!(e.status, Status::Slp | Status::Frz) {
+                // Poison from Toxic Spikes is not passed back (its "source" is only nominal).
+                if source == target
+                    || e.effect == Eff::SideCond(SideCond::Toxicspikes)
+                    || matches!(e.status, Status::Slp | Status::Frz)
+                {
                     return Res::Undef;
                 }
                 self.try_set_status(source, e.status, Some(target), Eff::Ability(ab::SYNCHRONIZE));
@@ -1757,7 +2114,7 @@ impl Battle {
 
             // ---- Tangled Feet: onModifyAccuracy(accuracy, target)
             (ab::TANGLEDFEET, Ev::ModifyAccuracy, Pre::On) => {
-                if matches!(relay, Res::Num(_)) && self.mon(holder).volatiles.has(VolKind::Confusion) {
+                if matches!(relay, Res::Num(_)) && self.vols(holder).has(VolKind::Confusion) {
                     return self.chain_modify(2048, 4096);
                 }
                 Res::Undef

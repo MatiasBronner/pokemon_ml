@@ -3,7 +3,7 @@
 //! `parity.rs` and `scripts/fuzz.sh`; these only pin down outcomes that do not
 //! depend on the random number generator.
 
-use vgc_engine::data::{ABILITIES, ATK, SPECIES, Type};
+use vgc_engine::data::{ABILITIES, ATK, Pseudo, SPECIES, SideCond, Type, Weather};
 use vgc_engine::{Battle, Choice, Error, PokemonSet};
 
 fn set(species: &str, moves: &[&str]) -> PokemonSet {
@@ -102,18 +102,59 @@ fn levitate_and_air_balloon_avoid_ground_moves() -> Result<(), Error> {
 fn effects_that_are_not_modelled_are_refused() {
     let p1 = filler();
     let mut p2 = filler();
-    p2[0] = set("Pelipper", &["Scald", "Protect"]).ability("Drizzle").unwrap();
+    p2[0] = set("Aegislash", &["Shadow Ball", "Protect"]).ability("Stance Change").unwrap();
     match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("Drizzle")),
+        Err(Error::Unsupported(what)) => assert!(what.contains("Stance Change"), "{what}"),
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
-    // A Mega whose ability is not modelled is refused up front, not when it evolves.
     let mut p2 = filler();
-    p2[0] = set("Charizard", &["Flamethrower", "Protect"]).item("Charizardite Y").unwrap();
+    p2[0] = set("Snorlax", &["Body Slam", "Protect"]).item("Eject Button").unwrap();
     match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("Drought"), "{what}"),
+        Err(Error::Unsupported(what)) => assert!(what.contains("Eject Button"), "{what}"),
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
+    let mut p2 = filler();
+    p2[0] = set("Incineroar", &["Fake Out", "Protect"]);
+    match Battle::new([&p1, &p2], seed()) {
+        Err(Error::Unsupported(what)) => assert!(what.contains("Fake Out"), "{what}"),
+        other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
+    }
+}
+
+#[test]
+fn weather_tailwind_and_trick_room_are_set_and_count_down() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Pelipper", &["Protect", "Scald"]).ability("Drizzle")?;
+    p1[1] = set("Whimsicott", &["Tailwind", "Protect"]);
+    let mut p2 = filler();
+    p2[0] = set("Hatterene", &["Trick Room", "Protect"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    assert_eq!(b.field.weather.kind, Weather::Raindance, "Drizzle sets rain on entry");
+    assert_eq!(b.field.weather.duration, 5);
+    let whimsicott = b.active(0, 1);
+    let speed = b.mon(whimsicott).speed;
+
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 0), Choice::mv(0, 0)], [Choice::mv(0, 0), protect]])?;
+    // Each has used up one of its turns by the end of the turn it was set in.
+    assert_eq!(b.field.weather.duration, 4);
+    assert_eq!(b.sides[0].conds.get(SideCond::Tailwind).map(|c| c.duration), Some(3));
+    assert!(!b.sides[1].conds.has(SideCond::Tailwind));
+    assert_eq!(b.field.pseudo.get(Pseudo::Trickroom).map(|c| c.duration), Some(4));
+
+    // Rain and Trick Room end after their fifth turn, Tailwind after its fourth.
+    // Nobody attacks, so nothing else can happen in the meantime.
+    for turn in 2..=5 {
+        b.choose([[Choice::mv(0, 0), protect], [protect, protect]])?;
+        // `speed` is the value the turn order was decided with: doubled by
+        // Tailwind in turns 2 to 4, and negated while Trick Room is up.
+        let expected = if turn <= 4 { -speed * 2 } else { -speed };
+        assert_eq!(b.mon(whimsicott).speed, expected, "turn {turn}");
+    }
+    assert_eq!(b.field.weather.kind, Weather::None);
+    assert!(!b.sides[0].conds.has(SideCond::Tailwind));
+    assert!(!b.field.pseudo.has(Pseudo::Trickroom));
+    Ok(())
 }
 
 #[test]

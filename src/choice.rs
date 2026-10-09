@@ -55,14 +55,26 @@ impl Battle {
             move_this_turn: Res::Undef,
             move_last_turn: Res::Undef,
             speed: 0,
-            volatiles: Volatiles::default(),
         };
-        let blank_side =
-            Side { team: [blank_mon; MAX_TEAM], n: 0, order: [0, 1, 2, 3, 4, 5], pokemon_left: 0, total_fainted: 0 };
+        let blank_side = Side {
+            team: [blank_mon; MAX_TEAM],
+            n: 0,
+            order: [0, 1, 2, 3, 4, 5],
+            pokemon_left: 0,
+            total_fainted: 0,
+            conds: SideConds::new(SideCond::FIRST),
+            slot_conds: [SlotConds::new(SlotCond::FIRST); ACTIVE],
+        };
         let nobody = MonRef { side: 0, idx: 0 };
         let mut b = Battle {
             rng: Rng::from_words(seed),
             sides: [blank_side; 2],
+            field: Field {
+                weather: Cond::new(Weather::None),
+                terrain: Cond::new(Terrain::None),
+                pseudo: PseudoWeathers::new(Pseudo::FIRST),
+            },
+            vols: [[Volatiles::new(VolKind::FIRST); ACTIVE]; 2],
             turn: 0,
             request: Request::None,
             ended: false,
@@ -87,10 +99,6 @@ impl Battle {
             speed_order: [0; 4],
             n_speed_order: 0,
         };
-        // Any status or volatile can turn up in any battle.
-        for c in STATUS_CONDS.iter().chain(VOL_CONDS.iter()) {
-            b.event_mask |= c.events;
-        }
         for (s, team) in teams.iter().enumerate() {
             if team.len() < ACTIVE || team.len() > MAX_TEAM {
                 return Err(Error::BadTeam(format!(

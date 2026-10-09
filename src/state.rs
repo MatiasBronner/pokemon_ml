@@ -2,8 +2,8 @@
 //! copied cheaply (search wants thousands of copies per decision).
 
 use crate::data::{
-    Boosts, Category, Ev, Gender, MOVES, MoveData, Pseudo, Secondary, SideCond, SlotCond, Status, Target, Terrain,
-    Type, VolKind, Weather,
+    Boosts, Category, Ev, Gender, MOVES, MoveData, Pseudo, Secondary, SelfSwitch, SideCond, SlotCond, Status, Target,
+    Terrain, Type, VolKind, Weather,
 };
 use crate::rng::Rng;
 
@@ -41,6 +41,8 @@ pub struct MoveSlot {
     /// Disabled only by something its player has not been shown (a foe's
     /// Imprison). Showdown still lists such a move in the request it sends.
     pub hidden: bool,
+    /// Used at least once since the Pokémon came in (Last Resort).
+    pub used: bool,
 }
 
 /// Bookkeeping Showdown attaches to every effect instance (`EffectState`).
@@ -202,13 +204,25 @@ pub struct Pokemon {
     /// The species the Pokémon returns to when it leaves the field. Mega
     /// Evolution changes this too, so a Mega stays a Mega.
     pub base_species: u16,
+    /// The species it was brought to the battle as (`set.species`).
+    pub(crate) set_species: u16,
+    /// Has taken another Pokémon's shape with Transform or Imposter; undone on leaving the field.
+    pub transformed: bool,
+    /// Its own moves, set aside while it is transformed.
+    pub(crate) base_moves: [MoveSlot; MAX_MOVES],
+    pub(crate) base_n_moves: u8,
+    /// Illusion: the team index, plus one, of the Pokémon it is disguised as (0 for none).
+    pub(crate) illusion: u8,
     /// The Mega this Pokémon can still evolve into (`NO_SPECIES` if none).
     pub can_mega: u16,
     /// The set's nature and stat points, kept to recompute stats when the species changes.
     pub(crate) nature: (u8, u8),
     pub(crate) stat_points: [u8; 6],
     /// Current types; an effect can change them until the Pokémon leaves the field.
+    /// (Read them through `Battle::get_types`, which knows about Roost.)
     pub types: [Type; 2],
+    /// A third type added by Forest's Curse or Trick-or-Treat (`Type::None` if none).
+    pub added_type: Type,
     pub level: u8,
     pub gender: Gender,
     /// Unboosted stats: max HP, Atk, Def, SpA, SpD, Spe.
@@ -250,6 +264,16 @@ pub struct Pokemon {
     pub faint_queued: bool,
     /// Must be replaced at the next switch request.
     pub switch_flag: bool,
+    /// The move whose `selfSwitch` set `switch_flag` (`NO_MOVE` for any other
+    /// cause): Showdown stores the move's id in the flag itself, and some
+    /// effects only count a flag that is plainly `true`.
+    pub(crate) switch_move: u16,
+    /// About to be dragged out by Roar, Red Card and the like (`forceSwitchFlag`).
+    pub(crate) force_switch_flag: bool,
+    /// The `BeforeSwitchOut` event has already run for the switch that is coming.
+    pub(crate) skip_before_switch_out: bool,
+    /// In the middle of being switched out (`beingCalledBack`).
+    pub(crate) being_called_back: bool,
     /// Cannot switch out this turn.
     pub trapped: Trapped,
     /// Full turns spent on the field since switching in.
@@ -268,13 +292,48 @@ pub struct Pokemon {
     pub active_move_actions: u8,
     /// Came in this turn, or has not had a turn yet.
     pub(crate) newly_switched: bool,
+    /// HP left after the last time it took damage this turn (0 if unhurt), `Pokemon#hurtThisTurn`.
+    pub(crate) hurt_this_turn: u16,
+    /// Hits taken from moves since coming in (Rage Fist).
+    pub times_attacked: u16,
+    pub(crate) stats_raised_this_turn: bool,
+    pub(crate) stats_lowered_this_turn: bool,
+    /// What Showdown's `attackedBy` list is read for. Who has damaged this
+    /// Pokémon this turn (bit `side * MAX_TEAM + team index`), and, oldest
+    /// first, the latest damaging hit from each foe that has stayed on the
+    /// field since (Metal Burst answers the last of them).
+    pub(crate) hit_by_this_turn: u16,
+    pub(crate) damaged_by: [DamagedBy; MAX_TEAM],
+    pub(crate) n_damaged_by: u8,
+    /// The move it is locked into for the coming turn (`NO_MOVE` if free):
+    /// the next turn of a rampage, the second turn of a charging move, or the
+    /// `recharge` placeholder. Worked out when the request is made.
+    pub locked_move: u16,
 }
 
 impl Pokemon {
     pub fn max_hp(&self) -> u16 {
         self.stats[0]
     }
+    /// `Pokemon#getLastDamagedBy(true)`.
+    pub(crate) fn last_damaged_by(&self) -> Option<DamagedBy> {
+        self.n_damaged_by.checked_sub(1).map(|i| self.damaged_by[i as usize])
+    }
 }
+
+/// One entry of Showdown's `attackedBy` that Metal Burst can read: a hit
+/// from a foe that did a number of damage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DamagedBy {
+    /// The attacker's index in its team.
+    pub idx: u8,
+    /// The field slot it attacked from.
+    pub slot: u8,
+    pub damage: u16,
+    pub this_turn: bool,
+}
+
+pub(crate) const NO_DAMAGED_BY: DamagedBy = DamagedBy { idx: 0, slot: 0, damage: 0, this_turn: false };
 
 #[derive(Clone, Copy, Debug)]
 pub struct Side {
@@ -286,6 +345,9 @@ pub struct Side {
     pub pokemon_left: u8,
     /// How many of this side's Pokémon have fainted so far.
     pub total_fainted: u8,
+    /// Whether one of its Pokémon fainted this turn, and last turn.
+    pub(crate) fainted_this_turn: bool,
+    pub(crate) fainted_last_turn: bool,
     /// Conditions on the whole side (Tailwind, screens, hazards).
     pub conds: SideConds,
     /// Conditions on each active position (Wish).
@@ -398,9 +460,15 @@ pub(crate) enum ActKind {
     Start,
     InstaSwitch,
     BeforeTurn,
+    /// Revival Blessing bringing back the Pokémon its user picked.
+    Revival,
+    /// A move's `beforeTurnCallback`, at the very start of the turn (Counter).
+    BeforeTurnMove,
     RunSwitch,
     Switch,
     MegaEvo,
+    /// A move's `priorityChargeCallback`, before any move is used (Focus Punch).
+    PriorityCharge,
     Move,
     Residual,
 }
@@ -426,6 +494,30 @@ pub(crate) struct Action {
     pub prankster: bool,
     /// The Pokémon in the targeted slot when the move was chosen.
     pub orig_target: Option<MonRef>,
+    /// Champions: Curse queued by a Pokémon that was not a Ghost at the time
+    /// is a move used on oneself from then on, whatever its user becomes.
+    pub self_target: bool,
+    /// What put this move at the head of the queue, if it matters to the move (`action.sourceEffect`).
+    pub source: ActSource,
+}
+
+/// `action.sourceEffect` of a queued move.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ActSource {
+    None,
+    /// Another Pokémon's Round called it forward; `ignore_ability` is that move's.
+    Round {
+        ignore_ability: bool,
+    },
+    /// A switch brought about by this move of the Pokémon leaving (U-turn, Baton Pass).
+    SelfSwitch(u16),
+}
+
+impl Action {
+    /// The target type of the queued move (`action.move.target`).
+    pub(crate) fn move_target(&self) -> Target {
+        if self.self_target { Target::User } else { MOVES[self.move_id as usize].target }
+    }
 }
 
 pub(crate) const QUEUE_CAP: usize = 16;
@@ -451,6 +543,8 @@ impl Queue {
             move_priority: 0,
             prankster: false,
             orig_target: None,
+            self_target: false,
+            source: ActSource::None,
         };
         Queue { len: 0, items: [blank; QUEUE_CAP] }
     }
@@ -534,6 +628,16 @@ pub(crate) enum Eff {
     /// The stand-in move Showdown uses for confusion self-damage: it counts
     /// as a move for effects that ask, but has no data of its own.
     Confused,
+    /// A species as the cause of damage: Mimikyu's disguise breaking.
+    Species,
+    /// A condition named after a move, as the cause of damage to its own user:
+    /// the crash of a High Jump Kick that missed, the price of Steel Beam. It
+    /// is neither a move nor recoil to the effects that ask.
+    Crash,
+    /// A secondary effect's own data, which Showdown passes along as "the
+    /// effect" when a secondary's `onHit` causes something without saying
+    /// what did it. It is not a move (so Infiltrator does not carry over).
+    Secondary,
 }
 
 impl Eff {
@@ -730,6 +834,9 @@ pub(crate) struct ActiveMove {
     pub has_sheer_force: bool,
     pub prankster_boosted: bool,
     pub tracks_target: bool,
+    /// Still set to split its hits between two targets (`smartTarget`); anything that stops one of them clears it.
+    pub smart_target: bool,
+    pub multiaccuracy: bool,
     pub infiltrates: bool,
     /// The move has lost its `volatileStatus` (No Retreat on a Pokémon that is already trapped).
     pub no_volatile: bool,
@@ -753,6 +860,18 @@ pub(crate) struct ActiveMove {
     pub hit_targets: [MonRef; 3],
     pub n_hit_targets: u8,
     pub has_hit_targets: bool,
+    /// Beat Up's `allies`: the base power of each hit still to come, and how many have been used.
+    pub beat_up: [u8; MAX_TEAM],
+    pub beat_up_used: u8,
+    /// The damage a `damageCallback` just returned has another half a point
+    /// to it (Metal Burst's one and a half times); a substitute counts it.
+    pub half_damage: bool,
+    /// Plain move data with no script callbacks: the hit of a future move.
+    pub bare: bool,
+    /// `selfSwitch`, which Parting Shot loses when it fails to lower anything.
+    pub self_switch: SelfSwitch,
+    /// The item Fling is throwing (0 before it has picked one up).
+    pub fling_item: u16,
 }
 
 impl ActiveMove {
@@ -800,7 +919,9 @@ impl ActiveMove {
             off_stat: d.off_stat,
             has_sheer_force: false,
             prankster_boosted: false,
-            tracks_target: false,
+            tracks_target: d.tracks_target,
+            smart_target: d.smart_target,
+            multiaccuracy: d.multiaccuracy,
             infiltrates: false,
             no_volatile: false,
             has_bounced: false,
@@ -817,6 +938,12 @@ impl ActiveMove {
             hit_targets: [MonRef { side: 0, idx: 0 }; 3],
             n_hit_targets: 0,
             has_hit_targets: false,
+            beat_up: [0; MAX_TEAM],
+            beat_up_used: 0,
+            half_damage: false,
+            bare: false,
+            self_switch: d.self_switch,
+            fling_item: 0,
         }
     }
 }
@@ -865,6 +992,10 @@ pub struct Battle {
     pub(crate) active_move: Option<u8>,
     pub(crate) active_pokemon: Option<MonRef>,
     pub(crate) active_target: Option<MonRef>,
+    /// `battle.lastMove`: the last move anyone got as far as using (`NO_MOVE` before the first).
+    pub(crate) last_move: u16,
+    /// The opening switch-ins have happened: every active slot has an occupant.
+    pub(crate) started: bool,
     /// Field positions (side + 2 * position) in the speed order fixed at the last switch-in.
     pub(crate) speed_order: [u8; 4],
     pub(crate) n_speed_order: u8,

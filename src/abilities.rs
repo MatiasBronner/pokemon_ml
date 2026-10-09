@@ -409,6 +409,162 @@ impl Battle {
                 self.sun_modify_damage();
                 relay
             }
+            // ============================================ forme changes
+            // ---- Stance Change: onModifyMove(move, attacker, defender). Blade forme to attack, Shield forme behind King's Shield.
+            (ab::STANCECHANGE, Ev::ModifyMove, Pre::On) => {
+                let Some(m) = mi else {
+                    return Res::Undef;
+                };
+                let mon = self.mon(holder);
+                if SPECIES[mon.species as usize].base_species != "aegislash" || mon.transformed {
+                    return Res::Undef;
+                }
+                let am = &self.am[m as usize];
+                if am.category == Category::Status && am.id != mv::KINGSSHIELD {
+                    return Res::Undef;
+                }
+                let want = if am.id == mv::KINGSSHIELD { "aegislash" } else { "aegislashblade" };
+                if SPECIES[mon.species as usize].id != want {
+                    if let Some(species) = species_id(want) {
+                        self.forme_change(holder, species, false, false);
+                    }
+                }
+                Res::Undef
+            }
+            // ---- Hunger Switch: onResidual(pokemon). Morpeko changes mode at the end of every turn.
+            (ab::HUNGERSWITCH, Ev::Residual, Pre::On) => {
+                let species = &SPECIES[self.mon(holder).species as usize];
+                if species.base_species != "morpeko" {
+                    return Res::Undef;
+                }
+                let want = if species.id == "morpeko" { "morpekohangry" } else { "morpeko" };
+                if let Some(species) = species_id(want) {
+                    self.forme_change(holder, species, false, false);
+                }
+                Res::Undef
+            }
+            // ---- Disguise. `ability_st.a` is `abilityState.busted`.
+            // onDamage(damage, target, source, effect): the first hit from a move does nothing.
+            (ab::DISGUISE, Ev::Damage, Pre::On) => {
+                if e.effect.is_move() && SPECIES[self.mon(holder).species as usize].id == "mimikyu" {
+                    self.mon_mut(holder).ability_st.a = 1;
+                    return Res::Num(0);
+                }
+                Res::Undef
+            }
+            // onCriticalHit(target, source, move) and onEffectiveness(typeMod, target, type, move):
+            // the hit the disguise will take is neither critical nor more or less effective.
+            (ab::DISGUISE, Ev::CriticalHit | Ev::Effectiveness, Pre::On) => {
+                let (Some(m), Some(target)) = (mi, e.target) else {
+                    return Res::Undef;
+                };
+                if ev == Ev::Effectiveness && self.am[m as usize].category == Category::Status {
+                    return Res::Undef;
+                }
+                if SPECIES[self.mon(target).species as usize].id != "mimikyu" {
+                    return Res::Undef;
+                }
+                let am = &self.am[m as usize];
+                let hit_sub =
+                    self.vols(target).has(VolKind::Substitute) && am.flags & F_BYPASSSUB == 0 && !am.infiltrates;
+                if hit_sub || !self.run_immunity(target, m) {
+                    return Res::Undef;
+                }
+                if ev == Ev::CriticalHit { FALSE } else { Res::Num(0) }
+            }
+            // onUpdate(pokemon): the disguise is gone for good, at the cost of an eighth of its HP.
+            (ab::DISGUISE, Ev::Update, Pre::On) => {
+                if SPECIES[self.mon(holder).species as usize].id == "mimikyu" && self.mon(holder).ability_st.a != 0 {
+                    if let Some(species) = species_id("mimikyubusted") {
+                        self.forme_change(holder, species, true, false);
+                        let d = div1(self.mon(holder).max_hp() as u32, 8);
+                        self.damage(d, Some(holder), Some(holder), Eff::Species);
+                    }
+                }
+                Res::Undef
+            }
+            // ---- Zero to Hero: onSwitchOut(pokemon). Palafin comes back as a hero.
+            (ab::ZEROTOHERO, Ev::SwitchOut, Pre::On) => {
+                let mon = self.mon(holder);
+                if SPECIES[mon.base_species as usize].base_species == "palafin"
+                    && SPECIES[mon.species as usize].id != "palafinhero"
+                {
+                    if let Some(species) = species_id("palafinhero") {
+                        self.forme_change(holder, species, true, true);
+                    }
+                }
+                Res::Undef
+            }
+            // onSwitchIn(pokemon) only announces it.
+            (ab::ZEROTOHERO, Ev::SwitchIn, Pre::On) => Res::Undef,
+            // ---- Abilities of species that are not in Champions (Eiscue, Cramorant,
+            // Minior, Greninja's bonded forme). Every callback first checks for that
+            // species, so on anything else they do nothing at all.
+            (
+                ab::ICEFACE,
+                Ev::Start | Ev::Damage | Ev::CriticalHit | Ev::Effectiveness | Ev::Update | Ev::WeatherChange,
+                Pre::On,
+            )
+            | (ab::GULPMISSILE, Ev::DamagingHit, Pre::On)
+            | (ab::GULPMISSILE, Ev::TryPrimaryHit, Pre::Source)
+            | (ab::SHIELDSDOWN, Ev::Start | Ev::Residual | Ev::SetStatus | Ev::TryAddVolatile, Pre::On)
+            | (ab::BATTLEBOND, Ev::AfterFaint, Pre::Source)
+            | (ab::BATTLEBOND, Ev::ModifyMove, Pre::On) => Res::Undef,
+
+            // ============================================ Illusion, Imposter
+            // ---- Illusion. `Pokemon::illusion` is who the holder looks like.
+            // onBeforeSwitchIn(pokemon): the last Pokémon in the party that can still fight.
+            (ab::ILLUSION, Ev::BeforeSwitchIn, Pre::On) => {
+                let s = &self.sides[holder.side as usize];
+                let own = self.mon(holder).position as usize;
+                let mut looks_like = 0;
+                for p in (own + 1..s.n as usize).rev() {
+                    if !s.team[s.order[p] as usize].fainted {
+                        looks_like = s.order[p] + 1;
+                        break;
+                    }
+                }
+                self.mon_mut(holder).illusion = looks_like;
+                Res::Undef
+            }
+            // onDamagingHit(damage, target, source, move): a damaging hit ends it.
+            (ab::ILLUSION, Ev::DamagingHit, Pre::On) => {
+                if self.mon(holder).illusion != 0 {
+                    let me = e.effect;
+                    self.single_event(
+                        Ev::End,
+                        Eff::Ability(ab::ILLUSION),
+                        Some(holder),
+                        Some(holder),
+                        e.source,
+                        me,
+                        Res::Undef,
+                    );
+                }
+                Res::Undef
+            }
+            // onEnd(pokemon): not while it is being called back, so that it leaves disguised.
+            (ab::ILLUSION, Ev::End, Pre::On) => {
+                if !self.mon(holder).being_called_back {
+                    self.mon_mut(holder).illusion = 0;
+                }
+                Res::Undef
+            }
+            // onFaint(pokemon)
+            (ab::ILLUSION, Ev::Faint, Pre::On) => {
+                self.mon_mut(holder).illusion = 0;
+                Res::Undef
+            }
+            // ---- Imposter: onSwitchIn(pokemon). Transforms into the foe straight across.
+            (ab::IMPOSTER, Ev::SwitchIn, Pre::On) => {
+                let across = ACTIVE - 1 - self.mon(holder).position as usize;
+                let target = self.active(1 - holder.side as usize, across);
+                if self.in_play(target) {
+                    self.transform_into(holder, target);
+                }
+                Res::Undef
+            }
+
             // ---- Forecast
             // onStart(pokemon)
             (ab::FORECAST, Ev::Start, Pre::On) => {
@@ -504,8 +660,11 @@ impl Battle {
                     Terrain::Psychicterrain => [Type::Psychic, Type::None],
                     Terrain::None => SPECIES[self.mon(holder).base_species as usize].types,
                 };
-                if self.mon(holder).types != types {
-                    self.mon_mut(holder).types = types;
+                // `oldTypes.join() === types.join()`: the types that count now, in order.
+                let (current, n) = self.get_types(holder, false);
+                let wanted: Vec<Type> = types.iter().copied().filter(|&t| t != Type::None).collect();
+                if current[..n] != wanted[..] {
+                    self.set_type(holder, types);
                 }
                 Res::Undef
             }
@@ -588,8 +747,28 @@ impl Battle {
             ) => Res::Undef,
             // ---- Gluttony only matters for berries that are not in Champions.
             (ab::GLUTTONY, Ev::Start | Ev::Damage, Pre::On) => Res::Undef,
-            // ---- Heavy Metal / Light Metal: nothing modelled asks for a weight.
-            (ab::HEAVYMETAL | ab::LIGHTMETAL, Ev::ModifyWeight, Pre::On) => Res::Undef,
+            // ---- Heavy Metal / Light Metal: onModifyWeight(weighthg)
+            (ab::HEAVYMETAL, Ev::ModifyWeight, Pre::On) => Res::Num(relay.num() * 2),
+            (ab::LIGHTMETAL, Ev::ModifyWeight, Pre::On) => Res::Num(relay.num() / 2),
+            // ---- Emergency Exit, Wimp Out: onEmergencyExit(originalHp, target). Leaves when brought to half.
+            (ab::EMERGENCYEXIT | ab::WIMPOUT, Ev::EmergencyExit, Pre::On) => {
+                let Some(target) = e.target else {
+                    return Res::Undef;
+                };
+                let m = self.mon(target);
+                let (hp, max, original) = (m.hp as i32, m.max_hp() as i32, relay.num());
+                if hp == 0 || 2 * hp > max || 2 * original <= max {
+                    return Res::Undef;
+                }
+                if !self.can_switch(target.side as usize) || m.force_switch_flag || m.switch_flag {
+                    return Res::Undef;
+                }
+                let m = self.mon_mut(target);
+                m.switch_flag = true;
+                m.switch_move = NO_MOVE;
+                Res::Undef
+            }
+
             // ---- Suction Cups: onDragOut
             (ab::SUCTIONCUPS, Ev::DragOut, Pre::On) => Res::Null,
 
@@ -666,7 +845,8 @@ impl Battle {
                 if source == target || t.hp == 0 || am.total_damage == 0 || !t.was_attacked {
                     return Res::Undef;
                 }
-                let damage = if am.multihit != (0, 0) { am.total_damage } else { t.last_attack_damage };
+                let damage =
+                    if am.multihit != (0, 0) && !am.smart_target { am.total_damage } else { t.last_attack_damage };
                 let (hp, max) = (t.hp as i32, t.max_hp() as i32);
                 if hp * 2 <= max && (hp + damage) * 2 > max {
                     self.boost1(SPA, 1, Some(target), Some(target), Eff::None);
@@ -745,6 +925,13 @@ impl Battle {
             }
 
             // ---- Contrary: onChangeBoost(boost, target, source, effect)
+            // ---- Simple: onChangeBoost(boost, target, source, effect). Every stat change is doubled.
+            (ab::SIMPLE, Ev::ChangeBoost, Pre::On) => {
+                for b in self.event.boosts.iter_mut() {
+                    *b = b.saturating_mul(2);
+                }
+                Res::Undef
+            }
             (ab::CONTRARY, Ev::ChangeBoost, Pre::On) => {
                 for b in self.event.boosts.iter_mut() {
                     *b = -*b;
@@ -755,7 +942,10 @@ impl Battle {
             // ---- Cud Chew. `ability_st.a` is the berry to eat again, `.b` the turns left.
             // onEatItem(item, pokemon, source, effect)
             (ab::CUDCHEW, Ev::EatItem, Pre::On) => {
-                if ITEMS[e.item as usize].flags & IF_BERRY != 0 {
+                // (Not a berry the holder took from someone with Bug Bite or Pluck.)
+                let stolen =
+                    matches!(e.effect, Eff::Move(m) if matches!(self.am[m as usize].id, mv::BUGBITE | mv::PLUCK));
+                if ITEMS[e.item as usize].flags & IF_BERRY != 0 && !stolen {
                     let last_action = self.queue.peek().is_none();
                     let st = &mut self.mon_mut(holder).ability_st;
                     st.a = e.item as i16;
@@ -798,8 +988,15 @@ impl Battle {
             }
 
             // ---- Damp
-            // onAnyTryMove(target, source, effect): the self-destructing moves are not modelled.
-            (ab::DAMP, Ev::TryMove, Pre::Any) => Res::Undef,
+            // onAnyTryMove(target, source, effect): nobody blows up.
+            (ab::DAMP, Ev::TryMove, Pre::Any) => {
+                if mi.is_some_and(|m| {
+                    matches!(self.am[m as usize].d().id, "explosion" | "mindblown" | "mistyexplosion" | "selfdestruct")
+                }) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
             // onAnyDamage(damage, target, source, effect)
             (ab::DAMP, Ev::Damage, Pre::Any) => {
                 if e.effect == Eff::Ability(ab::AFTERMATH) {
@@ -986,6 +1183,12 @@ impl Battle {
                     for slot in &m.moves[..m.n_moves as usize] {
                         let d = &MOVES[slot.id as usize];
                         let mut bp = d.base_power as u32;
+                        if d.ohko != Ohko::No {
+                            bp = 150;
+                        }
+                        if matches!(slot.id, mv::COUNTER | mv::METALBURST | mv::MIRRORCOAT) {
+                            bp = 120;
+                        }
                         if bp == 1 || (bp == 0 && d.category != Category::Status) {
                             bp = 80;
                         }
@@ -1138,7 +1341,9 @@ impl Battle {
             (ab::INNARDSOUT, Ev::DamagingHit, Pre::On) => {
                 if let (Some(m), Some(target), Some(source)) = (mi, e.target, e.source) {
                     if self.mon(target).hp == 0 {
-                        let d = relay.num() + self.am[m as usize].total_damage;
+                        // (The earlier hits count too, except for Dragon Darts.)
+                        let am = &self.am[m as usize];
+                        let d = relay.num() + if am.smart_target { 0 } else { am.total_damage };
                         self.damage(d, Some(source), Some(target), Eff::None);
                     }
                 }
@@ -1197,14 +1402,18 @@ impl Battle {
                 let Some(m) = mi else {
                     return Res::Undef;
                 };
-                if self.mon(holder).ability_st.a != 0 || self.am[m as usize].has_bounced {
+                let am = &self.am[m as usize];
+                if self.mon(holder).ability_st.a != 0
+                    || am.has_bounced
+                    || am.flags & F_FUTUREMOVE != 0
+                    || am.d().calls_move
+                {
                     return Res::Undef;
                 }
                 let t = self.am[m as usize].typ;
-                if t != Type::Typeless && t != Type::None && self.mon(holder).types != [t, Type::None] {
-                    let mon = self.mon_mut(holder);
-                    mon.types = [t, Type::None];
-                    mon.ability_st.a = 1;
+                if t != Type::Typeless && t != Type::None && !self.is_only_type(holder, t) {
+                    self.set_type(holder, [t, Type::None]);
+                    self.mon_mut(holder).ability_st.a = 1;
                 }
                 Res::Undef
             }
@@ -1223,6 +1432,7 @@ impl Battle {
                 };
                 let loc = self.loc_of(user, holder);
                 if self.valid_target_loc(loc, user, t) {
+                    self.am[m as usize].smart_target = false;
                     return Res::Mon(holder);
                 }
                 Res::Undef
@@ -1328,7 +1538,9 @@ impl Battle {
                 };
                 let am = &self.am[m as usize];
                 let s = self.mon(source);
-                if !am.has_hit_targets
+                if self.switch_flag_is_true(source)
+                    || !am.has_hit_targets
+                    || am.id == mv::FLING
                     || s.item != it::NONE
                     || self.vols(source).has(VolKind::Gem)
                     || am.category == Category::Status
@@ -1653,7 +1865,12 @@ impl Battle {
                 if source == target || mflags & F_CONTACT == 0 {
                     return Res::Undef;
                 }
-                if self.mon(target).item != it::NONE || self.mon(target).switch_flag || self.mon(source).switch_flag {
+                // (A user on its way out through its own move's switch can still be robbed.)
+                if self.mon(target).item != it::NONE
+                    || self.mon(target).switch_flag
+                    || self.mon(target).force_switch_flag
+                    || self.switch_flag_is_true(source)
+                {
                     return Res::Undef;
                 }
                 let taken = self.take_item(source, Some(target));
@@ -1823,7 +2040,8 @@ impl Battle {
 
             // ---- Reckless: onBasePower(basePower, attacker, defender, move)
             (ab::RECKLESS, Ev::BasePower, Pre::On) => {
-                if mi.is_some_and(|m| self.am[m as usize].d().recoil.0 > 0) {
+                if mi.is_some_and(|m| self.am[m as usize].d().recoil.0 > 0 || self.am[m as usize].d().has_crash_damage)
+                {
                     return self.chain_modify(4915, 4096);
                 }
                 Res::Undef
@@ -1964,7 +2182,7 @@ impl Battle {
             (ab::SHEERFORCE, Ev::ModifyMove, Pre::On) => {
                 if let Some(m) = mi {
                     let am = &mut self.am[m as usize];
-                    if am.has_secs {
+                    if am.has_secs && !am.d().sheer_force_boost {
                         am.has_secs = false;
                         am.n_secs = 0;
                         // Not a secondary effect, but removed with them.
@@ -1977,7 +2195,8 @@ impl Battle {
             }
             // onBasePower(basePower, pokemon, target, move)
             (ab::SHEERFORCE, Ev::BasePower, Pre::On) => {
-                if mi.is_some_and(|m| self.am[m as usize].has_sheer_force) {
+                if mi.is_some_and(|m| self.am[m as usize].has_sheer_force || self.am[m as usize].d().sheer_force_boost)
+                {
                     return self.chain_modify(5325, 4096);
                 }
                 Res::Undef
@@ -2003,6 +2222,7 @@ impl Battle {
                     if am.multihit.0 != am.multihit.1 {
                         am.multihit = (am.multihit.1, am.multihit.1);
                     }
+                    am.multiaccuracy = false;
                 }
                 Res::Undef
             }
@@ -2093,15 +2313,22 @@ impl Battle {
                 if self.mon(holder).hp == 0 {
                     return Res::Undef;
                 }
-                if e.source.is_some() && e.source != Some(holder) {
+                // Nobody else takes it, and Knock Off does not remove it either.
+                let knock_off = self.active_move.is_some_and(|m| self.am[m as usize].id == mv::KNOCKOFF);
+                if (e.source.is_some() && e.source != Some(holder)) || knock_off {
                     return FALSE;
                 }
                 Res::Undef
             }
 
             // ---- Sturdy
-            // onTryHit only concerns one-hit KO moves, which are not modelled.
-            (ab::STURDY, Ev::TryHit, Pre::On) => Res::Undef,
+            // onTryHit(pokemon, target, move): immune to one-hit knockouts.
+            (ab::STURDY, Ev::TryHit, Pre::On) => {
+                if mi.is_some_and(|m| self.am[m as usize].d().ohko != Ohko::No) {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
             // onDamage(damage, target, source, effect)
             (ab::STURDY, Ev::Damage, Pre::On) => {
                 let m = self.mon(holder);

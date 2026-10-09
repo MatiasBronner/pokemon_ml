@@ -4,7 +4,7 @@
 //! depend on the random number generator.
 
 use vgc_engine::data::{ABILITIES, ATK, Pseudo, SPA, SPECIES, SideCond, Type, Weather};
-use vgc_engine::{Battle, Choice, Error, PokemonSet, VolKind};
+use vgc_engine::{Battle, Choice, Error, PokemonSet, Request, VolKind};
 
 fn set(species: &str, moves: &[&str]) -> PokemonSet {
     PokemonSet::from_names(species, moves, "Hardy", [0; 6]).unwrap()
@@ -98,25 +98,15 @@ fn levitate_and_air_balloon_avoid_ground_moves() -> Result<(), Error> {
     Ok(())
 }
 
+/// Everything a Champions Pokémon can have is modelled; what is still refused
+/// is a Pokémon the game does not have at all.
 #[test]
-fn effects_that_are_not_modelled_are_refused() {
+fn a_forme_of_a_species_that_is_not_in_the_game_is_refused() {
     let p1 = filler();
     let mut p2 = filler();
-    p2[0] = set("Aegislash", &["Shadow Ball", "Protect"]).ability("Stance Change").unwrap();
+    p2[0] = set("Eiscue-Noice", &["Ice Beam", "Protect"]);
     match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("Stance Change"), "{what}"),
-        other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
-    }
-    let mut p2 = filler();
-    p2[0] = set("Snorlax", &["Body Slam", "Protect"]).item("Eject Button").unwrap();
-    match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("Eject Button"), "{what}"),
-        other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
-    }
-    let mut p2 = filler();
-    p2[0] = set("Incineroar", &["U-turn", "Protect"]);
-    match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("U-turn"), "{what}"),
+        Err(Error::Unsupported(what)) => assert!(what.contains("Eiscue"), "{what}"),
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
 }
@@ -289,6 +279,129 @@ fn electrify_does_not_change_the_type_of_struggle() -> Result<(), Error> {
     let after: u32 = (0..2).map(|pos| b.mon(b.active(1, pos)).hp as u32).sum();
     assert!(after < before, "Struggle hit a Ground type, so it was not Electric");
     assert!(b.mon(snorlax).hp < b.mon(snorlax).max_hp(), "and Snorlax took Struggle's recoil");
+    Ok(())
+}
+
+/// U-turn stops the turn to ask its user who comes in; the rest of the turn follows.
+#[test]
+fn u_turn_asks_for_a_replacement_in_the_middle_of_the_turn() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Scizor", &["U-turn", "Protect"]);
+    let p2 = filler();
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let scizor = b.active(0, 0);
+    let protect = Choice::mv(1, 0);
+    // (The foe it hits attacks Scizor's protected partner, so nothing else happens to Scizor.)
+    b.choose([[Choice::mv(0, 1), protect], [Choice::mv(0, 2), protect]])?;
+    assert_eq!(b.request, Request::Switch);
+    assert_eq!(b.turn, 1, "the turn is not over yet");
+    // The user's slot may bring in either benched Pokémon; its partner just passes.
+    assert_eq!(b.legal_choices(0, 0), vec![Choice::Switch { to: 2 }, Choice::Switch { to: 3 }]);
+    assert_eq!(b.legal_choices(0, 1), vec![Choice::Pass]);
+
+    b.choose([[Choice::Switch { to: 2 }, Choice::Pass], [Choice::Pass, Choice::Pass]])?;
+    assert_ne!(b.active(0, 0), scizor);
+    assert!(!b.mon(scizor).is_active);
+    assert_eq!((b.request, b.turn), (Request::Move, 2));
+    Ok(())
+}
+
+/// Roar drags its target out for a teammate picked at random, with no request.
+#[test]
+fn roar_drags_in_a_random_teammate() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Arcanine", &["Roar", "Protect"]);
+    let p2 = filler();
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let before = b.active(1, 0);
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [Choice::mv(0, 1), protect]])?;
+    assert_ne!(b.active(1, 0), before, "the target was replaced");
+    assert!(!b.mon(before).is_active);
+    assert_eq!(b.request, Request::Move);
+    Ok(())
+}
+
+/// Aegislash attacks in Blade forme and goes back behind its shield for King's Shield.
+#[test]
+fn stance_change_follows_the_move_being_used() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Aegislash", &["Shadow Ball", "King's Shield"]).ability("Stance Change")?;
+    let p2 = filler();
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let aegislash = b.active(0, 0);
+    let shield = SPECIES[b.mon(aegislash).species as usize];
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [protect, protect]])?;
+    let blade = SPECIES[b.mon(aegislash).species as usize];
+    assert_eq!(blade.name, "Aegislash-Blade");
+    assert!(blade.base[ATK + 1] > shield.base[ATK + 1]);
+
+    b.choose([[Choice::mv(1, 0), protect], [protect, protect]])?;
+    assert_eq!(SPECIES[b.mon(aegislash).species as usize].name, "Aegislash");
+    Ok(())
+}
+
+/// Ditto's Imposter copies the foe across from it as it enters: species,
+/// stats other than HP, ability and moves, each move with at most 5 PP.
+#[test]
+fn imposter_transforms_into_the_foe_across_the_field() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Ditto", &["Transform"]).ability("Imposter")?;
+    let mut p2 = filler();
+    p2[1] = set("Garchomp", &["Earthquake", "Dragon Claw", "Protect"]).ability("Rough Skin")?;
+    let b = Battle::new([&p1, &p2], seed())?;
+    // Position 0 on one side faces position 1 on the other.
+    let (ditto, garchomp) = (b.mon(b.active(0, 0)), b.mon(b.active(1, 1)));
+    assert!(ditto.transformed);
+    assert_eq!(ditto.species, garchomp.species);
+    assert_eq!(ditto.ability, garchomp.ability);
+    assert_eq!(ditto.stats[1..], garchomp.stats[1..]);
+    assert_ne!(ditto.max_hp(), garchomp.max_hp(), "HP is not copied");
+    assert_eq!(ditto.n_moves, 3);
+    for k in 0..3 {
+        assert_eq!(ditto.moves[k].id, garchomp.moves[k].id);
+        assert_eq!(ditto.moves[k].pp, 5);
+    }
+    Ok(())
+}
+
+/// Mimikyu's Disguise takes the first hit: no damage from the move, then an eighth of its HP.
+#[test]
+fn disguise_takes_one_hit_and_then_breaks() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[1] = set("Milotic", &["Aqua Jet", "Protect"]);
+    let mut p2 = filler();
+    p2[0] = set("Mimikyu", &["Shadow Sneak", "Protect"]).ability("Disguise")?;
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let mimikyu = b.active(1, 0);
+    let max = b.mon(mimikyu).max_hp();
+    let protect = Choice::mv(1, 0);
+    // Milotic's Aqua Jet is what the disguise soaks up. (Mimikyu's own Shadow Sneak
+    // goes into Snorlax, a Normal type, and does nothing.)
+    b.choose([[protect, Choice::mv(0, 1)], [Choice::mv(0, 1), protect]])?;
+    assert_eq!(b.mon(mimikyu).hp, max - max / 8);
+    assert_eq!(SPECIES[b.mon(mimikyu).species as usize].name, "Mimikyu-Busted");
+    Ok(())
+}
+
+/// Future Sight does nothing on the turn it is used and lands at the end of the turn after next.
+#[test]
+fn future_sight_lands_two_turns_later() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Gardevoir", &["Future Sight", "Protect"]);
+    let p2 = filler();
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let target = b.active(1, 0);
+    let max = b.mon(target).max_hp();
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [protect, protect]])?;
+    assert_eq!(b.mon(target).hp, max, "nothing yet (and Protect would not have stopped it)");
+    b.choose([[protect, protect], [Choice::mv(1, 0), protect]])?;
+    assert_eq!(b.mon(target).hp, max);
+    // Protecting on the turn it lands is no help either: the hit comes after the turn's moves.
+    b.choose([[Choice::mv(1, 0), protect], [Choice::mv(1, 0), protect]])?;
+    assert!(b.mon(target).hp < max);
     Ok(())
 }
 

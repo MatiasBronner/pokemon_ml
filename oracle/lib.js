@@ -16,7 +16,7 @@ const STATUSES = ['brn', 'par', 'psn', 'tox', 'slp', 'frz'];
 const BASE_KEYS = new Set([
 	'name', 'id', 'fullname', 'effectType', 'exists', 'num', 'gen', 'isNonstandard', 'duration', 'noCopy',
 	'affectsFainted', 'status', 'weather', 'sourceEffect', 'type', 'target', 'basePower', 'accuracy', 'critRatio',
-	'baseMoveType', 'secondary', 'secondaries', 'hasSheerForceBoost', 'priority', 'category',
+	'baseMoveType', 'secondary', 'secondaries', 'priority', 'category',
 	'overrideOffensiveStat', 'overrideOffensivePokemon', 'overrideDefensiveStat', 'overrideDefensivePokemon',
 	'ignoreNegativeOffensive', 'ignorePositiveDefensive', 'ignoreOffensive', 'ignoreDefensive', 'ignoreImmunity',
 	'pp', 'noPPBoosts', 'isZ', 'isMax', 'flags', 'selfSwitch', 'ignoreAbility', 'damage', 'spreadHit', 'forceSTAB',
@@ -27,13 +27,14 @@ const BASE_KEYS = new Set([
 const EXTRA_OK = new Set([
 	'boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTarget', 'willCrit', 'ignoreEvasion', 'multihit',
 	'stallingMove', 'struggleRecoil', 'condition', 'sideCondition', 'slotCondition', 'pseudoWeather', 'terrain',
-	'breaksProtect',
+	'breaksProtect', 'selfdestruct', 'selfBoost', 'hasCrashDamage', 'mindBlownRecoil',
+	'tracksTarget', 'sleepUsable', 'ohko', 'multiaccuracy', 'tags', 'smartTarget', 'callsMove', 'forceSwitch', 'hasSheerForceBoost',
 ]);
 const TARGETS_OK = new Set([
 	'normal', 'any', 'adjacentFoe', 'allAdjacentFoes', 'allAdjacent', 'self', 'adjacentAlly', 'adjacentAllyOrSelf', 'allies',
-	'randomNormal', 'all', 'allySide', 'foeSide',
+	'randomNormal', 'all', 'allySide', 'foeSide', 'scripted', 'allyTeam',
 ]);
-const BAD_FLAGS = ['charge', 'recharge', 'futuremove', 'cantusetwice', 'pledgecombo'];
+const BAD_FLAGS = ['pledgecombo'];
 // Moves whose script callbacks (onHit, onTry, basePowerCallback, ...) all have a
 // hand-written body in src/movecbs.rs. A move with callbacks that is not listed
 // here is rejected by `Battle::new`.
@@ -46,7 +47,34 @@ const HAND_MOVES = new Set(('protect detect struggle auroraveil ' +
 	'fakeout firstimpression followme ragepowder helpinghand wideguard quickguard endure banefulbunker kingsshield ' +
 	'spikyshield disable attract substitute leechseed magnetrise noretreat octolock electrify gastroacid lockon ' +
 	'perishsong yawn stockpile spitup swallow destinybond sparklingaria block meanlook jawlock throatchop ' +
-	'spiritshackle').split(' '));
+	'spiritshackle ' +
+	// moves that take more than one turn
+	'fly dig dive bounce phantomforce solarbeam solarblade skyattack meteorbeam electroshot uproar ' +
+	// moves prepared before the turn, fixed damage, crashes and self-destruction
+	'focuspunch beakblast counter mirrorcoat superfang endeavor finalgambit mistyexplosion highjumpkick axekick ' +
+	'supercellslam steelbeam ' +
+	// base power that depends on the state of the battle
+	'acrobatics assurance avalanche electroball eruption waterspout flail reversal gyroball hardpress hex ' +
+	'infernalparade lastrespects payback powertrip storedpower ragefist stompingtantrum temperflare watershuriken ' +
+	'barbbarrage venoshock facade ficklebeam gravapple lashout grassknot lowkick heatcrash heavyslam ' +
+	'burningjealousy alluringvoice fellstinger ' +
+	// HP, stat stages and PP
+	'healbell healpulse painsplit strengthsap bellydrum clangoroussoul acupressure psychup topsyturvy clearsmog ' +
+	'guardsplit powersplit guardswap powerswap speedswap spite rest direclaw triattack eeriespell ' +
+	// abilities and types changed by moves
+	'skillswap entrainment roleplay simplebeam worryseed soak magicpowder forestscurse trickortreat reflecttype ' +
+	'burnup doubleshock ' +
+	// moves that take, swap or eat items
+	'knockoff thief covet trick switcheroo bugbite pluck corrosivegas recycle poltergeist belch stuffcheeks ' +
+	'teatime ' +
+	// assorted
+	'suckerpunch upperhand lastresort flyingpress freezedry ragingbull snore ceaselessedge stoneaxe ' +
+	'tripleaxel pollenpuff shellsidearm beatup curse metalburst comeuppance ' +
+	// the order of the turn, and moves that use other moves
+	'afteryou quash round instruct copycat sleeptalk ' +
+	'futuresight fling allyswitch ' +
+	// switching
+	'partingshot chillyreception batonpass shedtail healingwish revivalblessing transform aurawheel').split(' '));
 // Callback-like move properties, mapped to the event the Rust engine files them under.
 const MOVE_CALLBACKS = {
 	basePowerCallback: 'BasePowerCallback', damageCallback: 'DamageCallback', beforeMoveCallback: 'BeforeMoveCallback',
@@ -62,6 +90,8 @@ function moveCallbacks(m) {
 		else if (k.startsWith('on')) out.push(k.slice(2));
 		else throw new Error(`${m.id}: unexpected function property ${k}`);
 	}
+	// Fling gives itself an onHit while it runs (the thrown item's effect).
+	if (m.id === 'fling') out.push('Hit');
 	return out;
 }
 
@@ -98,10 +128,12 @@ function hitEffectReasons(e, where, why, moveId) {
 /** Returns [] if the Rust engine models every effect of this move, else the reasons it does not. */
 function unsupportedReasons(m) {
 	const why = [];
+	if (m === RECHARGE) return ['placeholder'];
 	const hand = HAND_MOVES.has(m.id);
 	if (PENDING_MOVES.has(m.id)) why.push('pending');
 	for (const k in m) {
-		if (BASE_KEYS.has(k) || EXTRA_OK.has(k)) continue;
+		// (A mod can blank out a property it inherits: Champions removes Belch's onDisableMove.)
+		if (BASE_KEYS.has(k) || EXTRA_OK.has(k) || m[k] === undefined) continue;
 		if (typeof m[k] === 'function') {
 			if (!hand) why.push('fn:' + k);
 			continue;
@@ -120,12 +152,12 @@ function unsupportedReasons(m) {
 	if (m.terrain && condClass(m.terrain) !== 'terrain') why.push('terrain:' + m.terrain);
 	// A move's own `condition` block is the definition of the condition named after the move.
 	if (m.condition && !condClass(m.id)) why.push('condition');
-	if (m.selfSwitch) why.push('selfSwitch');
-	if (m.damage) why.push('damage:' + m.damage);
+	if (m.damage && m.damage !== 'level') why.push('damage:' + m.damage);
 	if (m.isZ || m.isMax) why.push('zmax');
 	if (m.forceSTAB) why.push('forceSTAB');
 	if (m.ignoreImmunity && m.ignoreImmunity !== true) why.push('ignoreImmunity:map');
-	if (m.ignoreImmunity === true && m.category !== 'Status') why.push('ignoreImmunity');
+	// (A future move never hits on the turn it is used; the hit that lands later has its own data.)
+	if (m.ignoreImmunity === true && m.category !== 'Status' && !m.flags.futuremove) why.push('ignoreImmunity');
 	if (m.ignoreNegativeOffensive || m.ignorePositiveDefensive || m.ignoreOffensive) why.push('ignoreBoosts');
 	if (m.overrideDefensivePokemon) why.push('overrideDefensivePokemon');
 	for (const f of BAD_FLAGS) if (m.flags[f]) why.push('flag:' + f);
@@ -157,12 +189,22 @@ function learnableMoves(species) {
 	}).sort();
 }
 
+// What Showdown queues for a Pokémon that must recharge: a move id with no entry in the
+// dex, which resolves to a blank move (no type, no category, no target). It is never
+// carried out, but it is sorted into the queue and given a target like any other.
+// For the purposes that leaves, a blank target behaves like 'randomNormal'.
+const RECHARGE = {
+	id: 'recharge', name: 'Recharge', exists: false, type: '???', category: 'Physical', basePower: 0, accuracy: true,
+	pp: 1, noPPBoosts: true, priority: 0, target: 'randomNormal', flags: {}, critRatio: 1,
+};
+
 /** Every move the generated Rust table contains, in table order. */
 function tableMoves() {
 	const ids = new Set(dex.moves.all().filter(m => m.exists && !m.isNonstandard).map(m => m.id));
 	for (const s of legalSpecies()) for (const m of learnableMoves(s)) ids.add(m);
 	ids.add('struggle');
-	return [...ids].sort().map(id => dex.moves.get(id));
+	ids.add(RECHARGE.id);
+	return [...ids].sort().map(id => (id === RECHARGE.id ? RECHARGE : dex.moves.get(id)));
 }
 
 /** Every species the generated Rust table contains, in table order. */
@@ -191,14 +233,21 @@ const VOLATILES = ['protect', 'stall', 'flinch', 'confusion', 'choicelock', 'gem
 	'aquaring', 'ingrain', 'leechseed', 'focusenergy', 'dragoncheer', 'magnetrise', 'minimize', 'noretreat', 'trapped',
 	'trapper', 'octolock', 'powertrick', 'smackdown', 'saltcure', 'syrupbomb', 'throatchop', 'charge', 'destinybond',
 	'electrify', 'gastroacid', 'lockon', 'perishsong', 'yawn', 'glaiverush', 'stockpile', 'sparklingaria',
-	'partiallytrapped'];
+	'partiallytrapped',
+	// moves that take more than one turn
+	'lockedmove', 'mustrecharge', 'twoturnmove', 'uproar', 'fly', 'dig', 'dive', 'bounce', 'phantomforce',
+	'solarbeam', 'solarblade', 'skyattack', 'meteorbeam', 'electroshot',
+	'focuspunch', 'beakblast', 'counter', 'mirrorcoat', 'roost', 'gigatonhammer', 'curse', 'fling', 'allyswitch', 'chillyreception'];
 // Volatiles that are only a marker: Showdown has no condition data for them at all.
-const BARE_VOLATILES = new Set(['sparklingaria']);
+// (A charging move puts a volatile named after itself on its user, condition or not.)
+// (So does a move that cannot be used twice in a row, when it is tried twice in a row.)
+const BARE_VOLATILES = new Set(['sparklingaria', 'solarbeam', 'solarblade', 'skyattack', 'meteorbeam', 'electroshot',
+	'gigatonhammer']);
 // Side conditions sit on one side of the field (`SideCond`).
 const SIDE_CONDS = ['tailwind', 'reflect', 'lightscreen', 'auroraveil', 'safeguard', 'spikes', 'toxicspikes', 'stealthrock', 'stickyweb',
 	'wideguard', 'quickguard'];
 // Slot conditions sit on one active position of a side (`SlotCond`).
-const SLOT_CONDS = ['wish'];
+const SLOT_CONDS = ['wish', 'futuremove', 'healingwish', 'revivalblessing'];
 // Pseudo-weathers sit on the whole field (`Pseudo`).
 const PSEUDO_WEATHERS = ['trickroom', 'gravity', 'magicroom', 'wonderroom', 'fairylock'];
 // `Weather` and `Terrain`; index 0 of each Rust enum is "none".
@@ -215,43 +264,34 @@ const PENDING_MOVES = new Set([]);
 // here with the mechanic they wait for.
 const DEFERRED_ABILITIES = {};
 const defer = (why, ids) => { for (const id of ids.split(' ')) DEFERRED_ABILITIES[id] = why; };
-defer('forme changes', 'iceface');
-defer('forme changes', 'battlebond disguise gulpmissile hungerswitch shieldsdown stancechange zerotohero terashell');
-defer('Illusion and Transform', 'illusion imposter');
-defer('switching out mid-turn', 'emergencyexit wimpout');
 const SUPPORTED_ABILITIES = new Set(['noability']);
-// Modelled effects with a part that can never come up yet, because it reacts to
-// something that is not modelled. They are exact for every battle the engine
-// accepts; this list says what to revisit when the missing mechanic arrives.
+// Modelled effects with a part that never comes up, because it reacts to something
+// Champions does not have or only writes to the battle log. They are exact for every
+// battle the engine accepts; this list says what to revisit if Showdown's Champions
+// data grows.
 const DORMANT_PARTS = {
 	abilities: {
 		anticipation: 'only writes to the battle log',
-		damp: 'blocks self-destructing moves, which are not modelled (its Aftermath block is)',
+		battlebond: 'does nothing: Greninja-Bond is not in Champions',
 		embodyaspectcornerstone: 'needs Terastallization, which Champions does not have',
 		embodyaspecthearthflame: 'needs Terastallization, which Champions does not have',
 		embodyaspectteal: 'needs Terastallization, which Champions does not have',
 		embodyaspectwellspring: 'needs Terastallization, which Champions does not have',
-		forewarn: 'only writes to the battle log (its random pick is still drawn)',
+		forewarn: 'only writes to the battle log (its random pick is still drawn, from the same number of candidates)',
 		frisk: 'only writes to the battle log',
 		gluttony: 'only matters for pinch berries, which are not in Champions',
-		guarddog: 'its block on being forced out (forced switches are not modelled)',
-		heavymetal: 'weight is only read by moves that are not modelled',
-		lightmetal: 'weight is only read by moves that are not modelled',
+		gulpmissile: 'does nothing: Cramorant is not in Champions',
+		iceface: 'does nothing: Eiscue is not in Champions',
 		parentalbond: 'its Secret Power special case (not in Champions)',
-		stickyhold: 'its Knock Off block (Knock Off is not modelled)',
-		sturdy: 'its one-hit-KO immunity (those moves are not modelled)',
-		suctioncups: 'blocks being forced out (forced switches are not modelled)',
+		shieldsdown: 'does nothing: Minior is not in Champions',
+		terashell: 'does nothing: Terapagos is not in Champions',
 	},
 	items: {
-		bigroot: 'boosting Strength Sap, which is not modelled (draining moves, Leech Seed, Ingrain and Aqua Ring are)',
 	},
 };
 // Items: everything except the ones listed here with the mechanic they wait for. (A Mega Stone is
 // accepted on any Pokémon; whether the Mega it leads to is modelled is checked when the battle is built.)
-const DEFERRED_ITEMS = {
-	ejectbutton: 'switching out mid-turn',
-	redcard: 'forced switching',
-};
+const DEFERRED_ITEMS = {};
 const SUPPORTED_ITEMS = new Set(['']);
 for (const item of dex.items.all()) {
 	if (!item.exists || item.isNonstandard) continue;
@@ -355,6 +395,9 @@ function tableItems() {
 }
 
 for (const id of legalAbilities()) if (!DEFERRED_ABILITIES[id]) SUPPORTED_ABILITIES.add(id);
+// Abilities no Champions species has, but which a move can hand out (Simple Beam).
+const MOVE_GIVEN_ABILITIES = ['simple'];
+for (const id of MOVE_GIVEN_ABILITIES) SUPPORTED_ABILITIES.add(id);
 if (process.env.VGC_ABILITIES !== undefined) {
 	// Debugging aid: model only the listed abilities.
 	const only = new Set(process.env.VGC_ABILITIES.split(',').filter(Boolean));

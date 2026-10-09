@@ -74,6 +74,10 @@ impl Battle {
                     self.cure_status(holder);
                     return Res::Undef;
                 }
+                // Snore and Sleep Talk go ahead anyway.
+                if matches!(self.event.effect, Eff::Move(mi) if self.am[mi as usize].d().sleep_usable) {
+                    return Res::Undef;
+                }
                 FALSE
             }
 
@@ -83,7 +87,10 @@ impl Battle {
                 Res::Undef
             }
             (Status::Frz, Ev::BeforeMove) => {
-                if self.event_move_flags() & F_DEFROST != 0 {
+                // A move that thaws its user goes ahead; Burn Up only does from a Fire type.
+                let burn_up_fizzles = matches!(self.event.effect, Eff::Move(mi) if self.am[mi as usize].id == mv::BURNUP)
+                    && !self.has_type(holder, Type::Fire);
+                if self.event_move_flags() & F_DEFROST != 0 && !burn_up_fizzles {
                     return Res::Undef;
                 }
                 let m = self.mon_mut(holder);
@@ -153,6 +160,7 @@ impl Battle {
                 if self.bypasses_protect(mi, source, target, true) {
                     return Res::Undef;
                 }
+                self.am[mi as usize].smart_target = false;
                 self.protect_unlocks(source);
                 Res::NotFail
             }
@@ -182,9 +190,33 @@ impl Battle {
                 Res::Undef
             }
 
+            // ---- Ally Switch's counter. `data` is the denominator of its next chance to work.
+            (VolKind::Allyswitch, Ev::Start) => {
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    v.data = 3;
+                }
+                Res::Undef
+            }
+            // onRestart(pokemon)
+            (VolKind::Allyswitch, Ev::Restart) => {
+                let counter = self.vols(holder).get(kind).map_or(1, |v| v.data.max(1)) as u32;
+                if !self.chance(1, counter, "consecutive ally switch") {
+                    self.drop_vol(holder, kind);
+                    return FALSE;
+                }
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    if v.data < 729 {
+                        v.data *= 3;
+                    }
+                    v.duration = 2;
+                }
+                Res::Undef
+            }
+
             (VolKind::Confusion, Ev::Start) => {
-                // Lasts 2 to 5 of the holder's move attempts.
-                let t = self.rand_range(2, 6, "confusion turns");
+                // Lasts 2 to 5 of the holder's move attempts (3 to 5 from Axe Kick).
+                let min = if self.eff_is_named(self.event.effect, "axekick") { 3 } else { 2 };
+                let t = self.rand_range(min, 6, "confusion turns");
                 if let Some(v) = self.vol_mut(holder, VolKind::Confusion) {
                     v.data = t as u16;
                 }
@@ -289,11 +321,18 @@ impl Battle {
                 let Eff::Move(mi) = self.event.effect else {
                     return Res::Undef;
                 };
+                if self.am[mi as usize].d().calls_move {
+                    return Res::Undef;
+                }
                 let id = self.am[mi as usize].id + 1;
                 let last_ok = self.mon(holder).move_last_turn.truthy();
+                // The second turn of a charging move counts as a use of its own.
+                let charged = self.vols(holder).has(VolKind::Twoturnmove);
                 if let Some(v) = self.vol_mut(holder, VolKind::Metronome) {
                     if v.data == id && last_ok {
                         v.st.a += 1;
+                    } else if charged {
+                        v.st.a = if v.data != id { 1 } else { v.st.a + 1 };
                     } else {
                         v.st.a = 0;
                     }
@@ -353,6 +392,7 @@ impl Battle {
                 if self.bypasses_protect(mi, source, target, kind != VolKind::Kingsshield) {
                     return Res::Undef;
                 }
+                self.am[mi as usize].smart_target = false;
                 self.protect_unlocks(source);
                 if self.makes_contact(mi) {
                     match kind {
@@ -585,12 +625,12 @@ impl Battle {
                 Res::Undef
             }
 
-            // ---- Substitute. `data` is the HP the substitute has left.
+            // ---- Substitute. `data` is the HP the substitute has left, in half points.
             // onStart(target, source, effect)
             (VolKind::Substitute, Ev::Start) => {
                 let hp = self.mon(holder).max_hp() / 4;
                 if let Some(v) = self.vol_mut(holder, VolKind::Substitute) {
-                    v.data = hp;
+                    v.data = 2 * hp;
                 }
                 // A substitute frees its maker from Wrap and the like, without the usual ending.
                 if let Some(k) = VolKind::named("partiallytrapped") {
@@ -613,8 +653,9 @@ impl Battle {
                     // No damage to deal (a status move, an immunity): the move fails.
                     return Res::Null;
                 }
+                // Everything here is in half points: Metal Burst's damage can end in one.
                 let left = self.vols(target).get(VolKind::Substitute).map_or(0, |v| v.data) as i32;
-                let damage = r.num().min(left);
+                let damage = (2 * r.num() + self.am[mi as usize].half_damage as i32).min(left);
                 if let Some(v) = self.vol_mut(target, VolKind::Substitute) {
                     v.data = (left - damage) as u16;
                 }
@@ -622,16 +663,17 @@ impl Battle {
                     self.remove_volatile(target, VolKind::Substitute);
                 }
                 if damage > 0 {
-                    self.apply_recoil(damage as u32, mi, source);
+                    self.apply_recoil_halves(damage as u32, mi, source);
                 }
                 let drain = self.am[mi as usize].d().drain;
                 if drain.0 > 0 {
-                    let amount = (damage as u32 * drain.0 as u32).div_ceil(drain.1 as u32);
+                    let amount = (damage as u32 * drain.0 as u32).div_ceil(2 * drain.1 as u32);
                     self.heal(amount as i32, Some(source), Some(target), Eff::Drain);
                 }
                 let me = Eff::Move(mi);
-                self.single_event(Ev::AfterSubDamage, me, None, Some(target), Some(source), me, Res::Num(damage));
-                self.run_event(Ev::AfterSubDamage, Some(target), Some(source), me, Res::Num(damage));
+                // (No handler reads the amount.)
+                self.single_event(Ev::AfterSubDamage, me, None, Some(target), Some(source), me, Res::Num(damage / 2));
+                self.run_event(Ev::AfterSubDamage, Some(target), Some(source), me, Res::Num(damage / 2));
                 HIT_SUBSTITUTE
             }
             (VolKind::Substitute, Ev::End) => Res::Undef,
@@ -785,6 +827,31 @@ impl Battle {
             // onRestart(pokemon)
             (VolKind::Smackdown, Ev::Restart) => {
                 self.smack_out_of_the_air(holder);
+                Res::Undef
+            }
+
+            // ---- Chilly Reception: onBeforeMove only announces the move.
+            (VolKind::Chillyreception, Ev::BeforeMove) => Res::Undef,
+
+            // ---- Fling: onUpdate(pokemon). The thrown item is gone, whether or not it hit anything.
+            (VolKind::Fling, Ev::Update) => {
+                let item = self.mon(holder).item;
+                self.set_item(holder, it::NONE, None, Eff::None);
+                let m = self.mon_mut(holder);
+                m.last_item = item;
+                m.used_item_this_turn = true;
+                let mut ee = Event::new(Ev::AfterUseItem, Some(holder), None, Eff::None);
+                ee.item = item;
+                self.run_event_ex(ee, Res::Undef, false, false);
+                self.remove_volatile(holder, VolKind::Fling);
+                Res::Undef
+            }
+
+            // ---- Curse (a Ghost's): onResidual(pokemon) takes a quarter of its HP.
+            (VolKind::Curse, Ev::Start) => Res::Undef,
+            (VolKind::Curse, Ev::Residual) => {
+                let d = div1(self.mon(holder).max_hp() as u32, 4);
+                self.damage(d, None, None, Eff::None);
                 Res::Undef
             }
 
@@ -1018,6 +1085,240 @@ impl Battle {
                 }
                 Res::Undef
             }
+
+            // ============================== moves that take more than one turn
+            // ---- A rampage (Outrage, Thrash, ...). `data` is the move (table index
+            // plus one); `st.a` counts down the two or three turns it really lasts.
+            // onStart(target, source, effect)
+            (VolKind::Lockedmove, Ev::Start) => {
+                let turns = self.rand_range(2, 4, "rampage turns") as i16;
+                let id = match e.effect {
+                    Eff::Move(mi) => self.am[mi as usize].id + 1,
+                    _ => 0,
+                };
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    v.st.a = turns;
+                    v.data = id;
+                }
+                Res::Undef
+            }
+            // onRestart(): each use renews the lock while turns remain.
+            (VolKind::Lockedmove, Ev::Restart) => {
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    if v.st.a >= 2 {
+                        v.duration = 2;
+                    }
+                }
+                Res::Undef
+            }
+            // onResidual(target)
+            (VolKind::Lockedmove, Ev::Residual) => {
+                if self.mon(holder).status == Status::Slp {
+                    self.drop_vol(holder, kind);
+                } else if let Some(v) = self.vol_mut(holder, kind) {
+                    v.st.a -= 1;
+                }
+                Res::Undef
+            }
+            // onAfterMove(pokemon)
+            (VolKind::Lockedmove, Ev::AfterMove) => {
+                if self.vols(holder).get(kind).is_some_and(|v| v.duration == 1) {
+                    self.remove_volatile(holder, kind);
+                }
+                Res::Undef
+            }
+            // onEnd(target): a rampage that ran its course leaves the user confused.
+            (VolKind::Lockedmove, Ev::End) => {
+                if self.vols(holder).get(kind).is_some_and(|v| v.st.a > 1) {
+                    return Res::Undef;
+                }
+                self.add_volatile(holder, VolKind::Confusion, None, Eff::None);
+                Res::Undef
+            }
+            // onLockMove(pokemon)
+            (VolKind::Lockedmove | VolKind::Twoturnmove, Ev::LockMove) => {
+                Res::Num(self.vols(holder).get(kind).map_or(0, |v| v.data) as i32)
+            }
+
+            // ---- Recharging after Hyper Beam and the like.
+            (VolKind::Mustrecharge, Ev::Start) => Res::Undef,
+            // onBeforeMove(pokemon): the turn is spent.
+            (VolKind::Mustrecharge, Ev::BeforeMove) => {
+                self.remove_volatile(holder, kind);
+                if let Some(k) = VolKind::named("truant") {
+                    self.remove_volatile(holder, k);
+                }
+                Res::Null
+            }
+            // onLockMove: 'recharge'
+            (VolKind::Mustrecharge, Ev::LockMove) => Res::Num(mv::RECHARGE as i32 + 1),
+
+            // ---- The first turn of a charging move. `data` is the move (table
+            // index plus one). The user also gets a volatile named after the move,
+            // whose `st.a` remembers where the move was aimed.
+            // onStart(attacker, defender, effect)
+            (VolKind::Twoturnmove, Ev::Start) => {
+                let Eff::Move(mi) = e.effect else {
+                    return Res::Undef;
+                };
+                let id = self.am[mi as usize].id;
+                let Some(own) = VolKind::named(MOVES[id as usize].id) else {
+                    return FALSE;
+                };
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    v.data = id + 1;
+                }
+                self.add_volatile(holder, own, None, Eff::None);
+                let mut defender = e.source;
+                let mut loc = self.mon(holder).last_move_loc;
+                // Called by another move, it remembers the target it was given.
+                if self.am[mi as usize].source_effect != Eff::None && MOVES[id as usize].target != Target::User {
+                    if defender.is_some_and(|d| self.mon(d).fainted) {
+                        let foe = 1 - holder.side as usize;
+                        let pick = self.rand(ACTIVE as u32, "charging move target") as usize;
+                        defender = Some(self.active(foe, pick));
+                    }
+                    if let Some(d) = defender {
+                        loc = self.loc_of(holder, d);
+                    }
+                }
+                if let Some(v) = self.vol_mut(holder, own) {
+                    v.st.a = loc as i16;
+                }
+                self.run_event(Ev::PrepareHit, Some(holder), defender, Eff::Move(mi), Res::Undef);
+                Res::Undef
+            }
+            // onEnd(target)
+            (VolKind::Twoturnmove, Ev::End) => {
+                let id = self.vols(holder).get(kind).map_or(0, |v| v.data);
+                if id > 0 {
+                    if let Some(own) = VolKind::named(MOVES[id as usize - 1].id) {
+                        self.remove_volatile(holder, own);
+                    }
+                }
+                Res::Undef
+            }
+            // onMoveAborted(pokemon)
+            (VolKind::Twoturnmove, Ev::MoveAborted) => {
+                self.remove_volatile(holder, kind);
+                Res::Undef
+            }
+
+            // ---- Out of reach: Fly, Bounce, Dig, Dive, Phantom Force.
+            // onInvulnerability(target, source, move): `false` unless the move is one that reaches.
+            (
+                VolKind::Fly | VolKind::Bounce | VolKind::Dig | VolKind::Dive | VolKind::Phantomforce,
+                Ev::Invulnerability,
+            ) => {
+                let reaches: &[&str] = match kind {
+                    VolKind::Fly | VolKind::Bounce => {
+                        &["gust", "twister", "skyuppercut", "thunder", "hurricane", "smackdown", "thousandarrows"]
+                    }
+                    VolKind::Dig => &["earthquake", "magnitude"],
+                    VolKind::Dive => &["surf", "whirlpool"],
+                    _ => &[],
+                };
+                if matches!(e.effect, Eff::Move(mi) if reaches.contains(&self.am[mi as usize].d().id)) {
+                    return Res::Undef;
+                }
+                FALSE
+            }
+            // onImmunity(type, pokemon): underground and underwater, the weather does not reach.
+            (VolKind::Dig | VolKind::Dive, Ev::Immunity) => {
+                if matches!(e.imm, Some(Imm::Weather(Weather::Sandstorm))) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Focus Punch's focus. `data` is set once it is lost.
+            (VolKind::Focuspunch | VolKind::Beakblast, Ev::Start) => Res::Undef,
+            // onHit(pokemon, source, move): any damaging move breaks it.
+            (VolKind::Focuspunch, Ev::Hit) => {
+                if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].category != Category::Status) {
+                    if let Some(v) = self.vol_mut(holder, kind) {
+                        v.data = 1;
+                    }
+                }
+                Res::Undef
+            }
+            // onTryAddVolatile(status, pokemon): it cannot flinch meanwhile.
+            (VolKind::Focuspunch, Ev::TryAddVolatile) => {
+                if e.vol == Some(VolKind::Flinch) {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
+            // ---- Beak Blast's heated beak: onHit(target, source, move) burns on contact.
+            (VolKind::Beakblast, Ev::Hit) => {
+                if let (Eff::Move(mi), Some(source)) = (e.effect, e.source) {
+                    if self.makes_contact(mi) {
+                        self.try_set_status(source, Status::Brn, Some(holder), Eff::None);
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Counter, Mirror Coat. `st.a` is the field slot (plus one) of the
+            // foe that hit the holder, `data` twice the damage it did.
+            (VolKind::Counter | VolKind::Mirrorcoat, Ev::Start) => {
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    v.st.a = 0;
+                    v.data = 0;
+                }
+                Res::Undef
+            }
+            // onRedirectTarget(target, source, source2, move): the move goes back where the hit came from.
+            (VolKind::Counter | VolKind::Mirrorcoat, Ev::RedirectTarget) => {
+                let own = if kind == VolKind::Counter { mv::COUNTER } else { mv::MIRRORCOAT };
+                if !matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].id == own) {
+                    return Res::Undef;
+                }
+                let slot = self.vols(holder).get(kind).map_or(0, |v| v.st.a);
+                if e.target != Some(holder) || slot == 0 {
+                    return Res::Undef;
+                }
+                match self.at_slot(slot as u8 - 1) {
+                    Some(r) => Res::Mon(r),
+                    None => Res::Undef,
+                }
+            }
+            // onDamagingHit(damage, target, source, move)
+            (VolKind::Counter | VolKind::Mirrorcoat, Ev::DamagingHit) => {
+                let (Eff::Move(mi), Some(source)) = (e.effect, e.source) else {
+                    return Res::Undef;
+                };
+                let wanted = if kind == VolKind::Counter { Category::Physical } else { Category::Special };
+                if !self.is_ally(source, holder) && self.am[mi as usize].category == wanted {
+                    let slot = self.field_slot(source);
+                    let damage = e.relay.num();
+                    if let Some(v) = self.vol_mut(holder, kind) {
+                        v.st.a = slot as i16 + 1;
+                        v.data = (2 * damage).clamp(0, u16::MAX as i32) as u16;
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Roost: the user is not Flying this turn. That is its onType(types, pokemon),
+            // which `get_types` applies directly.
+            (VolKind::Roost, Ev::Start | Ev::Type) => Res::Undef,
+
+            // ---- Uproar: three turns of it, and nobody sleeps meanwhile (see `vol_cb_prefixed`).
+            (VolKind::Uproar, Ev::Start | Ev::End) => Res::Undef,
+            // onResidual(target)
+            (VolKind::Uproar, Ev::Residual) => {
+                if self.vols(holder).has(VolKind::Throatchop) {
+                    self.remove_volatile(holder, kind);
+                    return Res::Undef;
+                }
+                if self.mon(holder).last_move == mv::STRUGGLE {
+                    self.drop_vol(holder, kind);
+                }
+                Res::Undef
+            }
+            // onLockMove: 'uproar'
+            (VolKind::Uproar, Ev::LockMove) => Res::Num(mv::UPROAR as i32 + 1),
             _ => unreachable!("no body for {kind:?} {ev:?}"),
         }
     }
@@ -1037,6 +1338,7 @@ impl Battle {
                 }
                 let loc = self.loc_of(user, holder);
                 if self.valid_target_loc(loc, user, self.am[mi as usize].target) {
+                    self.am[mi as usize].smart_target = false;
                     return Res::Mon(holder);
                 }
                 Res::Undef
@@ -1078,6 +1380,29 @@ impl Battle {
             }
             (VolKind::Glaiverush, Ev::ModifyDamage, Pre::Source) => self.chain_modify(2, 1),
 
+            // The moves that reach a Pokémon in mid-move hit it twice as hard:
+            // onSourceModifyDamage (Fly, Dig, Dive) or onSourceBasePower (Bounce).
+            (VolKind::Fly | VolKind::Dig | VolKind::Dive, Ev::ModifyDamage, Pre::Source)
+            | (VolKind::Bounce, Ev::BasePower, Pre::Source) => {
+                let doubled: &[&str] = match kind {
+                    VolKind::Fly | VolKind::Bounce => &["gust", "twister"],
+                    VolKind::Dig => &["earthquake", "magnitude"],
+                    _ => &["surf", "whirlpool"],
+                };
+                if matches!(e.effect, Eff::Move(mi) if doubled.contains(&self.am[mi as usize].d().id)) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+
+            // Uproar: onAnySetStatus(status, pokemon). Nobody falls asleep.
+            (VolKind::Uproar, Ev::SetStatus, Pre::Any) => {
+                if e.status == Status::Slp {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
+
             // Lock-On: the holder's moves cannot miss the Pokémon it locked on to.
             // onSourceInvulnerability(target, source, move) and onSourceAccuracy(accuracy, target, source, move)
             (VolKind::Lockon, Ev::Invulnerability | Ev::Accuracy, Pre::Source) => {
@@ -1092,7 +1417,7 @@ impl Battle {
     }
 
     /// Smack Down's check for a target in the air mid-move (Fly, Bounce): it
-    /// comes down and loses its turn. Those moves are not modelled yet.
+    /// comes down and loses its turn.
     fn smack_out_of_the_air(&mut self, r: MonRef) -> bool {
         let mut hit = false;
         for id in ["fly", "bounce"] {
@@ -1419,7 +1744,8 @@ impl Battle {
         }
     }
 
-    /// Whether an effect is the condition with this id (for effects the engine may not model yet).
+    /// Whether an effect is the condition with this id (looked up by name, as Showdown does,
+    /// so that an id Champions lacks simply never matches).
     pub(crate) fn eff_is_named(&self, eff: Eff, id: &str) -> bool {
         match eff {
             Eff::Vol(v) => v.id() == id,
@@ -1467,6 +1793,88 @@ impl Battle {
                     let hp = self.sides[side].slot_conds[pos].get(kind).map_or(0, |c| c.data);
                     self.heal(hp as i32, Some(target), Some(target), Eff::None);
                 }
+                Res::Undef
+            }
+            // ---- Healing Wish: waits on the slot for someone it can help.
+            // onSwitchIn(target)
+            (SlotCond::Healingwish, Ev::SwitchIn) => {
+                self.single_event(
+                    Ev::Swap,
+                    Eff::SlotCond(kind),
+                    Some(holder),
+                    Some(holder),
+                    None,
+                    Eff::None,
+                    Res::Undef,
+                );
+                Res::Undef
+            }
+            // onSwap(target): also when a Pokémon is moved into the slot by Ally Switch.
+            (SlotCond::Healingwish, Ev::Swap) => {
+                let target = e.target.unwrap_or(holder);
+                let m = self.mon(target);
+                if !m.fainted && (m.hp < m.max_hp() || m.status != Status::None) {
+                    let max = m.max_hp() as i32;
+                    self.heal_mon(target, max);
+                    self.cure_status(target);
+                    let (side, pos) = (target.side as usize, self.mon(target).position as usize);
+                    self.remove_slot_condition(side, pos, kind);
+                }
+                Res::Undef
+            }
+
+            // ---- A future move (Future Sight). `st.a` is the turn counter value it lands at,
+            // `source` the Pokémon that used it, wherever that is by then.
+            // onStart(target)
+            (SlotCond::Futuremove, Ev::Start) => {
+                let ending = self.turn as i16 - 1 + 2;
+                if let Some(c) = self.sides[side].slot_conds[pos].get_mut(kind) {
+                    c.st.a = ending;
+                }
+                Res::Undef
+            }
+            // onResidual(target): the counter is one byte, so a hit due at 256 or later never comes.
+            (SlotCond::Futuremove, Ev::Residual) => {
+                let Some(c) = self.sides[side].slot_conds[pos].get(kind) else {
+                    return Res::Undef;
+                };
+                if self.overflowed_turn_count() < c.st.a {
+                    return Res::Undef;
+                }
+                self.remove_slot_condition(side, pos, kind);
+                Res::Undef
+            }
+            // onEnd(target): time is up; whoever stands in the slot now is hit.
+            (SlotCond::Futuremove, Ev::End) => {
+                let Some(target) = e.target else {
+                    return Res::Undef;
+                };
+                let Some(source) = self.sides[side].slot_conds[pos].get(kind).and_then(|c| c.source) else {
+                    return Res::Undef;
+                };
+                if self.mon(target).fainted || target == source {
+                    return Res::Undef;
+                }
+                // The hit is built from a few plain fields of the move: no callbacks,
+                // and none of the original's indifference to type immunity.
+                let hit = self.new_am(mv::FUTURESIGHT);
+                {
+                    let infiltrates = self.has_ability(source, ab::INFILTRATOR);
+                    let am = &mut self.am[hit as usize];
+                    am.bare = true;
+                    am.flags = F_METRONOME | F_FUTUREMOVE;
+                    am.ignore_immunity = IgnoreImm::No;
+                    am.infiltrates = infiltrates;
+                }
+                self.set_active_move(Some(hit), Some(source), Some(target));
+                self.try_spread_move_hit(&[target], source, hit);
+                if self.mon(source).is_active && self.has_item(source, it::LIFEORB) {
+                    // The orb is asked directly, as "the move" itself: it takes its tenth, hit or miss.
+                    let d = div1(self.mon(source).max_hp() as u32, 10);
+                    self.damage(d, Some(source), Some(source), Eff::Item(it::LIFEORB));
+                }
+                self.active_move = None;
+                self.check_win(None);
                 Res::Undef
             }
             _ => unreachable!("no body for {kind:?} {ev:?}"),

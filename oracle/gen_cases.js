@@ -4,7 +4,7 @@
 //
 //   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID]
 //                     [--max-turns 250] [--policy switch] [--plain] [--check-legal]
-//                     [--abilities id,id] [--items id,id] [--moves id,id] [--species id,id] [--mega-rate 0.5]
+//                     [--abilities id,id] [--items id,id] [--moves id,id [--moves-per 2]] [--species id,id] [--mega-rate 0.5]
 //
 // --plain gives every Pokémon no ability, no item and no gender (the set-up the
 // engine's first version was checked with).
@@ -33,8 +33,10 @@ const PLAIN = !!args.plain;
 // --abilities a,b and --items x,y: make every battle a themed one over just these.
 const listArg = name => (typeof args[name] === 'string' ? args[name].split(',').filter(Boolean) : []);
 const FORCED_THEME = (args.abilities || args.items) ? { abilities: listArg('abilities'), items: listArg('items') } : null;
-// --moves a,b: every Pokémon is one that learns at least one of these, and knows up to two of them.
+// --moves a,b: every Pokémon is one that learns at least one of these, and knows up to two of them
+// (--moves-per N: up to N of them, for effects that need three particular moves on one Pokémon).
 const FORCED_MOVES = listArg('moves');
+const MOVES_PER = args['moves-per'] !== undefined ? parseInt(args['moves-per']) : 2;
 // --species a,b: at least half of every team is drawn from these.
 const FORCED_SPECIES = listArg('species');
 // --check-legal: at every move request, also ask Showdown itself about every
@@ -44,6 +46,19 @@ const CHECK_LEGAL = !!args['check-legal'];
 const MEGA_RATE = args['mega-rate'] !== undefined ? parseFloat(args['mega-rate']) : 0.5;
 
 const pool = JSON.parse(fs.readFileSync(path.join(__dirname, 'pool.json'), 'utf8'));
+// A theme can only name what the engine models, or the battles would all be skipped.
+if (FORCED_THEME) {
+	const unknown = [
+		...FORCED_THEME.abilities.filter(a => a !== 'noability' && !pool.abilities.includes(a)),
+		...FORCED_THEME.items.filter(i => !pool.items.includes(i) && !(pool.megastones || []).includes(i)),
+	];
+	if (unknown.length) throw new Error('not in the pool: ' + unknown.join(', '));
+}
+{
+	const known = new Set(pool.species.flatMap(sp => sp.moves));
+	const unknown = FORCED_MOVES.filter(m => !known.has(m));
+	if (unknown.length) throw new Error('--moves: nothing in the pool knows ' + unknown.join(', '));
+}
 const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
 const STATS = args.stats || null;
 const tally = { moves: {}, events: {}, abilities: {}, items: {}, megas: {}, brought: { abilities: {}, items: {} } };
@@ -128,7 +143,7 @@ function randomSet(rand) {
 	const s = pick(rand, from);
 	let moves = shuffled(rand, s.moves).slice(0, 4);
 	if (FORCED_MOVES.length) {
-		const known = shuffled(rand, FORCED_MOVES.filter(m => s.moves.includes(m))).slice(0, 2);
+		const known = shuffled(rand, FORCED_MOVES.filter(m => s.moves.includes(m))).slice(0, MOVES_PER);
 		moves = [...known, ...moves.filter(m => !known.includes(m))].slice(0, 4);
 	}
 	// Protect is on nearly every real doubles set; make sure it is exercised.
@@ -229,6 +244,7 @@ function snapshot(battle) {
 		request: battle.requestState || '',
 		rng: battle.prng.getSeed().split(',').map(Number),
 		effect_order: battle.effectOrder,
+		battle_last_move: battle.lastMove ? battle.lastMove.id : '',
 		field: {
 			weather: battle.field.weather,
 			weather_turns: battle.field.weatherState.duration || 0,
@@ -277,9 +293,36 @@ function snapshot(battle) {
 				last_move: p.lastMove ? p.lastMove.id : '',
 				move_actions: Math.min(p.activeMoveActions, 255),
 				newly_switched: !!p.newlySwitched,
+				hurt: p.hurtThisTurn || 0,
+				times_attacked: p.timesAttacked,
+				stat_flags: (p.statsRaisedThisTurn ? 'r' : '-') + (p.statsLoweredThisTurn ? 'l' : '-'),
+				attacked_by: attackedBySummary(p),
+				last_damaged: lastDamagedSummary(p),
+				moves: p.moveSlots.map(m => m.id).join(','),
+				transformed: !!p.transformed,
+				illusion: p.illusion ? p.illusion.pickIndex : -1,
+				added_type: p.addedType || '',
 			})),
 		})),
 	};
+}
+
+/** What this turn's entries of `attackedBy` amount to, as the Rust engine keeps it. */
+function attackedBySummary(p) {
+	let mask = 0;
+	for (const a of p.attackedBy) {
+		if (a.thisTurn && a.damage > 0) mask |= 1 << (a.source.side.n * 6 + a.source.pickIndex);
+	}
+	const last = p.getLastDamagedBy(true);
+	const slot = last && last.thisTurn ? `${'p1a p1b p2a p2b'.split(' ').indexOf(last.slot)}/${last.damage}` : '';
+	return `${mask}:${slot}`;
+}
+
+/** The last entry of `attackedBy` that Metal Burst would answer, whatever turn it is from. */
+function lastDamagedSummary(p) {
+	const last = p.getLastDamagedBy(true);
+	if (!last) return '';
+	return `${'p1a p1b p2a p2b'.split(' ').indexOf(last.slot)}/${last.damage}${last.thisTurn ? '' : '*'}`;
 }
 
 /** The state a side or slot condition carries, as the Rust engine prints it. */
@@ -287,6 +330,7 @@ function condDetail(id, state) {
 	switch (id) {
 	case 'spikes': case 'toxicspikes': return state.layers || 0;
 	case 'wish': return `${Math.floor(state.hp)}/${state.startingTurn}`;
+	case 'futuremove': return `${state.endingTurn}/${state.source.side.n}${state.source.pickIndex}`;
 	default: return 0;
 	}
 }
@@ -294,12 +338,16 @@ function condDetail(id, state) {
 /** The state a volatile carries, as the Rust engine prints it. */
 function volDetail(id, state) {
 	switch (id) {
-	case 'stall': return state.counter || 0;
+	case 'stall': case 'allyswitch': return state.counter || 0;
 	case 'choicelock': case 'encore': case 'disable': return state.move || 0;
 	case 'substitute': return state.hp;
 	case 'dragoncheer': return state.hasDragonType ? 1 : 0;
 	case 'partiallytrapped': return state.boundDivisor;
 	case 'stockpile': return `${state.layers}/${state.def}/${state.spd}`;
+	case 'lockedmove': return `${state.move}/${state.trueDuration}`;
+	case 'twoturnmove': return state.move;
+	case 'fly': case 'dig': case 'dive': case 'bounce': case 'phantomforce': case 'solarbeam': case 'solarblade':
+	case 'skyattack': case 'meteorbeam': case 'electroshot': return state.targetLoc || 0;
 	case 'leechseed': return 'p1a p1b p2a p2b'.split(' ').indexOf(state.sourceSlot);
 	case 'helpinghand': return Math.round(Math.log(state.multiplier) / Math.log(1.5));
 	case 'confusion': return state.time || 0;
@@ -323,9 +371,12 @@ function legalOptions(battle, side) {
 	for (let i = side.active.length; i < side.pokemon.length; i++) if (!side.pokemon[i].fainted) bench.push(i);
 	if (req.forceSwitch) {
 		const need = req.forceSwitch.filter(Boolean).length;
-		return req.forceSwitch.map(f => {
+		return req.forceSwitch.map((f, pos) => {
 			if (!f) return ['pass'];
-			const opts = bench.map(i => `switch ${i + 1}`);
+			// Revival Blessing asks for a fainted team member instead (one still in an active slot counts).
+			const opts = side.slotConditions[pos]['revivalblessing'] ?
+				side.pokemon.map((p, i) => (p.fainted ? `switch ${i + 1}` : null)).filter(Boolean) :
+				bench.map(i => `switch ${i + 1}`);
 			if (bench.length < need) opts.push('pass');
 			return opts;
 		});
@@ -334,6 +385,13 @@ function legalOptions(battle, side) {
 		const p = side.active[pos];
 		if (p.fainted) return ['pass'];
 		const opts = [];
+		// Locked into a move (a rampage, the second turn of a charging move, recharging):
+		// that move is all Showdown lists, and it takes no target.
+		if (p.getLockedMove()) {
+			opts.push('move 1');
+			if (!p.trapped) throw new Error('a locked Pokémon that is not trapped');
+			return opts;
+		}
 		const moves = p.getMoves();
 		// No usable move left: any move choice Showdown accepts becomes Struggle. It lists
 		// Struggle itself, except to a side's last active Pokémon with moves sealed by a
@@ -380,7 +438,10 @@ function checkLegal(battle, side, legal) {
 		const p = side.active[pos];
 		let want = legal[pos].filter(o => !(o.startsWith('switch') && o === other));
 		let got = accepted;
-		if (!p.fainted && !p.getMoves().length) {
+		if (!p.fainted && p.getLockedMove()) {
+			// Showdown takes the lone move with or without a Mega flag, and ignores the flag.
+			got = accepted.filter(o => !o.endsWith(' mega'));
+		} else if (!p.fainted && !p.getMoves().length) {
 			// Out of usable moves: Showdown takes any move slot it listed and turns it into Struggle.
 			// (It also ignores a Mega flag on that Struggle, so `move 1 mega` is not listed.)
 			got = accepted.filter(o => !o.startsWith('move'));
@@ -395,7 +456,44 @@ function checkLegal(battle, side, legal) {
 	}
 }
 
-function chooseFor(rand, options) {
+/**
+ * Whether Showdown takes these answers to a switch request. It counts down
+ * the switches and passes it still expects as it reads the slots in order, and a
+ * revival uses up a switch if one is left: so with a single replacement for a
+ * fainted Pokémon and a reviver to its left, reviving and replacing are not
+ * accepted together (Showdown throws).
+ */
+function switchComboOk(side, picks) {
+	const flagged = side.active.map(p => !!p.switchFlag);
+	const out = flagged.filter(Boolean).length;
+	const into = side.pokemon.slice(side.active.length).filter(p => !p.fainted).length;
+	let switches = Math.min(out, into);
+	let passes = out - switches;
+	const seen = new Set();
+	for (const [pos, pick] of picks.entries()) {
+		if (!flagged[pos]) continue;
+		if (pick === 'pass') {
+			if (!passes) return false;
+			passes--;
+		} else if (side.slotConditions[pos]['revivalblessing']) {
+			switches = Math.max(switches - 1, 0);
+		} else {
+			if (!switches || seen.has(pick)) return false;
+			seen.add(pick);
+			switches--;
+		}
+	}
+	return switches === 0;
+}
+
+function chooseFor(rand, options, side) {
+	if (side.activeRequest && side.activeRequest.forceSwitch && side.active.some((p, pos) => side.slotConditions[pos]['revivalblessing'])) {
+		for (let attempt = 0; attempt < 200; attempt++) {
+			const picks = options.map(opts => pick(rand, opts));
+			if (switchComboOk(side, picks)) return picks;
+		}
+		throw new Error('no acceptable answer to a switch request with Revival Blessing');
+	}
 	if (options.some(opts => opts.includes('pass') && opts.length > 1)) {
 		// Fewer replacements than empty slots: hand the bench out at random, pass the rest.
 		const open = shuffled(rand, options.map((opts, i) => i).filter(i => options[i].length > 1));
@@ -415,7 +513,9 @@ function chooseFor(rand, options) {
 			// Mega Evolve at the first chance about half the time, so that it happens early and late.
 			const megas = moves.filter(o => o.endsWith('mega'));
 			if (megas.length) moves = rand() < 0.5 ? megas : moves.filter(o => !o.endsWith('mega'));
-			if (moves.length && (!others.length || rand() < attackRate)) return pick(rand, moves);
+			// (With one Pokémon on the bench both slots cannot switch: after a few tries, let them attack.)
+			const rate = attempt < 10 ? attackRate : Math.max(attackRate, 0.5);
+			if (moves.length && (!others.length || rand() < rate)) return pick(rand, moves);
 			return pick(rand, others);
 		});
 		const switches = picks.filter(p => p.startsWith('switch'));
@@ -484,7 +584,7 @@ function runCase(id) {
 		if (battle.turn > MAX_TURNS) { out.truncated = true; break; }
 		const legal = battle.sides.map(side => legalOptions(battle, side));
 		if (CHECK_LEGAL) battle.sides.forEach((side, s) => checkLegal(battle, side, legal[s]));
-		const choices = legal.map(opts => chooseFor(rand, opts));
+		const choices = legal.map((opts, s) => chooseFor(rand, opts, battle.sides[s]));
 		// Decide who is being asked before anyone answers: the last answer starts the next
 		// request, which would otherwise look like one this step still had to fill.
 		const asked = battle.sides.map(side => !!side.activeRequest && !side.activeRequest.wait);

@@ -5,3 +5,5 @@
 *.jsonl
 !/tests/fixtures/*.jsonl
 /target-trace
+corpus/
+__pycache__/

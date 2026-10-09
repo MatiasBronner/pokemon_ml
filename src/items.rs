@@ -81,7 +81,7 @@ fn cure_berry(item: u16) -> Option<&'static [Status]> {
 
 /// The volatiles Mental Herb cures. None of them is modelled yet; looking them
 /// up by name means the herb starts working the moment one is.
-const MENTAL_HERB: [&str; 6] = ["attract", "taunt", "encore", "torment", "disable", "healblock"];
+pub(crate) const MENTAL_HERB: [&str; 6] = ["attract", "taunt", "encore", "torment", "disable", "healblock"];
 
 impl Battle {
     /// The move the running event is about, if it is about one.
@@ -104,7 +104,8 @@ impl Battle {
             // whose base species it belongs to.
             debug_assert!(ev == Ev::TakeItem && pre == Pre::On);
             let d = &ITEMS[item as usize];
-            let species = self.mon(holder).base_species;
+            // (When a move asks the stone directly, "the holder" is whoever would end up with it.)
+            let species = self.mon(e.target.unwrap_or(holder)).base_species;
             let own = if d.flags & IF_MEGA_BY_FORME != 0 {
                 // A few stones go by the exact forme instead: the ones they evolve and the Megas they make.
                 d.mega.iter().any(|&(from, to)| from == species || to == species)
@@ -366,6 +367,62 @@ impl Battle {
                 Res::Undef
             }
 
+            // ---- Eject Button: onAfterMoveSecondary(target, source, move). The holder leaves when hit.
+            (it::EJECTBUTTON, Ev::AfterMoveSecondary, Pre::On) => {
+                let (Some(target), Some(source), Some(mi)) = (e.target, e.source, self.event_move()) else {
+                    return Res::Undef;
+                };
+                let am = &self.am[mi as usize];
+                if source == target
+                    || self.mon(target).hp == 0
+                    || am.category == Category::Status
+                    || am.flags & F_FUTUREMOVE != 0
+                {
+                    return Res::Undef;
+                }
+                if !self.can_switch(target.side as usize) || self.mon(target).force_switch_flag {
+                    return Res::Undef;
+                }
+                // Only one such exit at a time.
+                let (actives, n) = self.all_active(false);
+                if actives[..n].iter().any(|&p| self.switch_flag_is_true(p)) {
+                    return Res::Undef;
+                }
+                self.mon_mut(target).switch_flag = true;
+                self.mon_mut(target).switch_move = NO_MOVE;
+                if !self.use_item(target, None, Eff::None) {
+                    self.mon_mut(target).switch_flag = false;
+                }
+                Res::Undef
+            }
+
+            // ---- Red Card: onAfterMoveSecondary(target, source, move). The attacker is dragged out.
+            (it::REDCARD, Ev::AfterMoveSecondary, Pre::On) => {
+                let (Some(target), Some(source), Some(mi)) = (e.target, e.source, self.event_move()) else {
+                    return Res::Undef;
+                };
+                if source == target
+                    || self.mon(source).hp == 0
+                    || self.mon(target).hp == 0
+                    || self.am[mi as usize].category == Category::Status
+                {
+                    return Res::Undef;
+                }
+                if !self.mon(source).is_active
+                    || !self.can_switch(source.side as usize)
+                    || self.mon(source).force_switch_flag
+                    || self.mon(target).force_switch_flag
+                {
+                    return Res::Undef;
+                }
+                if self.use_item(target, Some(source), Eff::None)
+                    && self.run_event(Ev::DragOut, Some(source), Some(target), Eff::Move(mi), Res::Undef).truthy()
+                {
+                    self.mon_mut(source).force_switch_flag = true;
+                }
+                Res::Undef
+            }
+
             // ---- Life Orb
             // onModifyDamage(damage, source, target, move)
             (it::LIFEORB, Ev::ModifyDamage, Pre::On) => self.chain_modify(5324, 4096),
@@ -374,7 +431,10 @@ impl Battle {
                 let (Some(source), Some(mi)) = (e.target, self.event_move()) else {
                     return Res::Undef;
                 };
-                if Some(source) != e.source && self.am[mi as usize].category != Category::Status {
+                if Some(source) != e.source
+                    && self.am[mi as usize].category != Category::Status
+                    && !self.mon(source).force_switch_flag
+                {
                     let d = div1(self.mon(source).max_hp() as u32, 10);
                     self.damage(d, Some(source), Some(source), Eff::Item(it::LIFEORB));
                 }
@@ -535,7 +595,7 @@ impl Battle {
                     return Res::Undef;
                 };
                 let total = self.am[mi as usize].total_damage;
-                if total > 0 {
+                if total > 0 && !self.mon(pokemon).force_switch_flag {
                     self.heal(div1(total as u32, 8), Some(pokemon), None, Eff::None);
                 }
                 Res::Undef

@@ -14,14 +14,20 @@ impl Battle {
     /// in the order picked (the first two lead), and plays the opening
     /// switch-ins. `seed` is Showdown's four 16-bit seed words.
     pub fn new(teams: [&[PokemonSet]; 2], seed: [u16; 4]) -> Result<Battle, Error> {
-        let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false, hidden: false };
+        let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false, hidden: false, used: false };
         let blank_mon = Pokemon {
             species: 0,
             base_species: 0,
+            set_species: 0,
+            transformed: false,
+            base_moves: [MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false, hidden: false, used: false }; MAX_MOVES],
+            base_n_moves: 0,
+            illusion: 0,
             can_mega: NO_SPECIES,
             nature: (0, 0),
             stat_points: [0; 6],
             types: [Type::None; 2],
+            added_type: Type::None,
             level: 50,
             gender: Gender::N,
             stats: [0; 6],
@@ -50,6 +56,10 @@ impl Battle {
             fainted: true,
             faint_queued: false,
             switch_flag: false,
+            switch_move: NO_MOVE,
+            force_switch_flag: false,
+            skip_before_switch_out: false,
+            being_called_back: false,
             trapped: Trapped::No,
             active_turns: 0,
             move_this_turn: Res::Undef,
@@ -58,6 +68,14 @@ impl Battle {
             last_move_loc: 0,
             active_move_actions: 0,
             newly_switched: true,
+            hurt_this_turn: 0,
+            times_attacked: 0,
+            stats_raised_this_turn: false,
+            stats_lowered_this_turn: false,
+            hit_by_this_turn: 0,
+            damaged_by: [NO_DAMAGED_BY; MAX_TEAM],
+            n_damaged_by: 0,
+            locked_move: NO_MOVE,
             speed: 0,
         };
         let blank_side = Side {
@@ -66,6 +84,8 @@ impl Battle {
             order: [0, 1, 2, 3, 4, 5],
             pokemon_left: 0,
             total_fainted: 0,
+            fainted_this_turn: false,
+            fainted_last_turn: false,
             conds: SideConds::new(SideCond::FIRST),
             slot_conds: [SlotConds::new(SlotCond::FIRST); ACTIVE],
         };
@@ -98,6 +118,8 @@ impl Battle {
             am: [ActiveMove::new(0); AM_CAP],
             am_len: 0,
             active_move: None,
+            last_move: NO_MOVE,
+            started: false,
             active_pokemon: None,
             active_target: None,
             speed_order: [0; 4],
@@ -113,6 +135,9 @@ impl Battle {
             }
             for (i, set) in team.iter().enumerate() {
                 let sp = SPECIES.get(set.species as usize).ok_or_else(|| Error::BadTeam("unknown species".into()))?;
+                if sp.illegal {
+                    return Err(Error::Unsupported(format!("{} is not in Champions", sp.name)));
+                }
                 if set.moves.is_empty() || set.moves.len() > MAX_MOVES {
                     return Err(Error::BadTeam(format!("{} needs 1 to {MAX_MOVES} moves", sp.name)));
                 }
@@ -151,9 +176,11 @@ impl Battle {
                 }
                 mon.species = set.species;
                 mon.base_species = set.species;
+                mon.set_species = set.species;
                 mon.nature = set.nature;
                 mon.stat_points = set.stat_points;
                 mon.types = sp.types;
+                mon.added_type = Type::None;
                 mon.gender = set.gender;
                 mon.ability = set.ability;
                 mon.base_ability = set.ability;
@@ -169,7 +196,7 @@ impl Battle {
                     if !d.supported {
                         return Err(Error::Unsupported(format!("move {}", d.name)));
                     }
-                    mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false, hidden: false };
+                    mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false, hidden: false, used: false };
                 }
                 mon.n_moves = set.moves.len() as u8;
                 b.sides[s].team[i] = mon;
@@ -207,6 +234,18 @@ impl Battle {
         m.moves[..m.n_moves as usize].iter().any(Battle::slot_usable)
     }
 
+    /// The target type Showdown's move request shows for a move
+    /// (`Pokemon#getMoves`), which is what a choice of target is checked against.
+    fn request_target(&self, r: MonRef, move_id: u16) -> Target {
+        match move_id {
+            // For anything but a Ghost, Curse is a move used on oneself.
+            mv::CURSE if !self.has_type(r, Type::Ghost) => Target::User,
+            // Heal Block keeps Pollen Puff off allies.
+            mv::POLLENPUFF if self.vols(r).has(VolKind::Healblock) => Target::AdjacentFoe,
+            _ => MOVES[move_id as usize].target,
+        }
+    }
+
     /// `Pokemon#isLastActive`: no living ally stands to its right.
     fn is_last_active(&self, r: MonRef) -> bool {
         let m = self.mon(r);
@@ -222,7 +261,7 @@ impl Battle {
         let m = self.mon(r);
         let listed = self.is_last_active(r) && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);
         if listed {
-            let t = MOVES[m.moves[0].id as usize].target;
+            let t = self.request_target(r, m.moves[0].id);
             if t.is_chosen() {
                 if let Some(loc) = [1i8, 2, -1, -2].into_iter().find(|&loc| self.valid_target_loc(loc, r, t)) {
                     return Choice::mv(0, loc);
@@ -252,7 +291,10 @@ impl Battle {
                     out.push(Choice::Pass);
                     return out;
                 }
-                if !self.usable_moves(r) {
+                if m.locked_move != NO_MOVE {
+                    // Locked into a move: Showdown lists that move alone, with no target to pick.
+                    out.push(Choice::mv(0, 0));
+                } else if !self.usable_moves(r) {
                     out.push(self.struggle_choice(r));
                 } else {
                     // Any usable move can be combined with Mega Evolution.
@@ -261,7 +303,7 @@ impl Battle {
                         if !Battle::slot_usable(slot) {
                             continue;
                         }
-                        let t = MOVES[slot.id as usize].target;
+                        let t = self.request_target(r, slot.id);
                         for &mega in megas {
                             if t.is_chosen() {
                                 for loc in [1i8, 2, -1, -2] {
@@ -284,8 +326,17 @@ impl Battle {
                     out.push(Choice::Pass);
                     return out;
                 }
-                bench(&mut out);
-                if out.len() < self.open_slots(side) {
+                if self.reviving(side, pos) {
+                    // Revival Blessing: pick a fainted team member (one still in an active slot counts).
+                    for p in 0..s.n as usize {
+                        if s.team[s.order[p] as usize].fainted {
+                            out.push(Choice::Switch { to: p as u8 });
+                        }
+                    }
+                } else {
+                    bench(&mut out);
+                }
+                if self.living_bench(side) < self.open_slots(side) {
                     // More empty slots than replacements: one of them stays empty.
                     out.push(Choice::Pass);
                 }
@@ -297,6 +348,11 @@ impl Battle {
     fn living_bench(&self, side: usize) -> usize {
         let s = &self.sides[side];
         (ACTIVE..s.n as usize).filter(|&p| !s.team[s.order[p] as usize].fainted).count()
+    }
+
+    /// Whether the Pokémon in this slot is being asked whom to revive.
+    fn reviving(&self, side: usize, pos: usize) -> bool {
+        self.sides[side].slot_conds[pos].has(SlotCond::Revivalblessing)
     }
 
     fn open_slots(&self, side: usize) -> usize {
@@ -318,6 +374,9 @@ impl Battle {
                 _ if m.fainted => false,
                 Choice::Switch { to } => m.trapped == Trapped::No && bench_ok(to),
                 Choice::Move { slot, target, mega } => {
+                    if m.locked_move != NO_MOVE {
+                        return c == Choice::mv(0, 0);
+                    }
                     if !self.usable_moves(r) {
                         // Struggle; Showdown would ignore a Mega flag here, so it is not offered.
                         return c == self.struggle_choice(r);
@@ -328,12 +387,15 @@ impl Battle {
                     if mega && m.can_mega == NO_SPECIES {
                         return false;
                     }
-                    let t = MOVES[m.moves[slot as usize].id as usize].target;
+                    let t = self.request_target(r, m.moves[slot as usize].id);
                     if t.is_chosen() { target != 0 && self.valid_target_loc(target, r, t) } else { target == 0 }
                 }
             },
             Request::Switch => match c {
                 Choice::Pass => !m.switch_flag || self.living_bench(side) < self.open_slots(side),
+                Choice::Switch { to } if self.reviving(side, pos) => {
+                    m.switch_flag && to < s.n && s.team[s.order[to as usize] as usize].fainted
+                }
                 Choice::Switch { to } => m.switch_flag && bench_ok(to),
                 Choice::Move { .. } => false,
             },
@@ -343,6 +405,7 @@ impl Battle {
     /// The constraints that tie a side's two slots together: no two slots
     /// switching to the same Pokémon, only one Mega Evolution, and at a switch
     /// request every open slot filled while replacements last.
+    #[inline(always)]
     fn pair_ok(&self, side: usize, c: &[Choice; ACTIVE]) -> bool {
         if let (Choice::Switch { to: a }, Choice::Switch { to: b }) = (c[0], c[1]) {
             if a == b {
@@ -352,14 +415,41 @@ impl Battle {
         if let (Choice::Move { mega: true, .. }, Choice::Move { mega: true, .. }) = (c[0], c[1]) {
             return false;
         }
-        if self.request == Request::Switch {
-            let passes =
-                (0..ACTIVE).filter(|&p| c[p] == Choice::Pass && self.mon(self.active(side, p)).switch_flag).count();
-            if passes != self.open_slots(side).saturating_sub(self.living_bench(side)) {
-                return false;
+        self.request != Request::Switch || self.switch_pair_ok(side, c)
+    }
+
+    /// The part of `pair_ok` that only a switch request needs.
+    #[inline(never)]
+    fn switch_pair_ok(&self, side: usize, c: &[Choice; ACTIVE]) -> bool {
+        // Showdown counts down the switches and passes it still expects as it
+        // reads the slots in order. A revival uses up a switch if one is left,
+        // so with one replacement for a fainted Pokémon and a reviver to its
+        // left, reviving and replacing cannot be chosen together (Showdown throws).
+        let out = self.open_slots(side);
+        let mut switches = out.min(self.living_bench(side));
+        let mut passes = out - switches;
+        for p in 0..ACTIVE {
+            if !self.mon(self.active(side, p)).switch_flag {
+                continue;
+            }
+            match c[p] {
+                Choice::Pass => {
+                    if passes == 0 {
+                        return false;
+                    }
+                    passes -= 1;
+                }
+                Choice::Switch { .. } if self.reviving(side, p) => switches = switches.saturating_sub(1),
+                Choice::Switch { .. } => {
+                    if switches == 0 {
+                        return false;
+                    }
+                    switches -= 1;
+                }
+                Choice::Move { .. } => return false,
             }
         }
-        true
+        switches == 0
     }
 
     /// Whether a side's two slot choices are legal together.
@@ -407,18 +497,30 @@ impl Battle {
                 match choices[side][pos] {
                     Choice::Pass => {}
                     Choice::Move { slot, target, mega } => {
-                        // Struggle picks its own target, whatever the choice said.
-                        let (id, target) = if self.usable_moves(r) {
+                        // A locked move goes where it was aimed. Struggle picks its
+                        // own target, whatever the choice said.
+                        let locked = self.mon(r).locked_move;
+                        let (id, target) = if locked != NO_MOVE {
+                            (locked, self.locked_move_loc(r, locked))
+                        } else if self.usable_moves(r) {
                             (self.mon(r).moves[slot as usize].id, target)
                         } else {
                             (struggle_id(), 0)
                         };
-                        if mega {
-                            // Resolved (and queued) ahead of the move itself.
-                            let a = self.resolve_mega(r);
-                            self.queue.push(a);
+                        // The move, and ahead of it whatever goes with it (a Mega Evolution, ...).
+                        let (actions, n) = self.resolve_move_actions(r, id, target, mega && locked == NO_MOVE);
+                        for a in &actions[..n] {
+                            self.queue.push(*a);
                         }
-                        let a = self.resolve_move(r, id, target);
+                    }
+                    Choice::Switch { to } if request == Request::Switch && self.reviving(side, pos) => {
+                        // Not a switch at all: the chosen Pokémon is brought back.
+                        let mut a = Battle::blank_action(ActKind::Revival, 6);
+                        a.mon = Some(r);
+                        a.switch_to = Some(self.active_at(side, to as usize));
+                        self.mon_mut(r).switch_flag = false;
+                        self.mon_mut(r).switch_move = NO_MOVE;
+                        self.resolve_speed(&mut a);
                         self.queue.push(a);
                     }
                     Choice::Switch { to } => {

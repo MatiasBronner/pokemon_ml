@@ -106,7 +106,8 @@ impl HitEff {
 impl Battle {
     /// Whether a move has a script callback of its own for `ev`.
     pub(crate) fn move_has_cb(&self, mi: u8, ev: Ev) -> bool {
-        self.am[mi as usize].d().events & ev.bit() != 0
+        let am = &self.am[mi as usize];
+        !am.bare && am.d().events & ev.bit() != 0
     }
 
     /// `Pokemon#deductPP`: returns how much PP was actually removed.
@@ -116,6 +117,7 @@ impl Battle {
         let Some(s) = m.moves[..n].iter_mut().find(|s| s.id == move_id) else {
             return 0;
         };
+        s.used = true;
         if s.pp == 0 {
             return 0;
         }
@@ -156,8 +158,9 @@ impl Battle {
         let m = self.mon_mut(pokemon);
         m.active_move_actions = m.active_move_actions.saturating_add(1);
         let d = &MOVES[a.move_id as usize];
-        let target = self.get_target(pokemon, d.target, a.target_loc, a.orig_target);
+        let target = self.get_target_ex(pokemon, Some(a.move_id), a.move_target(), a.target_loc, a.orig_target);
         let mi = self.new_am(a.move_id);
+        self.am[mi as usize].target = a.move_target();
         self.am[mi as usize].priority = a.move_priority;
         self.am[mi as usize].prankster_boosted = a.prankster;
         // OverrideAction: nothing modelled listens.
@@ -169,7 +172,30 @@ impl Battle {
             self.mon_mut(pokemon).move_this_turn = will_try;
             return;
         }
-        if self.deduct_pp(pokemon, a.move_id, 1) == 0 && a.move_id != mv::STRUGGLE {
+        // A move that cannot be used twice running leaves a mark when that is tried anyway.
+        let twice = self.am[mi as usize].flags & F_CANTUSETWICE != 0;
+        if twice && self.mon(pokemon).last_move == a.move_id {
+            if let Some(k) = VolKind::named(d.id) {
+                self.add_volatile(pokemon, k, None, Eff::None);
+            }
+        }
+        // The move's own beforeMoveCallback (Focus Punch after being hit).
+        if self.move_has_cb(mi, Ev::BeforeMoveCallback) && self.before_move_callback(mi, pokemon) {
+            self.clear_active_move(true);
+            self.mon_mut(pokemon).move_this_turn = FALSE;
+            return;
+        }
+        // A move the Pokémon is locked into costs no PP.
+        let mut source_effect = Eff::None;
+        if let ActSource::Round { ignore_ability } = a.source {
+            // The Round that called this one forward, as far as it still matters.
+            let caller = self.new_am(mv::ROUND);
+            self.am[caller as usize].ignore_ability = ignore_ability;
+            source_effect = Eff::Move(caller);
+        }
+        if self.get_locked_move(pokemon).is_some() {
+            source_effect = Eff::Vol(VolKind::Lockedmove);
+        } else if self.deduct_pp(pokemon, a.move_id, 1) == 0 && a.move_id != mv::STRUGGLE {
             self.clear_active_move(true);
             self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
@@ -177,29 +203,53 @@ impl Battle {
         // `Pokemon#moveUsed`.
         self.mon_mut(pokemon).last_move = a.move_id;
         self.mon_mut(pokemon).last_move_loc = a.target_loc;
-        self.use_move(mi, pokemon, target, Eff::None);
+        self.use_move(mi, pokemon, target, source_effect);
         let mv = self.active_move.unwrap_or(mi);
         if self.move_has_cb(mv, Ev::AfterMove) {
             let me = Eff::Move(mv);
             self.single_event(Ev::AfterMove, me, None, Some(pokemon), target, me, Res::Undef);
         }
         self.run_event(Ev::AfterMove, Some(pokemon), target, Eff::Move(mv), Res::Undef);
+        if self.am[mv as usize].flags & F_CANTUSETWICE != 0 {
+            if let Some(k) = VolKind::named(self.am[mv as usize].d().id) {
+                self.remove_volatile(pokemon, k);
+            }
+        }
         self.faint_messages(false, false, true);
         self.check_win(None);
     }
 
     /// `BattleActions#useMove`: the effects of the move itself.
     pub(crate) fn use_move(&mut self, mi: u8, pokemon: MonRef, target: Option<MonRef>, source_effect: Eff) -> bool {
+        self.use_move_ex(mi, pokemon, target, false, source_effect)
+    }
+
+    /// `useMove(move, pokemon)` with no target named, as a move that calls
+    /// another does (Copycat, Sleep Talk): one is picked at random.
+    pub(crate) fn call_move(&mut self, move_id: u16, pokemon: MonRef) -> bool {
+        let mi = self.new_am(move_id);
+        self.use_move_ex(mi, pokemon, None, true, Eff::None)
+    }
+
+    fn use_move_ex(&mut self, mi: u8, pokemon: MonRef, target: Option<MonRef>, pick: bool, source_effect: Eff) -> bool {
         self.mon_mut(pokemon).move_this_turn = Res::Undef;
-        let result = self.use_move_inner(mi, pokemon, target, source_effect);
+        let result = self.use_move_inner(mi, pokemon, target, pick, source_effect);
         if self.mon(pokemon).move_this_turn == Res::Undef {
             self.mon_mut(pokemon).move_this_turn = result;
         }
         result.truthy()
     }
 
-    /// `BattleActions#useMoveInner`.
-    fn use_move_inner(&mut self, mi: u8, pokemon: MonRef, target: Option<MonRef>, source_effect: Eff) -> Res {
+    /// `BattleActions#useMoveInner`. `pick` says a missing target is
+    /// Showdown's `undefined` (pick one at random) rather than its `null`.
+    fn use_move_inner(
+        &mut self,
+        mi: u8,
+        pokemon: MonRef,
+        target: Option<MonRef>,
+        pick: bool,
+        source_effect: Eff,
+    ) -> Res {
         let m = mi as usize;
         let mut target = target;
         let mut source_effect = source_effect;
@@ -215,7 +265,18 @@ impl Battle {
             }
         }
         let base_target = self.am[m].target;
-        // ModifyTarget: nothing modelled listens.
+        // ModifyTarget: only moves listen (Metal Burst turns on whoever hit the user last).
+        let mut pick = pick;
+        if self.move_has_cb(mi, Ev::ModifyTarget) {
+            let me = Eff::Move(mi);
+            if let Res::Mon(t) = self.single_event(Ev::ModifyTarget, me, None, Some(pokemon), target, me, Res::Undef) {
+                target = Some(t);
+                pick = false;
+            }
+        }
+        if pick && target.is_none() {
+            target = self.get_random_target(pokemon, base_target);
+        }
         if matches!(self.am[m].target, Target::User | Target::Allies) {
             target = Some(pokemon);
         }
@@ -257,8 +318,14 @@ impl Battle {
         if n > 0 {
             target = Some(targets[n - 1]);
         }
-        if source_effect == Eff::None && self.listens(Ev::DeductPP) {
-            // Pressure. A move aimed at the foe's side spares them, unless it is
+        // Pressure applies to a move used outright and to one called by another
+        // move, which then pays the toll itself.
+        let caller = match source_effect {
+            Eff::Move(s) => Some(self.am[s as usize].id),
+            _ => None,
+        };
+        if (source_effect == Eff::None || caller.is_some()) && self.listens(Ev::DeductPP) {
+            // A move aimed at the foe's side spares them, unless it is
             // one of the few that take the toll from every opponent.
             let mut pressure = targets;
             let mut np = n;
@@ -278,7 +345,7 @@ impl Battle {
                 }
             }
             if extra > 0 {
-                let id = self.am[m].id;
+                let id = caller.unwrap_or(self.am[m].id);
                 self.deduct_pp(pokemon, id, extra as u32);
             }
         }
@@ -289,6 +356,11 @@ impl Battle {
         }
         if !try_move.truthy() {
             return try_move;
+        }
+
+        // Explosion and the like: the user faints first, whatever becomes of the move.
+        if self.am[m].d().selfdestruct == SelfDestruct::Always {
+            self.faint(pokemon, Some(pokemon), me);
         }
 
         let result;
@@ -305,16 +377,31 @@ impl Battle {
             }
             result = self.try_spread_move_hit(&targets[..n], pokemon, mi);
         }
+        // `selfBoost`: stat changes for the user after the whole move (Scale Shot).
+        if let (Some(boosts), true) = (self.am[m].d().self_boost, result) {
+            let eff = HitEff { boosts: Some(boosts), boost_order: self.am[m].d().self_boost_order, ..NO_HIT_EFF };
+            self.move_hit(pokemon, pokemon, mi, eff, false, true);
+        }
         if self.mon(pokemon).hp == 0 {
             self.faint(pokemon, Some(pokemon), me);
         }
+        // Emergency Exit is asked about what the move cost its user: a crash, Life Orb.
+        let attacked_another = Some(pokemon) != target && self.am[m].category != Category::Status;
         if !result {
+            let original_hp = self.mon(pokemon).hp as i32;
             self.single_event(Ev::MoveFail, me, None, target, Some(pokemon), me, Res::Undef);
+            if attacked_another {
+                self.run_event(Ev::EmergencyExit, Some(pokemon), Some(pokemon), Eff::None, Res::Num(original_hp));
+            }
             return FALSE;
         }
-        if !self.suppressing_secondaries() {
+        if !self.suppressing_secondaries() && self.am[m].flags & F_FUTUREMOVE == 0 {
+            let original_hp = self.mon(pokemon).hp as i32;
             self.single_event(Ev::AfterMoveSecondarySelf, me, None, Some(pokemon), target, me, Res::Undef);
             self.run_event(Ev::AfterMoveSecondarySelf, Some(pokemon), target, me, Res::Undef);
+            if attacked_another {
+                self.run_event(Ev::EmergencyExit, Some(pokemon), Some(pokemon), Eff::None, Res::Num(original_hp));
+            }
         }
         TRUE
     }
@@ -424,18 +511,44 @@ impl Battle {
                         t = redirected;
                     }
                 }
-                if self.mon(t).fainted {
+                // `Pokemon#getSmartTargets` (Dragon Darts): the target and the Pokémon beside it.
+                if self.am[mi as usize].smart_target {
+                    let (beside, k) = self.adjacent_allies(t);
+                    let second = (k > 0).then(|| beside[0]);
+                    match second {
+                        Some(t2) if t2 != user && self.mon(t2).hp > 0 => {
+                            if self.mon(t).hp == 0 {
+                                self.am[mi as usize].smart_target = false;
+                                t = t2;
+                            } else {
+                                out[1] = t2;
+                                n = 1;
+                            }
+                        }
+                        _ => self.am[mi as usize].smart_target = false,
+                    }
+                }
+                // (A future move is content with a fainted target: it is after the slot.)
+                if self.mon(t).fainted && self.am[mi as usize].flags & F_FUTUREMOVE == 0 {
                     return (out, 0);
                 }
                 out[0] = t;
-                n = 1;
+                n += 1;
             }
         }
         (out, n)
     }
 
-    /// Showdown filters `targets` after each hit step by "truthy or 0".
-    fn keep_hits(targets: &mut [MonRef; MAX_TARGETS], n: &mut usize, res: &Damage, any_failure: &mut bool) {
+    /// Showdown filters `targets` after each hit step by "truthy or 0". Once
+    /// any target has failed outright, Dragon Darts stops splitting its hits.
+    fn keep_hits(
+        &mut self,
+        mi: u8,
+        targets: &mut [MonRef; MAX_TARGETS],
+        n: &mut usize,
+        res: &Damage,
+        any_failure: &mut bool,
+    ) {
         let mut w = 0;
         for i in 0..*n {
             if res[i] == FALSE {
@@ -447,16 +560,19 @@ impl Battle {
             }
         }
         *n = w;
+        if *any_failure {
+            self.am[mi as usize].smart_target = false;
+        }
     }
 
     /// `BattleActions#trySpreadMoveHit` (this is also the path single-target moves take).
-    fn try_spread_move_hit(&mut self, initial: &[MonRef], user: MonRef, mi: u8) -> bool {
+    pub(crate) fn try_spread_move_hit(&mut self, initial: &[MonRef], user: MonRef, mi: u8) -> bool {
         let m = mi as usize;
         let me = Eff::Move(mi);
         let mut targets = [user; MAX_TARGETS];
         let mut n = initial.len();
         targets[..n].copy_from_slice(initial);
-        if n > 1 {
+        if n > 1 && !self.am[m].smart_target {
             self.am[m].spread_hit = true;
         }
 
@@ -474,16 +590,14 @@ impl Battle {
         let mut failure = false;
         let mut res: Damage = [TRUE; MAX_TARGETS];
 
-        // Step 0: semi-invulnerability.
-        let toxic_sure = self.am[m].d().id == "toxic" && self.has_type(user, Type::Poison);
-        for i in 0..n {
-            res[i] = if toxic_sure {
-                TRUE
-            } else {
-                self.run_event(Ev::Invulnerability, Some(targets[i]), Some(user), me, Res::Undef)
-            };
+        // Step 0: semi-invulnerability (a target in the middle of Fly or Dig).
+        // Helping Hand reaches it anyway, and so does Toxic from a Poison type.
+        let sure =
+            self.am[m].id == mv::HELPINGHAND || (self.am[m].id == mv::TOXIC && self.has_type(user, Type::Poison));
+        if !sure {
+            self.run_event_multi(Ev::Invulnerability, &targets[..n], Some(user), me, &mut res[..n], false);
         }
-        Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
             return self.spread_done(user, mi, n, failure);
         }
@@ -495,7 +609,7 @@ impl Battle {
                 res[i] = FALSE;
             }
         }
-        Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
             return self.spread_done(user, mi, n, failure);
         }
@@ -504,7 +618,7 @@ impl Battle {
         for i in 0..n {
             res[i] = Res::Bool(self.run_immunity(targets[i], mi));
         }
-        Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
             return self.spread_done(user, mi, n, failure);
         }
@@ -529,7 +643,7 @@ impl Battle {
                 TRUE
             };
         }
-        Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
             return self.spread_done(user, mi, n, failure);
         }
@@ -538,7 +652,7 @@ impl Battle {
         for i in 0..n {
             res[i] = Res::Bool(self.accuracy_check(targets[i], user, mi));
         }
-        Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &res, &mut failure);
         if n == 0 {
             return self.spread_done(user, mi, n, failure);
         }
@@ -568,7 +682,7 @@ impl Battle {
 
         // Step 7: the hits themselves.
         let dmg = self.move_hit_loop(&targets[..n], user, mi);
-        Battle::keep_hits(&mut targets, &mut n, &dmg, &mut failure);
+        self.keep_hits(mi, &mut targets, &mut n, &dmg, &mut failure);
         self.am[m].hit_targets = targets;
         self.spread_done(user, mi, n, failure)
     }
@@ -591,8 +705,23 @@ impl Battle {
         self.active_target = Some(target);
         let base = self.am[m].accuracy;
         let mut accuracy = if base == 0 { TRUE } else { Res::Num(base as i32) };
-        accuracy = self.run_event(Ev::ModifyAccuracy, Some(target), Some(user), me, accuracy);
-        if let Res::Num(a) = accuracy {
+        let ohko = self.am[m].d().ohko;
+        if ohko != Ohko::No {
+            // One-hit knockouts: nothing modifies their accuracy, only the levels do.
+            if !self.is_semi_invulnerable(target) {
+                let (mine, theirs) = (self.mon(user).level as i32, self.mon(target).level as i32);
+                let mut a = if ohko == Ohko::Ice && !self.has_type(user, Type::Ice) { 20 } else { 30 };
+                if mine >= theirs && (ohko == Ohko::Yes || !self.has_type(target, Type::Ice)) {
+                    a += mine - theirs;
+                } else {
+                    return false;
+                }
+                accuracy = Res::Num(a);
+            }
+        } else {
+            accuracy = self.run_event(Ev::ModifyAccuracy, Some(target), Some(user), me, accuracy);
+        }
+        if let (Res::Num(a), Ohko::No) = (accuracy, ohko) {
             let ub = self.mon(user).boosts;
             let mut boost = (self.modify_boost(user, ub)[ACC] as i32).clamp(-6, 6);
             if !self.am[m].ignore_evasion {
@@ -621,6 +750,72 @@ impl Battle {
         }
     }
 
+    /// The accuracy roll of the later hits of a `multiaccuracy` move. Showdown
+    /// does this one in floating point (the stage multipliers are thirds), so
+    /// this does too, with the same operations in the same order.
+    fn multi_accuracy_check(&mut self, target: MonRef, user: MonRef, mi: u8) -> bool {
+        const TABLE: [f64; 7] = [1.0, 4.0 / 3.0, 5.0 / 3.0, 2.0, 7.0 / 3.0, 8.0 / 3.0, 3.0];
+        // A stand-in for "the number the events were given", to see what they made of it.
+        const PROBE: i32 = 100_000;
+        let m = mi as usize;
+        let me = Eff::Move(mi);
+        let base = self.am[m].accuracy;
+        let mut accuracy: Option<f64> = (base != 0).then_some(base as f64);
+        if let Some(a) = accuracy.as_mut() {
+            let ub = self.mon(user).boosts;
+            let boost = (self.modify_boost(user, ub)[ACC] as i32).clamp(-6, 6);
+            if boost > 0 {
+                *a *= TABLE[boost as usize];
+            } else {
+                *a /= TABLE[(-boost) as usize];
+            }
+            if !self.am[m].ignore_evasion {
+                let tb = self.mon(target).boosts;
+                let boost = (self.modify_boost(target, tb)[EVA] as i32).clamp(-6, 6);
+                if boost > 0 {
+                    *a /= TABLE[boost as usize];
+                } else if boost < 0 {
+                    *a *= TABLE[(-boost) as usize];
+                }
+            }
+        }
+        // ModifyAccuracy: handlers either chain a modifier or name a value outright.
+        if self.listens(Ev::ModifyAccuracy) {
+            let relay = if accuracy.is_some() { Res::Num(PROBE) } else { TRUE };
+            let e = Event::new(Ev::ModifyAccuracy, Some(target), Some(user), me);
+            let (r, after) = self.run_event_ex(e, relay, false, false);
+            accuracy = match (r, accuracy) {
+                (Res::Bool(true), _) => None,
+                (Res::Num(x), Some(a)) if x == crate::battle::modify(PROBE as u32, after.modifier) as i32 => {
+                    // Showdown only applies the chained modifier to whole numbers, so a
+                    // fractional accuracy comes through untouched.
+                    if after.modifier == 4096 || a != a.floor() {
+                        Some(a)
+                    } else {
+                        Some(crate::battle::modify(a as u32, after.modifier) as f64)
+                    }
+                }
+                (Res::Num(x), _) => Some(x as f64),
+                (_, a) => a,
+            };
+        }
+        // Accuracy: a handler can make the hit certain.
+        if self.listens(Ev::Accuracy) {
+            let relay = if accuracy.is_some() { Res::Num(PROBE) } else { TRUE };
+            match self.run_event(Ev::Accuracy, Some(target), Some(user), me, relay) {
+                Res::Bool(true) => accuracy = None,
+                Res::Num(x) if x == PROBE => {}
+                Res::Num(x) => accuracy = Some(x as f64),
+                _ => accuracy = Some(0.0),
+            }
+        }
+        match accuracy {
+            None => true,
+            // `randomChance(accuracy, 100)`: an integer below 100 against the fraction.
+            Some(a) => (self.rand(100, "accuracy") as f64) < a,
+        }
+    }
+
     /// `hitStepMoveHitLoop` as overridden by the Champions mod.
     fn move_hit_loop(&mut self, targets: &[MonRef], user: MonRef, mi: u8) -> Damage {
         let m = mi as usize;
@@ -638,14 +833,22 @@ impl Battle {
         };
         let mut copy: Targets = [Tgt::Gone; MAX_TARGETS];
         let mut last_damage: Damage = [Res::Undef; MAX_TARGETS];
+        // Dragon Darts with two targets in reach: the first hit is for one, the second for the other.
+        let smart = self.am[m].smart_target && n > 1;
         let mut hit = 1;
+        let mut hits_done = 0u16;
         let mut completed_one = false;
         while hit <= target_hits {
             if damage[..n].contains(&FALSE) {
                 break;
             }
             if hit > 1 && self.mon(user).status == Status::Slp {
-                break;
+                // Snore, or anything Sleep Talk called, carries on asleep.
+                let called_asleep =
+                    matches!(self.am[m].source_effect, Eff::Move(s) if self.am[s as usize].d().sleep_usable);
+                if !self.am[m].d().sleep_usable && !called_asleep {
+                    break;
+                }
             }
             if targets.iter().all(|&t| self.mon(t).hp == 0) {
                 break;
@@ -655,19 +858,40 @@ impl Battle {
             for i in 0..n {
                 copy[i] = Tgt::Mon(targets[i]);
             }
-            let eff = HitEff::of_move(&self.am[m]);
-            let move_damage = self.spread_move_hit(&mut copy, n, user, mi, eff, false, false);
-            last_damage = move_damage;
-            if !move_damage[..n].iter().any(|&v| v != FALSE) {
+            // Population Bomb, Triple Axel: every hit after the first can miss.
+            if self.am[m].multiaccuracy && hit > 1 && !self.multi_accuracy_check(targets[0], user, mi) {
                 break;
             }
-            for i in 0..n {
-                let dealt = move_damage[i].num();
-                damage[i] = Res::Num(dealt);
-                self.am[m].total_damage += dealt;
+            let eff = HitEff::of_move(&self.am[m]);
+            if smart {
+                // Showdown keeps one list of the damage of every hit so far, and
+                // starts its list of results over with each hit: only the target
+                // of the last hit made ends up with a result.
+                let i = (hit as usize - 1).min(n - 1);
+                copy[0] = Tgt::Mon(targets[i]);
+                let dealt = self.spread_move_hit(&mut copy, 1, user, mi, eff, false, false)[0];
+                last_damage[i] = dealt;
+                if !last_damage[..=i].iter().any(|&v| v != FALSE) {
+                    break;
+                }
+                damage = [Res::Undef; MAX_TARGETS];
+                damage[i] = Res::Num(dealt.num());
+                self.am[m].total_damage += dealt.num();
+            } else {
+                let move_damage = self.spread_move_hit(&mut copy, n, user, mi, eff, false, false);
+                last_damage = move_damage;
+                if !move_damage[..n].iter().any(|&v| v != FALSE) {
+                    break;
+                }
+                for i in 0..n {
+                    let dealt = move_damage[i].num();
+                    damage[i] = Res::Num(dealt);
+                    self.am[m].total_damage += dealt;
+                }
             }
             self.each_event(Ev::Update);
             completed_one = true;
+            hits_done += 1;
             if self.mon(user).hp == 0 && n == 1 {
                 break;
             }
@@ -682,13 +906,45 @@ impl Battle {
         if self.am[m].total_damage > 0 {
             self.apply_recoil(self.am[m].total_damage as u32, mi, user);
         }
+        if smart {
+            // (Showdown goes back to the full list of targets here.)
+            for i in 0..n {
+                copy[i] = Tgt::Mon(targets[i]);
+            }
+            hits_done = 1;
+        }
         // Pokemon#gotAttacked
         for i in 0..n {
             if let Tgt::Mon(t) = copy[i] {
                 if t != user {
+                    // (A future move can land after its user has left: Showdown's slot is then no field slot.)
+                    let slot =
+                        if (self.mon(user).position as usize) < ACTIVE { self.field_slot(user) } else { NO_SLOT };
+                    let ally = self.is_ally(t, user);
                     let mon = self.mon_mut(t);
                     mon.was_attacked = true;
                     mon.last_attack_damage = last_damage[i].num();
+                    if let Res::Num(d) = last_damage[i] {
+                        if d > 0 {
+                            mon.hit_by_this_turn |= 1 << (user.side as usize * MAX_TEAM + user.idx as usize);
+                        }
+                        if !ally {
+                            // Only a source's latest entry can ever be the last one, so keep just that.
+                            let mut k = mon.n_damaged_by as usize;
+                            if let Some(old) = mon.damaged_by[..k].iter().position(|a| a.idx == user.idx) {
+                                mon.damaged_by.copy_within(old + 1..k, old);
+                                k -= 1;
+                            }
+                            mon.damaged_by[k] = DamagedBy {
+                                idx: user.idx,
+                                slot,
+                                damage: d.clamp(0, u16::MAX as i32) as u16,
+                                this_turn: true,
+                            };
+                            mon.n_damaged_by = k as u8 + 1;
+                        }
+                        mon.times_attacked = mon.times_attacked.saturating_add(hits_done);
+                    }
                 }
             }
         }
@@ -717,19 +973,47 @@ impl Battle {
                 false,
             );
         }
+        // Emergency Exit: each target is asked with the HP it had before the move.
+        // (Showdown walks the list of results here, which for Dragon Darts split
+        // between two targets only has an entry for the second.)
+        if self.listens(Ev::EmergencyExit) {
+            for i in 0..n {
+                let dealt = if n == 1 { Res::Num(self.am[m].total_damage) } else { damage[i] };
+                if let Res::Num(d) = dealt {
+                    let t = targets[i];
+                    if self.mon(t).hp > 0 {
+                        let before = self.mon(t).hurt_this_turn as i32 + d;
+                        self.run_event(Ev::EmergencyExit, Some(t), Some(user), Eff::None, Res::Num(before));
+                    }
+                }
+            }
+        }
         damage
     }
 
     /// `BattleActions#applyRecoilDamage`.
     pub(crate) fn apply_recoil(&mut self, dealt: u32, mi: u8, user: MonRef) {
+        self.apply_recoil_halves(2 * dealt, mi, user);
+    }
+
+    /// The same for damage counted in half points (what a substitute can be left with).
+    pub(crate) fn apply_recoil_halves(&mut self, dealt2: u32, mi: u8, user: MonRef) {
         let d = self.am[mi as usize].d();
+        let hp_before = self.mon(user).hp;
         if d.struggle_recoil {
             let r = round_div(self.mon(user).max_hp() as u32, 1, 4).max(1);
             self.direct_damage(r as i32, user, Some(user), Eff::StruggleRecoil);
+        } else if d.mind_blown_recoil {
+            // Half the user's HP, and not recoil as far as Rock Head is concerned.
+            let r = round_div(self.mon(user).max_hp() as u32, 1, 2);
+            self.damage(r as i32, Some(user), Some(user), Eff::Crash);
         } else if d.recoil.0 > 0 {
-            let r = round_div(dealt, d.recoil.0 as u32, d.recoil.1 as u32).max(1);
+            let r = round_div(dealt2, d.recoil.0 as u32, 2 * d.recoil.1 as u32).max(1);
             self.damage(r as i32, Some(user), Some(user), Eff::Recoil);
+        } else {
+            return;
         }
+        self.run_event(Ev::EmergencyExit, Some(user), Some(user), Eff::None, Res::Num(hp_before as i32));
     }
 
     /// `BattleActions#spreadMoveHit` as overridden by the Champions mod.
@@ -740,7 +1024,7 @@ impl Battle {
         n: usize,
         user: MonRef,
         mi: u8,
-        eff: HitEff,
+        mut eff: HitEff,
         is_secondary: bool,
         is_self: bool,
     ) -> Damage {
@@ -773,6 +1057,9 @@ impl Battle {
                     out[0] = FALSE;
                     return out;
                 }
+                // The callback may have edited the move (Clangorous Soul applies
+                // its boosts there and then removes them from the move).
+                eff.boosts = self.am[mi as usize].boosts;
             }
         }
 
@@ -841,12 +1128,30 @@ impl Battle {
 
         self.active_target = active_target;
 
+        // 6. forced switches (`BattleActions#forceSwitch`): mark whoever can be dragged out.
+        if eff.primary && self.am[mi as usize].d().force_switch {
+            for i in 0..n {
+                let Tgt::Mon(t) = targets[i] else {
+                    continue;
+                };
+                if self.mon(t).hp > 0 && self.mon(user).hp > 0 && self.can_switch(t.side as usize) {
+                    let r = self.run_event(Ev::DragOut, Some(t), Some(user), me, Res::Undef);
+                    if r.truthy() {
+                        self.mon_mut(t).force_switch_flag = true;
+                    } else if r == FALSE && self.am[mi as usize].category == Category::Status {
+                        damage[i] = FALSE;
+                    }
+                }
+            }
+        }
+
         for i in 0..n {
             if !damage[i].hit() {
                 targets[i] = Tgt::Gone;
             }
         }
 
+        let user_hp_before = self.mon(user).hp;
         if !is_secondary && !is_self {
             let mut hit = [user; MAX_TARGETS];
             let mut amounts = [Res::Undef; MAX_TARGETS];
@@ -867,6 +1172,8 @@ impl Battle {
                         self.single_event(Ev::AfterHit, me, None, Some(t), Some(user), me, Res::Undef);
                     }
                 }
+                // (What the hit cost the user: Rocky Helmet, Rough Skin.)
+                self.run_event(Ev::EmergencyExit, Some(user), None, Eff::None, Res::Num(user_hp_before as i32));
             }
         }
         damage
@@ -938,98 +1245,139 @@ impl Battle {
         is_self: bool,
     ) {
         let me = Eff::Move(mi);
+        // `didAnything`: what the block amounted to over all targets, starting
+        // from the damage results (`damage.reduce(combineResults)`).
+        let mut any = damage[0];
+        for d in &damage[1..n] {
+            any = any.combine(*d);
+        }
         for i in 0..n {
-            let Tgt::Mon(t) = targets[i] else {
+            if targets[i] == Tgt::Gone {
                 continue;
-            };
+            }
             let mut did = Res::Undef;
-            if let Some(b) = eff.boosts {
-                if !self.mon(t).fainted {
-                    let r = self.boost_ordered(b, &BOOST_ORDERS[eff.boost_order as usize], Some(t), Some(source), me);
-                    did = did.combine(r);
+            // (A hit that landed on a substitute has no target left to affect.)
+            if let Tgt::Mon(t) = targets[i] {
+                if let Some(b) = eff.boosts {
+                    if !self.mon(t).fainted {
+                        let r =
+                            self.boost_ordered(b, &BOOST_ORDERS[eff.boost_order as usize], Some(t), Some(source), me);
+                        did = did.combine(r);
+                    }
                 }
-            }
-            if eff.heal.0 > 0 && !self.mon(t).fainted {
-                let mon = self.mon(t);
-                if mon.hp >= mon.max_hp() {
-                    damage[i] = damage[i].combine(FALSE);
-                    continue;
+                if eff.heal.0 > 0 && !self.mon(t).fainted {
+                    let mon = self.mon(t);
+                    if mon.hp >= mon.max_hp() {
+                        damage[i] = damage[i].combine(FALSE);
+                        any = any.combine(Res::Null);
+                        continue;
+                    }
+                    let amount = round_div(mon.max_hp() as u32, eff.heal.0 as u32, eff.heal.1 as u32);
+                    let healed = self.heal(amount as i32, Some(t), Some(source), me);
+                    if !healed.hit() {
+                        damage[i] = damage[i].combine(FALSE);
+                        any = any.combine(Res::Null);
+                        continue;
+                    }
+                    did = TRUE;
                 }
-                let amount = round_div(mon.max_hp() as u32, eff.heal.0 as u32, eff.heal.1 as u32);
-                let healed = self.heal(amount as i32, Some(t), Some(source), me);
-                if !healed.hit() {
-                    damage[i] = damage[i].combine(FALSE);
-                    continue;
-                }
-                did = TRUE;
-            }
-            if eff.status != Status::None {
-                let r = self.try_set_status(t, eff.status, Some(source), me);
-                if !r.truthy() && self.am[mi as usize].d().status != Status::None {
-                    damage[i] = damage[i].combine(FALSE);
-                    continue;
-                }
-                did = did.combine(r);
-            }
-            if let Some(v) = eff.volatile {
-                let r = self.add_volatile(t, v, Some(source), me);
-                did = did.combine(r);
-            }
-            if let Some(k) = eff.side_condition {
-                let r = self.add_side_condition(t.side as usize, k, Some(source), me);
-                did = did.combine(r);
-            }
-            if let Some(k) = eff.slot_condition {
-                let pos = self.mon(t).position as usize;
-                let r = self.add_slot_condition(t.side as usize, pos, k, Some(source), me);
-                did = did.combine(r);
-            }
-            if eff.weather != Weather::None {
-                let r = self.set_weather(eff.weather, Some(source), me);
-                did = did.combine(r);
-            }
-            if eff.terrain != Terrain::None {
-                let r = self.set_terrain(eff.terrain, Some(source), me);
-                did = did.combine(Res::Bool(r));
-            }
-            if let Some(k) = eff.pseudo_weather {
-                let r = self.add_pseudo_weather(k, Some(source), me);
-                did = did.combine(Res::Bool(r));
-            }
-            // The Hit events. A move aimed at the field or at a side has its own.
-            let move_target = self.am[mi as usize].target;
-            if move_target == Target::All && !is_self {
-                if eff.primary && self.move_has_cb(mi, Ev::HitField) {
-                    let r = self.single_event(Ev::HitField, me, None, Some(t), Some(source), me, Res::Undef);
-                    did = did.combine(r);
-                }
-            } else if matches!(move_target, Target::FoeSide | Target::AllySide) && !is_self {
-                if eff.primary && self.move_has_cb(mi, Ev::HitSide) {
-                    let mut e = Event::new(Ev::HitSide, None, Some(source), me);
-                    e.target_side = Some(t.side);
-                    let r = self.single_event_ex(Ev::HitSide, Ev::HitSide, Pre::On, me, None, e, Res::Undef, false);
-                    did = did.combine(r);
-                }
-            } else {
-                if let Some(body) = eff.on_hit {
-                    // The block's own onHit: the move's, a secondary's or a self block's.
-                    let e = Event::new(Ev::Hit, Some(t), Some(source), me);
-                    let relay = if body == Ev::SecondaryHit { Res::Num(eff.sec_index as i32) } else { Res::Undef };
-                    let mut r = self.single_event_ex(Ev::Hit, body, Pre::On, me, None, e, relay, true);
-                    if body == Ev::SecondaryHit && r == relay {
-                        // Nothing returned: the relay variable is not a result.
-                        r = TRUE;
+                if eff.status != Status::None {
+                    let r = self.try_set_status(t, eff.status, Some(source), me);
+                    if !r.truthy() && self.am[mi as usize].d().status != Status::None {
+                        damage[i] = damage[i].combine(FALSE);
+                        any = any.combine(Res::Null);
+                        continue;
                     }
                     did = did.combine(r);
                 }
-                if !is_self && !is_secondary {
-                    self.run_event(Ev::Hit, Some(t), Some(source), me, Res::Undef);
+                if let Some(v) = eff.volatile {
+                    let r = self.add_volatile(t, v, Some(source), me);
+                    did = did.combine(r);
+                }
+                if let Some(k) = eff.side_condition {
+                    let r = self.add_side_condition(t.side as usize, k, Some(source), me);
+                    did = did.combine(r);
+                }
+                if let Some(k) = eff.slot_condition {
+                    let pos = self.mon(t).position as usize;
+                    let r = self.add_slot_condition(t.side as usize, pos, k, Some(source), me);
+                    did = did.combine(r);
+                }
+                if eff.weather != Weather::None {
+                    let r = self.set_weather(eff.weather, Some(source), me);
+                    did = did.combine(r);
+                }
+                if eff.terrain != Terrain::None {
+                    let r = self.set_terrain(eff.terrain, Some(source), me);
+                    did = did.combine(Res::Bool(r));
+                }
+                if let Some(k) = eff.pseudo_weather {
+                    let r = self.add_pseudo_weather(k, Some(source), me);
+                    did = did.combine(Res::Bool(r));
+                }
+                // Roar and the like only work if there is someone to drag in.
+                if eff.primary && self.am[mi as usize].d().force_switch {
+                    did = did.combine(Res::Bool(self.can_switch(t.side as usize)));
+                }
+                // The Hit events. A move aimed at the field or at a side has its own.
+                let move_target = self.am[mi as usize].target;
+                if move_target == Target::All && !is_self {
+                    if eff.primary && self.move_has_cb(mi, Ev::HitField) {
+                        let r = self.single_event(Ev::HitField, me, None, Some(t), Some(source), me, Res::Undef);
+                        did = did.combine(r);
+                    }
+                } else if matches!(move_target, Target::FoeSide | Target::AllySide) && !is_self {
+                    if eff.primary && self.move_has_cb(mi, Ev::HitSide) {
+                        let mut e = Event::new(Ev::HitSide, None, Some(source), me);
+                        e.target_side = Some(t.side);
+                        let r = self.single_event_ex(Ev::HitSide, Ev::HitSide, Pre::On, me, None, e, Res::Undef, false);
+                        did = did.combine(r);
+                    }
+                } else {
+                    if let Some(body) = eff.on_hit {
+                        // The block's own onHit: the move's, a secondary's or a self block's.
+                        let e = Event::new(Ev::Hit, Some(t), Some(source), me);
+                        let relay = if body == Ev::SecondaryHit { Res::Num(eff.sec_index as i32) } else { Res::Undef };
+                        let mut r = self.single_event_ex(Ev::Hit, body, Pre::On, me, None, e, relay, true);
+                        if body == Ev::SecondaryHit && r == relay {
+                            // Nothing returned: the relay variable is not a result.
+                            r = TRUE;
+                        }
+                        did = did.combine(r);
+                    }
+                    if !is_self && !is_secondary {
+                        self.run_event(Ev::Hit, Some(t), Some(source), me, Res::Undef);
+                    }
+                }
+            }
+            // Memento, Final Gambit: the user goes down unless the move failed outright.
+            if eff.primary && self.am[mi as usize].d().selfdestruct == SelfDestruct::IfHit && damage[i] != FALSE {
+                self.faint(source, Some(source), me);
+            }
+            // U-turn and the like: leaving counts as doing something, if there is anyone to leave for.
+            if eff.primary && self.am[mi as usize].self_switch != SelfSwitch::No {
+                if self.can_switch(source.side as usize) {
+                    did = TRUE;
+                } else {
+                    did = did.combine(FALSE);
                 }
             }
             if did == Res::Undef {
                 did = TRUE;
             }
             damage[i] = damage[i].combine(if did == Res::Null { FALSE } else { did });
+            any = any.combine(did);
+        }
+        // Unless the block came to nothing, a self-switching move marks its user to
+        // leave. (Showdown asks this of every block of the move: the move itself,
+        // its secondaries and its self effects.)
+        let selfdestructs = eff.primary && self.am[mi as usize].d().selfdestruct != SelfDestruct::No;
+        let nothing = !any.truthy() && any != Res::Num(0) && !eff.has_self && !selfdestructs;
+        if !nothing && self.am[mi as usize].self_switch != SelfSwitch::No && self.mon(source).hp > 0 {
+            let id = self.am[mi as usize].id;
+            let m = self.mon_mut(source);
+            m.switch_flag = true;
+            m.switch_move = id;
         }
     }
 
@@ -1049,6 +1397,28 @@ impl Battle {
         let me = Eff::Move(mi);
         if !self.run_immunity(target, mi) {
             return FALSE;
+        }
+        if self.am[m].d().ohko != Ohko::No {
+            return Res::Num(self.mon(target).max_hp() as i32);
+        }
+        // Damage that bypasses the formula: a damageCallback, or the user's level.
+        self.am[m].half_damage = false;
+        if self.move_has_cb(mi, Ev::DamageCallback) {
+            // damageCallback(pokemon, target)
+            let e = Event::new(Ev::DamageCallback, Some(user), Some(target), me);
+            return self.single_event_ex(
+                Ev::DamageCallback,
+                Ev::DamageCallback,
+                Pre::On,
+                me,
+                None,
+                e,
+                Res::Undef,
+                true,
+            );
+        }
+        if self.am[m].d().fixed_damage == FixedDamage::Level {
+            return Res::Num(self.mon(user).level as i32);
         }
         let mut base_power = self.am[m].base_power as i32;
         if self.move_has_cb(mi, Ev::BasePowerCallback) {
@@ -1134,7 +1504,10 @@ impl Battle {
             self.run_event(DEF_EVS[def_stat - 1], Some(target), Some(user), me, Res::Num(defense as i32)).num() as u32;
         let level = self.mon(user).level as u32;
         let dmg = (2 * level / 5 + 2).wrapping_mul(base_power).wrapping_mul(attack) / defense.max(1) / 50;
-        self.modify_damage(dmg, user, target, mi)
+        crate::trace::note(|| format!("  power {base_power}, attack {attack}, defence {defense}, base damage {dmg}"));
+        let out = self.modify_damage(dmg, user, target, mi);
+        crate::trace::note(|| format!("  damage {out:?}"));
+        out
     }
 
     /// The Champions `modifyDamage`.

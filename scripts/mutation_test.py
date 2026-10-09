@@ -6,7 +6,14 @@ an inverted condition, a dropped line), rebuilds, replays recorded Showdown
 battles and reports whether the replay noticed. A bug that goes unnoticed is
 either an equivalent change or a gap in what the recorded battles exercise.
 
-    scripts/mutation_test.py CASES.jsonl [MORE.jsonl ...] [--only TEXT] [--range FROM:TO]
+    scripts/mutation_test.py CASES.jsonl [MORE.jsonl ...] [--only TEXT]... [--range FROM:TO]
+                             [--handlers [REF] | --handlers-only [REF]] [--work NAME]
+    scripts/mutation_test.py --check
+
+--handlers adds one mutation for every callback body of a move, ability, item
+or condition ("the callback does nothing"); with a git ref, only for callbacks
+that ref does not have. --work names a separate build directory under target/,
+so that several slices can run at once.
 
 Record a few thousand battles first (oracle/gen_cases.js); small corpora miss
 the rarer effects. Corpora are tried in the order given, so put batches built
@@ -16,6 +23,7 @@ when the source changes under an entry it is reported as BAD PATTERN and
 should be updated rather than deleted.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,11 +34,111 @@ A, I, B, M, C, E = 'src/abilities.rs', 'src/items.rs', 'src/battle.rs', 'src/mov
 V = 'src/movecbs.rs'
 CH = 'src/choice.rs'
 MUT = [
+ # --- everything after the volatile conditions: scripted moves, switching, formes
+ ('reckless ignores crash moves', A, 'self.am[m as usize].d().recoil.0 > 0 || self.am[m as usize].d().has_crash_damage)', 'self.am[m as usize].d().recoil.0 > 0)'),
+ ('sheer force passes over electro shot', A, 'self.am[m as usize].has_sheer_force || self.am[m as usize].d().sheer_force_boost', 'self.am[m as usize].has_sheer_force'),
+ ('cud chew keeps a stolen berry', A, 'if ITEMS[e.item as usize].flags & IF_BERRY != 0 && !stolen {', 'if ITEMS[e.item as usize].flags & IF_BERRY != 0 {'),
+ ('magician steals after fling', A, '                    || am.id == mv::FLING\n', ''),
+ ('burn up thaws anyone', C, 'if self.event_move_flags() & F_DEFROST != 0 && !burn_up_fizzles {', 'if self.event_move_flags() & F_DEFROST != 0 {'),
+ ('attack history never ages', B, '                    if self.mon(MonRef { side: 1 - r.side, idx: a.idx }).is_active {', '                    if true {'),
+ ('attack history stays this turn', B, '                        a.this_turn = false;\n', ''),
+ ('metal burst 1.5 -> 2', V, 'Res::Num(a.damage as i32 * 3 / 2)', 'Res::Num(a.damage as i32 * 2)'),
+ ('metal burst loses its half point', V, 'self.am[mi as usize].half_damage = a.damage % 2 == 1;', 'self.am[mi as usize].half_damage = false;'),
+ ('metal burst picks a random target', M, '            if let Res::Mon(t) = self.single_event(Ev::ModifyTarget, me, None, Some(pokemon), target, me, Res::Undef) {\n                target = Some(t);\n                pick = false;\n            }', '            self.single_event(Ev::ModifyTarget, me, None, Some(pokemon), target, me, Res::Undef);'),
+ ('substitute starts with whole hp doubled wrongly', C, '                    v.data = 2 * hp;', '                    v.data = hp;'),
+ ('curse aims like any move', B, 'a.self_target = move_id == mv::CURSE && !self.has_type(user, Type::Ghost);', 'a.self_target = false;'),
+ ('curse costs a quarter', V, 'let half = div1(self.mon(source).max_hp() as u32, 2);\n                self.direct_damage(half, source, Some(source), Eff::Move(mi));', 'let half = div1(self.mon(source).max_hp() as u32, 4);\n                self.direct_damage(half, source, Some(source), Eff::Move(mi));'),
+ ('curse request targets like a ghost', CH, 'mv::CURSE if !self.has_type(r, Type::Ghost) => Target::User,', 'mv::CURSE if false => Target::User,'),
+ ('pollen puff heal block still targets allies', CH, 'mv::POLLENPUFF if self.vols(r).has(VolKind::Healblock) => Target::AdjacentFoe,', 'mv::POLLENPUFF if false => Target::AdjacentFoe,'),
+ ('beat up counts the fainted', V, 'if s.order[p] == pokemon.idx || (!ally.fainted && ally.status == Status::None) {', 'if s.order[p] == pokemon.idx || ally.status == Status::None {'),
+ ('beat up uses the current species', V, 'powers[n] = 5 + SPECIES[ally.set_species as usize].base[ATK + 1] / 10;', 'powers[n] = 5 + SPECIES[ally.species as usize].base[ATK + 1] / 10;'),
+ ('shell side arm never rolls the tie', V, 'if physical > special || (physical == special && self.chance(1, 2, "shell side arm")) {', 'if physical > special {'),
+ ('dragon darts counts as a spread move', M, '        if n > 1 && !self.am[m].smart_target {', '        if n > 1 {'),
+ ('dragon darts hits one target twice', M, '        let smart = self.am[m].smart_target && n > 1;', '        let smart = false;'),
+ ('dragon darts keeps splitting after a failure', M, '        if *any_failure {\n            self.am[mi as usize].smart_target = false;\n        }', ''),
+ ('protect does not stop the split', C, '                self.am[mi as usize].smart_target = false;\n                self.protect_unlocks(source);\n                Res::NotFail', '                self.protect_unlocks(source);\n                Res::NotFail'),
+ ('dragon darts second target can be the user', M, 'Some(t2) if t2 != user && self.mon(t2).hp > 0 => {', 'Some(t2) if self.mon(t2).hp > 0 => {'),
+ ('prioritised action keeps its order', B, '        a.source = source;\n        a.order = 3;', '        a.source = source;'),
+ ('quash order 201 -> 199', V, 'self.queue.items[at].order = 201;', 'self.queue.items[at].order = 199;'),
+ ('round is not doubled', V, 'Res::Num(am.base_power as i32 * if called { 2 } else { 1 })', 'Res::Num(am.base_power as i32)'),
+ ('round forgets who called', M, '        if let ActSource::Round { ignore_ability } = a.source {', '        if let (ActSource::Round { ignore_ability }, false) = (a.source, true) {'),
+ ('instruct ignores empty pp', V, '                    || out_of_pp\n', ''),
+ ('instruct repeats recharge moves', V, 'if flags & (F_FAILINSTRUCT | F_CHARGE | F_RECHARGE) != 0', 'if flags & (F_FAILINSTRUCT | F_CHARGE) != 0'),
+ ('copycat copies anything', V, '                if MOVES[last as usize].flags & F_FAILCOPYCAT != 0 {\n                    return FALSE;\n                }\n', ''),
+ ('battle last move never set', B, '            self.last_move = self.am[mi as usize].id;', ''),
+ ('called move gets no random target', M, '        if pick && target.is_none() {\n            target = self.get_random_target(pokemon, base_target);\n        }', ''),
+ ('called move escapes pressure', M, 'if (source_effect == Eff::None || caller.is_some()) && self.listens(Ev::DeductPP) {', 'if source_effect == Eff::None && self.listens(Ev::DeductPP) {'),
+ ('pressure charges the called move', M, 'let id = caller.unwrap_or(self.am[m].id);', 'let id = self.am[m].id;'),
+ ('sleep talk can pick charging moves', V, 'if MOVES[slot.id as usize].flags & (F_NOSLEEPTALK | F_CHARGE) == 0 {', 'if MOVES[slot.id as usize].flags & F_NOSLEEPTALK == 0 {'),
+ ('called multi-hit stops when asleep', M, 'if !self.am[m].d().sleep_usable && !called_asleep {', 'if !self.am[m].d().sleep_usable {'),
+ ('protean changes type for sleep talk', A, '                    || am.d().calls_move\n', ''),
+ ('future sight lands a turn early', C, 'let ending = self.turn as i16 - 1 + 2;', 'let ending = self.turn as i16 - 1 + 1;'),
+ ('future sight ignores type immunity', C, '                    am.ignore_immunity = IgnoreImm::No;\n', ''),
+ ('future sight hit runs the move callbacks', C, '                    am.bare = true;\n', ''),
+ ('future sight life orb chip missing', C, '                if self.mon(source).is_active && self.has_item(source, it::LIFEORB) {', '                if false {'),
+ ('life orb chips on the turn future sight is used', M, '        if !self.suppressing_secondaries() && self.am[m].flags & F_FUTUREMOVE == 0 {', '        if !self.suppressing_secondaries() {'),
+ ('future sight cannot aim at a fainted ally', M, 'if self.mon(t).fainted && self.am[mi as usize].flags & F_FUTUREMOVE == 0 {', 'if self.mon(t).fainted {'),
+ ('future sight aimed at itself fails', B, '            return future.then_some(user);', '            return None;'),
+ ('fling works under klutz', V, '                    || self.has_ability(source, ab::KLUTZ)\n                {\n                    return FALSE;', '                {\n                    return FALSE;'),
+ ('fling keeps the item', C, '                self.set_item(holder, it::NONE, None, Eff::None);\n                let m = self.mon_mut(holder);\n                m.last_item = item;', '                let m = self.mon_mut(holder);\n                m.last_item = item;'),
+ ('fling power fixed', V, 'self.am[mi as usize].base_power = fling.power as u16;', 'self.am[mi as usize].base_power = 30;'),
+ ('flung berry is not eaten', V, '                    if self.has_cb(Eff::Item(item), Ev::Eat) {\n                        self.mon_mut(foe).ate_berry = true;\n                    }\n                } else if item == it::MENTALHERB {', '                } else if item == it::MENTALHERB {'),
+ ('ally switch leaves volatiles behind', B, '        self.vols[side].swap(old_pos, new_pos);\n', ''),
+ ('ally switch always works', C, 'if !self.chance(1, counter, "consecutive ally switch") {', 'if !self.chance(1, 1, "consecutive ally switch") {'),
+ ('self-switch flag forgets the move', M, '            m.switch_flag = true;\n            m.switch_move = id;', '            m.switch_flag = true;'),
+ ('did-anything ignores the damage', M, '        let mut any = damage[0];\n        for d in &damage[1..n] {\n            any = any.combine(*d);\n        }', '        let mut any = Res::Undef;'),
+ ('u-turn redoes the switch-out event', B, '                if !self.mon(old).skip_before_switch_out && !is_drag {', '                if !is_drag {'),
+ ('before-switch-out event not marked done', B, '                        self.mon_mut(r).skip_before_switch_out = true;\n', ''),
+ ('parting shot always switches', V, '                if !success && !self.has_ability(target, ab::MIRRORARMOR) {\n                    self.am[mi as usize].self_switch = SelfSwitch::No;\n                }', ''),
+ ('roar works with no one to drag in', M, '                if eff.primary && self.am[mi as usize].d().force_switch {\n                    did = did.combine(Res::Bool(self.can_switch(t.side as usize)));\n                }', ''),
+ ('dragged pokemon enters with the others', B, "        if is_drag {\n            // So that Mold Breaker's move can still be the active one when the hazards strike.\n            self.run_switch(incoming);\n            return true;\n        }", ''),
+ ('drag skips the second DragOut check', B, '        if !self.run_event(Ev::DragOut, Some(old), None, Eff::None, Res::Undef).truthy() {\n            return false;\n        }\n        self.switch_in(incoming, pos, false, SelfSwitch::No, true)', '        self.switch_in(incoming, pos, false, SelfSwitch::No, true)'),
+ ('eject button ignores other exits', I, '                if actives[..n].iter().any(|&p| self.switch_flag_is_true(p)) {\n                    return Res::Undef;\n                }', ''),
+ ('eject button counts a u-turn as an exit', B, '        m.switch_flag && m.switch_move == NO_MOVE\n', '        m.switch_flag\n'),
+ ('red card drags without asking', I, '                    && self.run_event(Ev::DragOut, Some(source), Some(target), Eff::Move(mi), Res::Undef).truthy()\n', ''),
+ ('life orb chips a red-carded user', I, '                    && !self.mon(source).force_switch_flag\n', ''),
+ ('shell bell heals a red-carded user', I, 'if total > 0 && !self.mon(pokemon).force_switch_flag {', 'if total > 0 {'),
+ ('emergency exit threshold ignores the hp before', A, 'if hp == 0 || 2 * hp > max || 2 * original <= max {', 'if hp == 0 || 2 * hp > max {'),
+ ('emergency exit not asked after recoil', M, '        self.run_event(Ev::EmergencyExit, Some(user), Some(user), Eff::None, Res::Num(hp_before as i32));', ''),
+ ('emergency exit not asked after the hit loop', M, '                        self.run_event(Ev::EmergencyExit, Some(t), Some(user), Eff::None, Res::Num(before));', ''),
+ ('emergency exit not asked after rocky helmet', M, '                self.run_event(Ev::EmergencyExit, Some(user), None, Eff::None, Res::Num(user_hp_before as i32));', ''),
+ ('emergency exit not asked at the end of the turn', B, '                self.run_event(Ev::EmergencyExit, Some(r), None, Eff::None, Res::Num(hp as i32));', ''),
+ ('emergency exit not asked after hazards', B, '            self.run_event(Ev::EmergencyExit, a.mon, None, Eff::None, Res::Num(original_hp as i32));', ''),
+ ('baton pass copies everything', B, '!k.data().no_copy && (via == SelfSwitch::CopyVolatile || k == VolKind::Substitute)', 'via == SelfSwitch::CopyVolatile || k == VolKind::Substitute'),
+ ('shed tail passes stat stages', B, 'let boosts = if via == SelfSwitch::CopyVolatile { self.mon(old).boosts } else { [0; 7] };', 'let boosts = self.mon(old).boosts;'),
+ ('passed volatiles get no copy event', B, '                        self.single_event(Ev::Copy, eff, Some(incoming), Some(incoming), None, Eff::None, Res::Undef);', ''),
+ ('shed tail costs a quarter', V, 'let half = (self.mon(target).max_hp() as i32 + 1) / 2;', 'let half = (self.mon(target).max_hp() as i32 + 1) / 4;'),
+ ('healing wish heals the healthy too', C, 'if !m.fainted && (m.hp < m.max_hp() || m.status != Status::None) {', 'if !m.fainted {'),
+ ('revival restores full hp', B, 'm.hp = (m.max_hp() / 2).max(1);', 'm.hp = m.max_hp();'),
+ ('revival does not count the pokemon back in', B, '                self.sides[side].pokemon_left += 1;\n', ''),
+ ('revived active pokemon never returns', B, '                    let back = self.resolve_switch(ActKind::InstaSwitch, t, t);\n                    self.queue.push(back);\n', ''),
+ ('revival request lapses without a bench', B, '                switching = reviving;', '                switching = false;'),
+ ('reviver may switch for real', CH, '                Choice::Switch { .. } if self.reviving(side, p) => switches = switches.saturating_sub(1),\n', ''),
+ ('stance change on status moves', A, 'if am.category == Category::Status && am.id != mv::KINGSSHIELD {', 'if false {'),
+ ('disguise blocks only once... never busts', A, '                    self.mon_mut(holder).ability_st.a = 1;\n                    return Res::Num(0);', '                    return Res::Num(0);'),
+ ('busted disguise costs nothing', A, '                        self.damage(d, Some(holder), Some(holder), Eff::Species);', ''),
+ ('busted disguise is not permanent', A, '                        self.forme_change(holder, species, true, false);\n                        let d = div1', '                        self.forme_change(holder, species, false, false);\n                        let d = div1'),
+ ('zero to hero keeps the old ability state', A, '                        self.forme_change(holder, species, true, true);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon) only announces it.', '                        self.forme_change(holder, species, true, false);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon) only announces it.'),
+ ('mega evolution ends an illusion', B, '                self.mon_mut(r).ability = ab::NOABILITY;\n', ''),
+ ('illusion picks the first party member', A, 'for p in (own + 1..s.n as usize).rev() {', 'for p in own + 1..s.n as usize {'),
+ ('illusion survives a hit', A, '                if !self.mon(holder).being_called_back {\n                    self.mon_mut(holder).illusion = 0;\n                }', ''),
+ ('illusion ends on switching out', A, '                if !self.mon(holder).being_called_back {\n                    self.mon_mut(holder).illusion = 0;', '                if true {\n                    self.mon_mut(holder).illusion = 0;'),
+ ('imposter copies the foe in front', A, 'let across = ACTIVE - 1 - self.mon(holder).position as usize;', 'let across = self.mon(holder).position as usize;'),
+ ('transform through a substitute', B, '            || self.vols(target).has(VolKind::Substitute)\n            || t.transformed', '            || t.transformed'),
+ ('transform into an illusion', B, '            || self.mon(r).illusion != 0\n            || t.illusion != 0\n', '            || self.mon(r).illusion != 0\n'),
+ ('transform copies full pp', B, 'let pp = MOVES[id as usize].base_pp.min(5);', 'let pp = MOVES[id as usize].pp;'),
+ ('transform keeps its own stats', B, '            m.stats[1..].copy_from_slice(&t.stats[1..]);\n            m.base_moves', '            m.base_moves'),
+ ('transform skips the stat stages', B, '            m.times_attacked = t.times_attacked;\n            m.boosts = t.boosts;', '            m.times_attacked = t.times_attacked;'),
+ ('transform restarts a shared ability', B, '        if old != new {\n            self.single_event(Ev::Start, Eff::Ability(new), Some(r), Some(r), Some(r), Eff::None, Res::Undef);\n        }', '        self.single_event(Ev::Start, Eff::Ability(new), Some(r), Some(r), Some(r), Eff::None, Res::Undef);'),
+ ('transformed moves survive switching', B, '            m.moves = m.base_moves;\n            m.n_moves = m.base_n_moves;\n', ''),
+ ('forme-bound ability works when transformed', B, '        if ABILITIES[m.ability as usize].flags & AF_NOTRANSFORM != 0 && m.transformed {\n            return true;\n        }\n', ''),
+ ('aura wheel is always electric', V, 'self.am[mi as usize].typ = if hangry { Type::Dark } else { Type::Electric };', 'self.am[mi as usize].typ = Type::Electric;'),
+ ('vetoed move draws no target', M, '            self.get_random_target(pokemon, Target::Normal);\n            return FALSE;', '            return FALSE;'),
  # --- turn flow, volatile conditions, Substitute
  ('fake out works every turn', V, 'if e.target.is_some_and(|source| self.mon(source).active_move_actions > 1) {', 'if e.target.is_some_and(|source| self.mon(source).active_move_actions > 100) {'),
  ('fake out never disabled', V, 'if self.mon(pokemon).active_move_actions > 0 {', 'if self.mon(pokemon).active_move_actions > 100 {'),
  ('move actions not reset on switch', B, '            m.active_turns = 0;\n            m.active_move_actions = 0;\n', '            m.active_turns = 0;\n'),
- ('follow me does not redirect', C, '                if self.valid_target_loc(loc, user, self.am[mi as usize].target) {\n                    return Res::Mon(holder);\n                }', '                if self.valid_target_loc(loc, user, self.am[mi as usize].target) {\n                    return Res::Undef;\n                }'),
+ ('follow me does not redirect', C, '                if self.valid_target_loc(loc, user, self.am[mi as usize].target) {\n                    self.am[mi as usize].smart_target = false;\n                    return Res::Mon(holder);\n                }', '                if self.valid_target_loc(loc, user, self.am[mi as usize].target) {\n                    return Res::Undef;\n                }'),
  ('rage powder pulls grass types', C, 'if kind == VolKind::Ragepowder && !self.run_status_immunity(user, Imm::Powder) {', 'if false && !self.run_status_immunity(user, Imm::Powder) {'),
  ('helping hand 1.5 -> 1.3', C, 'self.chain_modify(3u32.pow(n), 2u32.pow(n))', 'self.chain_modify(13u32.pow(n), 10u32.pow(n))'),
  ('helping hand works on a pokemon that moved', V, 'if e.target.is_some_and(|t| !self.mon(t).newly_switched && !self.will_move(t)) {', 'if e.target.is_some_and(|t| !self.mon(t).newly_switched && !self.will_move(t) && false) {'),
@@ -57,7 +165,7 @@ MUT = [
  ('disable works on a move without pp', C, '                if self.move_slot(holder, last).is_some_and(|s| s.pp == 0) {\n                    return FALSE;\n                }', ''),
  ('torment disables nothing', C, '                    self.disable_slots_where(holder, |s| s.id == last);\n', ''),
  ('last move not recorded', M, '        self.mon_mut(pokemon).last_move = a.move_id;\n', ''),
- ('last move survives switching', B, '        m.last_move = NO_MOVE;\n        m.newly_switched = true;', '        m.newly_switched = true;'),
+ ('last move survives switching', B, '        m.last_move = NO_MOVE;\n        m.locked_move = NO_MOVE;\n', '        m.locked_move = NO_MOVE;\n'),
  ('imprison does not stop the move', C, '                if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {\n                    return FALSE;\n                }', ''),
  ('imprison disables openly', C, '                self.disable_slots_hidden_where(pokemon, |s| {', '                self.disable_slots_where(pokemon, |s| {'),
  ('struggle spelled plainly when moves are hidden', CH, 'let listed = self.is_last_active(r) && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);', 'let listed = false && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);'),
@@ -76,9 +184,9 @@ MUT = [
  ('substitute blocks sound moves', C, 'if target == source || am.flags & F_BYPASSSUB != 0 || am.infiltrates {', 'if target == source || am.infiltrates {'),
  ('substitute blocks infiltrator', C, 'if target == source || am.flags & F_BYPASSSUB != 0 || am.infiltrates {', 'if target == source || am.flags & F_BYPASSSUB != 0 {'),
  ('status moves pass a substitute', C, '                if !r.hit() {\n                    // No damage to deal (a status move, an immunity): the move fails.\n                    return Res::Null;\n                }', '                if !r.hit() {\n                    return Res::Undef;\n                }'),
- ('no recoil from hitting a substitute', C, '                if damage > 0 {\n                    self.apply_recoil(damage as u32, mi, source);\n                }', ''),
+ ('no recoil from hitting a substitute', C, '                if damage > 0 {\n                    self.apply_recoil_halves(damage as u32, mi, source);\n                }\n', ''),
  ('no drain from hitting a substitute', C, '                    self.heal(amount as i32, Some(source), Some(target), Eff::Drain);\n                }\n                let me = Eff::Move(mi);', '                }\n                let me = Eff::Move(mi);'),
- ('substitute drain rounds down', C, 'let amount = (damage as u32 * drain.0 as u32).div_ceil(drain.1 as u32);', 'let amount = damage as u32 * drain.0 as u32 / drain.1 as u32;'),
+ ('substitute drain rounds down', C, 'let amount = (damage as u32 * drain.0 as u32).div_ceil(2 * drain.1 as u32);', 'let amount = damage as u32 * drain.0 as u32 / (2 * drain.1 as u32);'),
  ('secondaries reach behind a substitute', M, '            if damage[i] == HIT_SUBSTITUTE {\n                damage[i] = TRUE;\n                targets[i] = Tgt::Sub;\n            }', '            if damage[i] == HIT_SUBSTITUTE {\n                damage[i] = TRUE;\n            }'),
  ('no secondary roll behind a substitute', M, '        for i in 0..n {\n            if targets[i] == Tgt::Gone {\n                continue;\n            }\n            let count = self.am[mi as usize].n_secs as usize;', '        for i in 0..n {\n            if targets[i] == Tgt::Gone || targets[i] == Tgt::Sub {\n                continue;\n            }\n            let count = self.am[mi as usize].n_secs as usize;'),
  ('intimidate goes through a substitute', A, '                    if !self.has_vol_named(f, "substitute") {\n                        self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);\n                    }', '                    self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);'),
@@ -112,7 +220,7 @@ MUT = [
  ('destiny bond never wears off', C, '                self.remove_volatile(holder, VolKind::Destinybond);\n                Res::Undef\n            }\n            // onMoveAborted(pokemon, target, move)', '                Res::Undef\n            }\n            // onMoveAborted(pokemon, target, move)'),
  ('destiny bond can be repeated', V, 'Res::Bool(e.target.is_some_and(|p| !self.remove_volatile(p, VolKind::Destinybond)))', 'Res::Bool(e.target.is_some())'),
  ('electrify changes struggle', C, '                    if self.am[mi as usize].id != mv::STRUGGLE {\n                        self.am[mi as usize].typ = Type::Electric;\n                    }', '                    self.am[mi as usize].typ = Type::Electric;'),
- ('vetoed move draws no target', M, '            self.get_random_target(pokemon, Target::Normal);\n            return FALSE;', '            return FALSE;'),
+
  ('gastro acid suppresses nothing', B, '        self.vols(r).has(VolKind::Gastroacid)\n    }', '        false\n    }'),
  ('gastro acid skips the ability end', C, '            (VolKind::Gastroacid, Ev::Start) => {\n                let ability = self.mon(holder).ability;\n                self.single_event(\n                    Ev::End,', '            (VolKind::Gastroacid, Ev::Start) => {\n                let ability = self.mon(holder).ability;\n                self.single_event(\n                    Ev::Copy,'),
  ('lock-on locks everyone', C, 'if matches!(e.effect, Eff::Move(_)) && e.source == Some(holder) && e.target == locked {', 'if matches!(e.effect, Eff::Move(_)) && e.source == Some(holder) {'),
@@ -194,7 +302,7 @@ MUT = [
  ('sand veil 3277 -> 3686', A, "(ab::SANDVEIL, Ev::ModifyAccuracy, Pre::On) => {\n                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Sandstorm) {\n                    return self.chain_modify(3277, 4096);", "(ab::SANDVEIL, Ev::ModifyAccuracy, Pre::On) => {\n                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Sandstorm) {\n                    return self.chain_modify(3686, 4096);"),
  ('harvest rolls in the sun', A, "if self.is_weather(Weather::Sunnyday) || self.chance(1, 2, \"harvest\") {", "if self.chance(1, 2, \"harvest\") {"),
  ('grass pelt 1.5 -> 1.3', A, "(ab::GRASSPELT, Ev::ModifyDef, Pre::On) => {\n                if self.is_terrain(Terrain::Grassyterrain) {\n                    return self.chain_modify(3, 2);", "(ab::GRASSPELT, Ev::ModifyDef, Pre::On) => {\n                if self.is_terrain(Terrain::Grassyterrain) {\n                    return self.chain_modify(5325, 4096);"),
- ('mimicry keeps its type', A, "                if self.mon(holder).types != types {\n                    self.mon_mut(holder).types = types;\n                }\n", ""),
+ ('mimicry keeps its type', A, '                if current[..n] != wanted[..] {\n                    self.set_type(holder, types);\n                }\n', ''),
  ('screen cleaner spares the foe', A, "for side in [holder.side as usize, 1 - holder.side as usize] {\n                        self.remove_side_condition(side, cond);", "for side in [holder.side as usize] {\n                        self.remove_side_condition(side, cond);"),
  ('toxic debris on special hits', A, "if mcat == Some(Category::Physical) && layers.is_none_or(|l| l < 2) {", "if layers.is_none_or(|l| l < 2) {"),
  ('synchronize passes toxic spikes poison', A, "                    || e.effect == Eff::SideCond(SideCond::Toxicspikes)\n", ""),
@@ -219,10 +327,10 @@ MUT = [
  ('hazards cost no extra pp under pressure', M, "            if self.am[m].flags & F_MUSTPRESSURE != 0 {", "            if false {"),
  ('field move hits despite failed weather', M, "result = damage.hit() || damage == Res::Undef;", "result = true;"),
  # --- Mega Evolution
- ('mega keeps the old ability', B, "        self.set_ability_ex(r, ability, None, Eff::None, true);\n        self.mon_mut(r).base_ability = ability;", "        self.mon_mut(r).base_ability = ability;"),
+ ('mega keeps the old ability', B, '            self.set_ability_ex(r, ability, None, Eff::None, true);\n            self.mon_mut(r).base_ability = ability;', '            self.mon_mut(r).base_ability = ability;'),
  ('mega ability asks permission', B, "self.set_ability_ex(r, ability, None, Eff::None, true);", "self.set_ability_ex(r, ability, None, Eff::None, false);"),
  ('mega keeps the old stats', B, "        m.stats[1..].copy_from_slice(&stats[1..]);\n", ""),
- ('mega keeps the old types', B, "        m.types = SPECIES[species as usize].types;\n        m.stats[1..]", "        m.stats[1..]"),
+ ('mega keeps the old types', B, '        m.types = SPECIES[species as usize].types;\n        m.added_type = Type::None;\n', '        m.added_type = Type::None;\n'),
  ('mega reverts on switching out', B, "        self.mon_mut(r).base_species = species;\n", ""),
  ('second mega allowed', B, "            side.team[i].can_mega = NO_SPECIES;", "            side.team[i].can_mega = side.team[i].can_mega;"),
  ('mega does not count as acting', B, "        self.mon_mut(r).move_this_turn = TRUE;\n", ""),
@@ -259,7 +367,7 @@ MUT = [
  ('pixilate type', A, "ab::PIXILATE => Type::Fairy,", "ab::PIXILATE => Type::Ice,"),
  ('fluffy contact /2 -> /4', A, "                    num /= 2;", "                    num /= 4;"),
  ('heatproof burn /2 -> /3', A, "return Res::Num(relay.num() / 2);", "return Res::Num(relay.num() / 3);"),
- ('stickyhold off', A, "if e.source.is_some() && e.source != Some(holder) {\n                    return FALSE;", "if e.source.is_some() && e.source != Some(holder) {\n                    return Res::Undef;"),
+ ('stickyhold off', A, 'if (e.source.is_some() && e.source != Some(holder)) || knock_off {\n                    return FALSE;', 'if (e.source.is_some() && e.source != Some(holder)) || knock_off {\n                    return Res::Undef;'),
  ('minus/plus counts itself', A, "if a != holder && (self.has_ability(a, ab::MINUS)", "if (self.has_ability(a, ab::MINUS)"),
  ('firemane type', A, "(ab::FIREMANE, Ev::ModifyAtk | Ev::ModifySpA, Pre::On) => {\n                if mtype == Some(Type::Fire) {", "(ab::FIREMANE, Ev::ModifyAtk | Ev::ModifySpA, Pre::On) => {\n                if mtype == Some(Type::Water) {"),
  ('intimidate -1 -> -2', A, "self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);", "self.boost1(ATK, -2, Some(f), Some(holder), Eff::None);"),
@@ -292,7 +400,7 @@ MUT = [
  ('prankster +1 -> +2', A, "self.am[m as usize].prankster_boosted = true;\n                    return Res::Num(relay.num() + 1);", "self.am[m as usize].prankster_boosted = true;\n                    return Res::Num(relay.num() + 2);"),
  ('quick draw odds', A, "self.chance(3, 10, \"quick draw\")", "self.chance(4, 10, \"quick draw\")"),
  ('steely spirit 1.5 -> 1.3', A, "(ab::STEELYSPIRIT, Ev::BasePower, Pre::Ally) => {\n                if mtype == Some(Type::Steel) {\n                    return self.chain_modify(6144, 4096);", "(ab::STEELYSPIRIT, Ev::BasePower, Pre::Ally) => {\n                if mtype == Some(Type::Steel) {\n                    return self.chain_modify(5325, 4096);"),
- ('reckless 1.2 -> 1.3', A, "self.am[m as usize].d().recoil.0 > 0) {\n                    return self.chain_modify(4915, 4096);", "self.am[m as usize].d().recoil.0 > 0) {\n                    return self.chain_modify(5325, 4096);"),
+ ('reckless 1.2 -> 1.3', A, 'd().has_crash_damage)\n                {\n                    return self.chain_modify(4915, 4096);', 'd().has_crash_damage)\n                {\n                    return self.chain_modify(5325, 4096);'),
  ('scrappy off', A, "self.am[m as usize].ignore_immunity = IgnoreImm::NormalFighting;", "self.am[m as usize].ignore_immunity = IgnoreImm::No;"),
  ('liquid voice type', A, "self.am[m as usize].typ = Type::Water;", "self.am[m as usize].typ = Type::Ice;"),
  ('marvel scale 1.5 -> 2', A, "(ab::MARVELSCALE, Ev::ModifyDef, Pre::On) => {\n                if self.mon(holder).status != Status::None {\n                    return self.chain_modify(6144, 4096);", "(ab::MARVELSCALE, Ev::ModifyDef, Pre::On) => {\n                if self.mon(holder).status != Status::None {\n                    return self.chain_modify(8192, 4096);"),
@@ -308,11 +416,11 @@ MUT = [
  ('klutz off', B, "ITEMS[m.item as usize].flags & IF_IGNORE_KLUTZ == 0 && self.has_ability(r, ab::KLUTZ)", "false"),
  ('corrosion off', B, "if !corrosive && !self.run_status_immunity(r, Imm::Status(status)) {", "if !self.run_status_immunity(r, Imm::Status(status)) {"),
  ('levitate off', B, "(self.has_ability(r, ab::LEVITATE) || self.has_ability(r, ab::EELEVATE))", "self.has_ability(r, ab::EELEVATE)"),
- ('stalwart off', B, "if self.has_ability(user, ab::STALWART) || self.has_ability(user, ab::PROPELLERTAIL) {", "if false {"),
+ ('stalwart off', B, 'if tracks || self.has_ability(user, ab::STALWART) || self.has_ability(user, ab::PROPELLERTAIL) {', 'if tracks {'),
  ('early bird off', C, "                if early {", "                if early && false {"),
  ('quick feet still halved by paralysis', C, "if !self.has_ability(holder, ab::QUICKFEET) {", "if true {"),
  ('mold breaker off', E, "if ABILITIES[a as usize].flags & AF_BREAKABLE != 0 && self.suppressing_ability(Some(r)) {", "if false {"),
- ('sheer force keeps life orb recoil', M, "        if !self.suppressing_secondaries() {", "        if true {"),
+ ('sheer force keeps life orb recoil', M, '        if !self.suppressing_secondaries() && self.am[m].flags & F_FUTUREMOVE == 0 {', '        if self.am[m].flags & F_FUTUREMOVE == 0 {'),
  ('flash fire boost 1.5 -> 2', C, "if fire && self.has_ability(holder, ab::FLASHFIRE) {\n                    return self.chain_modify(6144, 4096);", "if fire && self.has_ability(holder, ab::FLASHFIRE) {\n                    return self.chain_modify(8192, 4096);"),
  ('unburden x2 -> x1.5', C, "!self.ignoring_ability(holder) {\n                    return self.chain_modify(2, 1);", "!self.ignoring_ability(holder) {\n                    return self.chain_modify(3, 2);"),
  # --- items
@@ -355,49 +463,147 @@ MUT = [
 def sh(cmd, **kw):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True, **kw)
 
+ARM = re.compile(r'^            \((mv|ab|it|VolKind|SlotCond|SideCond|Status|Pseudo|Weather|Terrain)::')
+
+def callback_arms(text):
+    """The match arms that are callback bodies: (header text, is a block)."""
+    out = []
+    lines = text.split('\n')
+    i = 0
+    while i < len(lines):
+        if ARM.match(lines[i]) or lines[i] == '            (':
+            j = i
+            while not re.search(r'=> (\{|.*,)$', lines[j]) and j - i < 12:
+                j += 1
+            header = '\n'.join(lines[i:j + 1])
+            if lines[j].endswith('=> {'):
+                out.append((header, True))
+            elif '=> ' in lines[j] and not lines[j].endswith('=> Res::Undef,'):
+                out.append((header, False))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+# Mutations that were tried and cannot be observed in Champions, kept out of MUT:
+#  - Sheer Force stripping the secondaries of a move marked hasSheerForceBoost (Electro Shot):
+#    the move has none when Sheer Force looks. King's Rock adds one, but later.
+#  - A pivoting move setting its switch flag on a user with no HP left, or Dragon Tail forcing a
+#    switch from a user with no HP left: nothing takes the user's HP before that point (Rocky
+#    Helmet, recoil and Life Orb all come after).
+#  - Curse applying its three stat changes in another order: nothing reacts to a self-inflicted
+#    change stat by stat.
+#  - Volatiles passed by Baton Pass keeping their effect order: the order only separates
+#    switch-in and redirection handlers, and the only passable volatiles with one (Follow Me,
+#    Rage Powder) last for the turn they were used in, when their user cannot also Baton Pass.
+#  - Stance Change working for a transformed Pokémon: an ability that cannot be copied by
+#    Transform is ignored altogether while its holder is transformed.
+#  - A hit on Mimikyu's disguise counting as critical: the hit does no damage either way.
+#  - A permanent forme change keeping the old maximum HP: the two that exist in Champions
+#    (Mimikyu's disguise breaking, Palafin's Hero forme) do not change base HP.
+
+# Callbacks that do nothing observable in Champions, so that switching them off changes nothing.
+EQUIVALENT = {
+    # Returns the move's own base power except for Greninja-Ash, which Champions does not have.
+    '            (mv::WATERSHURIKEN, Ev::BasePowerCallback)',
+    # Zeroes two fields of a volatile that has just been created, where they are zero already.
+    '            (VolKind::Counter | VolKind::Mirrorcoat, Ev::Start)',
+    # The core clears the illusion of a fainted Pokémon itself (Battle#faintMessages).
+    '            (ab::ILLUSION, Ev::Faint, Pre::On)',
+    # Marks the user as having had its BeforeSwitchOut event, which the core does for anyone
+    # about to switch, and which nothing in Champions listens to in any case (no Pursuit).
+    '            (mv::BATONPASS | mv::SHEDTAIL, Ev::SelfHit)',
+}
+
+def handler_off_entries(since=None):
+    """One mutation per callback: the callback does nothing and returns nothing.
+
+    With `since` (a git ref), only callbacks that ref does not have.
+    """
+    entries = []
+    for f in (V, C, A, I):
+        arms = callback_arms(open(os.path.join(REPO, f)).read())
+        known = set()
+        if since:
+            known = {h for h, _ in callback_arms(sh(f'git show {since}:{f}', cwd=REPO).stdout)}
+        for header, block in arms:
+            if header in known or any(header.startswith(e) for e in EQUIVALENT):
+                continue
+            name = 'off: ' + ' '.join(header.split())[:-5].strip()
+            if block:
+                off = header + '\n                if std::hint::black_box(true) {\n                    return Res::Undef;\n                }'
+            else:
+                off = header[:header.rindex('=> ')] + '=> Res::Undef,'
+            entries.append((name, f, header, off))
+    return entries
+
 def main():
     args = sys.argv[1:]
-    only = None
-    if '--only' in args:
-        i = args.index('--only'); only = args[i + 1]; del args[i:i + 2]
+    only = []
+    while '--only' in args:
+        i = args.index('--only'); only.append(args[i + 1]); del args[i:i + 2]
+    if '--handlers' in args:
+        # Add a mutation for every callback (or, with a ref, every callback newer than it).
+        i = args.index('--handlers')
+        since = args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith('-') and not args[i + 1].endswith('.jsonl') else None
+        del args[i:i + (2 if since else 1)]
+        MUT.extend(handler_off_entries(since))
+    if '--handlers-only' in args:
+        i = args.index('--handlers-only')
+        since = args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith('-') and not args[i + 1].endswith('.jsonl') else None
+        del args[i:i + (2 if since else 1)]
+        MUT[:] = handler_off_entries(since)
+    work = WORK
+    if '--work' in args:
+        i = args.index('--work'); work = os.path.join(REPO, 'target', args[i + 1]); del args[i:i + 2]
     lo, hi = 0, len(MUT)
     if '--range' in args:
         i = args.index('--range'); lo, hi = (int(x) for x in args[i + 1].split(':')); del args[i:i + 2]
+    if '--check' in args:
+        # Only confirm that every entry still matches the source exactly once.
+        bad = 0
+        for name, f, old, _ in MUT:
+            n = open(os.path.join(REPO, f)).read().count(old)
+            if n != 1:
+                bad += 1
+                print(f'BAD PATTERN ({n} matches): {name}')
+        print(f'{len(MUT)} entries, {bad} to repair')
+        return
     corpora = [os.path.abspath(c) for c in args]
     if not corpora:
         sys.exit(__doc__)
-    os.makedirs(WORK, exist_ok=True)
+    os.makedirs(work, exist_ok=True)
     for d in ('src', 'tests'):
-        shutil.rmtree(os.path.join(WORK, d), ignore_errors=True)
-        shutil.copytree(os.path.join(REPO, d), os.path.join(WORK, d), copy_function=shutil.copy)
+        shutil.rmtree(os.path.join(work, d), ignore_errors=True)
+        shutil.copytree(os.path.join(REPO, d), os.path.join(work, d), copy_function=shutil.copy)
     for f in ('Cargo.toml', 'Cargo.lock', 'rustfmt.toml'):
-        shutil.copy(os.path.join(REPO, f), os.path.join(WORK, f))
-    shutil.rmtree(os.path.join(WORK, 'examples'), ignore_errors=True)
-    shutil.copytree(os.path.join(REPO, 'examples'), os.path.join(WORK, 'examples'), copy_function=shutil.copy)
+        shutil.copy(os.path.join(REPO, f), os.path.join(work, f))
+    shutil.rmtree(os.path.join(work, 'examples'), ignore_errors=True)
+    shutil.copytree(os.path.join(REPO, 'examples'), os.path.join(work, 'examples'), copy_function=shutil.copy)
     results = []
     # baseline must pass
-    r = sh('cargo build --release --bin difftest 2>&1 | tail -1', cwd=WORK)
+    r = sh('cargo build --release --bin difftest 2>&1 | tail -1', cwd=work)
     for c in corpora:
-        r = sh(f'./target/release/difftest {c} --quiet', cwd=WORK)
+        r = sh(f'./target/release/difftest {c} --quiet', cwd=work)
         if r.returncode != 0:
             print('BASELINE FAILS on', c, r.stdout[-300:]); return
     print('baseline passes on', len(corpora), 'corpora', flush=True)
     for name, f, old, new in MUT[lo:hi]:
-        if only and only not in name:
+        if only and not any(o in name for o in only):
             continue
-        path = os.path.join(WORK, f)
+        path = os.path.join(work, f)
         src = open(path).read()
         n = src.count(old)
         if n != 1:
             print(f'BAD PATTERN ({n} matches): {name}', flush=True); results.append((name, 'bad')); continue
         open(path, 'w').write(src.replace(old, new))
-        b = sh('cargo build --release --bin difftest 2>&1 | grep -E "^error" -A6', cwd=WORK)
+        b = sh('cargo build --release --bin difftest 2>&1 | grep -E "^error" -A6', cwd=work)
         if b.stdout.strip():
             print(f'DOES NOT COMPILE: {name}\n{b.stdout[:400]}', flush=True); results.append((name, 'nocompile'))
         else:
             caught = None
             for c in corpora:
-                r = sh(f'./target/release/difftest {c} --quiet', cwd=WORK)
+                r = sh(f'./target/release/difftest {c} --quiet', cwd=work)
                 if r.returncode != 0:
                     line = [l for l in r.stdout.splitlines() if 'diverged' in l or 'panicked' in l]
                     caught = (os.path.basename(c), line[-1] if line else 'crash')
@@ -412,4 +618,5 @@ def main():
     print('summary:', tally)
     print('missed:', [n for n, r in results if r == 'missed'])
 
-main()
+if __name__ == '__main__':
+    main()

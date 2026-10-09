@@ -3,7 +3,7 @@
 //! binary and by the fixture test in `tests/`.
 
 use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, Type, VolKind};
-use crate::state::{Res, Trapped};
+use crate::state::{NO_SPECIES, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -87,6 +87,11 @@ pub struct MonSnap {
     /// u(ndefined), n(ull), t(rue), f(alse).
     #[serde(default)]
     pub move_result: Option<String>,
+    #[serde(default)]
+    pub base_species: Option<String>,
+    /// Id of the Mega the Pokémon can still become; empty if none.
+    #[serde(default)]
+    pub can_mega: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -178,6 +183,12 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         item_order: Some(m.item_st.order),
         active_turns: Some(m.active_turns),
         move_result: Some([m.move_this_turn, m.move_last_turn].iter().map(|r| result_code(*r)).collect()),
+        base_species: Some(SPECIES[m.base_species as usize].id.to_string()),
+        can_mega: Some(if m.can_mega == NO_SPECIES {
+            String::new()
+        } else {
+            SPECIES[m.can_mega as usize].id.to_string()
+        }),
     }
 }
 
@@ -272,6 +283,8 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
             check_opt!("types", types);
             check_opt!("disabled moves", disabled);
             check_opt!("active turns", active_turns);
+            check_opt!("base species", base_species);
+            check_opt!("can mega evolve", can_mega);
             if w.active {
                 check_opt!("move results", move_result);
                 check_opt!("trapped", trapped);

@@ -98,6 +98,15 @@ impl Battle {
         let relay = e.relay;
 
         // Families of items that share one callback.
+        if !ITEMS[item as usize].mega.is_empty() {
+            // Mega Stones: onTakeItem(item, source). The Pokémon Showdown passes
+            // second is the holder; the stone cannot be taken from a Pokémon
+            // whose base species it belongs to.
+            debug_assert!(ev == Ev::TakeItem && pre == Pre::On);
+            let base = SPECIES[self.mon(holder).base_species as usize].base_species;
+            let own = ITEMS[item as usize].mega.iter().any(|&(from, _)| SPECIES[from as usize].id == base);
+            return Res::Bool(!own);
+        }
         if let Some(t) = type_booster(item) {
             // onBasePower(basePower, user, target, move)
             debug_assert!(ev == Ev::BasePower && pre == Pre::On);
@@ -262,7 +271,7 @@ impl Battle {
 
             // ---- Leek: onModifyCritRatio(critRatio, user)
             (it::LEEK, Ev::ModifyCritRatio, Pre::On) => {
-                let base = e.target.map_or("", |u| SPECIES[self.mon(u).species as usize].base_species);
+                let base = e.target.map_or("", |u| SPECIES[self.mon(u).base_species as usize].base_species);
                 if base == "farfetchd" || base == "sirfetchd" {
                     return Res::Num(relay.num() + 2);
                 }
@@ -320,7 +329,7 @@ impl Battle {
 
             // ---- Light Ball: onModifyAtk / onModifySpA (atk, pokemon)
             (it::LIGHTBALL, Ev::ModifyAtk | Ev::ModifySpA, Pre::On) => {
-                let base = e.target.map_or("", |u| SPECIES[self.mon(u).species as usize].base_species);
+                let base = e.target.map_or("", |u| SPECIES[self.mon(u).base_species as usize].base_species);
                 if base == "pikachu" {
                     return self.chain_modify(2, 1);
                 }

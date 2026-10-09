@@ -6,13 +6,13 @@ simulator underneath a self-play bot: copyable fixed-size state, no allocation
 on the common paths of the turn loop, and a harness that proves each mechanic
 matches Showdown before anything is trained on it.
 
-**Status: moves, abilities and held items; not yet a full simulator.**
-Modelled so far: the turn loop, damage, status conditions, switching, 238 of
-the 510 moves Champions Pokémon can learn, 181 of the 225 abilities and 79 of
-the 85 held items. Mega Evolution, weather, terrain and the other field
-effects are not, and neither are staples such as Fake Out, Tailwind and Trick
-Room, so most real tournament teams still cannot be played. See
-[What is and is not modelled](#what-is-and-is-not-modelled).
+**Status: moves, abilities, held items and Mega Evolution; not yet a full
+simulator.** Modelled so far: the turn loop, damage, status conditions,
+switching, Mega Evolution, 238 of the 510 moves Champions Pokémon can learn,
+181 of the 225 abilities and 79 of the 85 held items. Weather, terrain and the
+other field effects are not, and neither are staples such as Fake Out,
+Tailwind and Trick Room, so most real tournament teams still cannot be played.
+See [What is and is not modelled](#what-is-and-is-not-modelled).
 
 ## Quick start
 
@@ -43,9 +43,10 @@ println!("{:?}", battle.winner);              // Some(0), Some(1) or None for a 
 ```
 
 `Battle` is `Copy`: cloning a position for search is a plain memory copy
-(about 4.8 kB). Choices use Showdown's conventions (`Choice::to_showdown`
-prints `move 2 1`, `switch 3`, `pass`), so they can be sent to a Showdown
-server unchanged. `Battle::new` returns `Error::Unsupported` naming the first
+(about 5.2 kB). Choices use Showdown's conventions (`Choice::to_showdown`
+prints `move 2 1`, `move 1 2 mega`, `switch 3`, `pass`), so they can be sent
+to a Showdown server unchanged. A Pokémon holding its Mega Stone is offered
+every move a second time with `mega: true`; a side can Mega Evolve once. `Battle::new` returns `Error::Unsupported` naming the first
 move, ability or item it does not model, rather than guessing.
 
 A set built with `from_names` has no ability and no item until you add them,
@@ -73,11 +74,14 @@ Results for the code in this repository, against Showdown commit `ad7ca5d`
 
 | Check | Battles | Decisions | Diverged |
 |---|---|---|---|
-| Abilities and items: state, RNG seed and legal choices after every decision | 21,000 | 393,381 | 0 |
+| Mega Evolution with abilities and items (about 3,500 Mega Evolutions, 71 different Megas) | 5,500 | 101,656 | 0 |
+| Abilities and items, no Mega Stones | 21,000 | 393,381 | 0 |
 | Items but no abilities | 5,000 | 93,086 | 0 |
 | Neither (how the engine's first version was checked) | 15,200 | 270,196 | 0 |
-| Abilities and items, comparing every individual RNG draw as well | 1,000 | 19,568 | 0 |
+| Comparing every individual RNG draw as well | 1,400 | 27,412 | 0 |
 | 1,000-turn limit (both sides only ever switch) | 8 | 8,000 | 0 |
+
+Each row compares state, RNG seed and legal choices after every decision.
 
 How the battles are made up:
 
@@ -88,6 +92,9 @@ How the battles are made up:
 - Abilities are the species' own half the time and any modelled ability
   otherwise, which exercises abilities on bodies and movesets their real
   owners lack. About 80% of Pokémon hold an item.
+- A species with a Mega Stone holds it half the time, and Mega Evolves at its
+  first chance half the time, so Megas arrive early and late. A few Pokémon
+  hold a stone they cannot use.
 - About 30% of battles are "themed": every Pokémon draws from the same one to
   three abilities and items, so effects meet themselves and each other
   (Intimidate into Defiant, two Lightning Rods, Unnerve against berries) far
@@ -102,14 +109,15 @@ Two further checks:
   state rather than from the request Showdown sends the player, because the
   request deliberately hides some things (a Shadow Tag trap not yet revealed).
   `gen_cases.js --check-legal` confirms that list against Showdown's own
-  validation by submitting every conceivable choice: 300 battles, 5,511
+  validation by submitting every conceivable choice: 500 battles, 9,248
   decisions, no disagreement.
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
-  replays 8,000 recorded battles. All 118 injected bugs were caught. (A
-  119th went unnoticed and turned out not to be a bug: it changed nothing
-  observable.)
+  replays recorded battles. All 126 injected bugs that can make a difference
+  were caught. Two more went unnoticed and turned out not to be bugs: one
+  changed nothing observable, the other only matters for abilities that are
+  not modelled yet.
 
 What this does **not** establish: agreement with the cartridge games where
 they differ from Showdown, or anything about mechanics outside the modelled
@@ -183,14 +191,17 @@ Modelled, and verified as above:
 - **181 abilities**, including Intimidate and everything that answers it,
   the absorbing and contact abilities, Mold Breaker, Prankster, Magic Bounce,
   Parental Bond, Trace, Protean, Unaware, Sheer Force, Shadow Tag
-- **79 held items**: every non-Mega item except the six listed below. Items
+- **Mega Evolution**: 72 of the 82 Megas (the Mega Stones themselves are all
+  accepted as held items)
+- **79 held items**: every other item except the six listed below. Items
   Showdown marks as unavailable in Champions (Choice Band, Choice Specs,
   Assault Vest among them) are left out; Choice Scarf is the only Choice item
 
 Not modelled yet:
 
-- **Mega Evolution** (and so the 81 Mega Stones)
 - Weather, terrain, Trick Room, Tailwind, screens, hazards
+- **10 Megas** whose ability needs weather or terrain (Charizard Y,
+  Tyranitar, Garchomp, ...); `Battle::new` refuses the Pokémon holding the stone
 - Fake Out, Follow Me / Rage Powder, Helping Hand, Wide Guard, Quick Guard
 - Pivoting moves (U-turn, Parting Shot), forced switches (Roar)
 - Two-turn and recharge moves, Substitute, Encore, Taunt, Disable
@@ -262,15 +273,14 @@ matter.
 
 ## Suggested order for what comes next
 
-1. **Mega Evolution** (new action type, forme change mid-turn, the Mega
-   Stones). The forme-changing abilities come along with it.
-2. **Weather and terrain**, which unlock 29 abilities and the terrain seeds,
-   then **Trick Room and Tailwind**.
-3. **Fake Out, redirection (Follow Me, Rage Powder), Helping Hand, Wide
+1. **Weather and terrain**, which unlock 29 abilities, the terrain seeds and
+   the last 10 Megas, then **Trick Room and Tailwind**.
+2. **Fake Out, redirection (Follow Me, Rage Powder), Helping Hand, Wide
    Guard**, and the remaining volatile conditions (Substitute, Taunt, Encore,
    Disable).
-4. **Pivoting and forced switches**, with Emergency Exit, Eject Button and
+3. **Pivoting and forced switches**, with Emergency Exit, Eject Button and
    Red Card.
+4. The remaining moves and the forme-changing abilities.
 5. **Building a `Battle` from an arbitrary mid-battle state**, which a bot
    needs to search from a live game, and sampling hidden information into it.
 6. Python bindings and batched stepping for training.

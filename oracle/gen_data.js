@@ -69,7 +69,18 @@ for (const k of IMM) out += '    [' + TYPES.map(t => dex.types.get(t).damageTake
 out += '];\n\n';
 
 // ---- species ----------------------------------------------------------------
+const abilities = L.tableAbilities();
+const abilityIndex = name => {
+	const i = abilities.findIndex(a => a.id === L.PS.toID(name));
+	if (i < 0) throw new Error('ability not in table: ' + name);
+	return i;
+};
 const species = L.tableSpecies();
+const speciesIndex = name => {
+	const i = species.findIndex(s => s.id === L.PS.toID(name));
+	if (i < 0) throw new Error('species not in table: ' + name);
+	return i;
+};
 out += `pub static SPECIES: [SpeciesData; ${species.length}] = [\n`;
 for (const s of species) {
 	const t = s.types.map(x => 'Type::' + x);
@@ -77,7 +88,7 @@ for (const s of species) {
 	const b = s.baseStats;
 	const gender = s.gender ? `Some(Gender::${s.gender})` : 'None';
 	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, base_species: ${rs(L.PS.toID(s.baseSpecies))}, types: [${t.join(', ')}], ` +
-		`base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender} },\n`;
+		`base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender}, ability0: ${abilityIndex(s.abilities['0'])}, weight_hg: ${s.weighthg} },\n`;
 }
 out += '];\n\n';
 
@@ -169,7 +180,6 @@ const AFLAGS = {
 	breakable: 'AF_BREAKABLE', cantsuppress: 'AF_CANTSUPPRESS', notransform: 'AF_NOTRANSFORM', failskillswap: 'AF_FAILSKILLSWAP',
 	failroleplay: 'AF_FAILROLEPLAY', noreceiver: 'AF_NORECEIVER', noentrain: 'AF_NOENTRAIN', notrace: 'AF_NOTRACE',
 };
-const abilities = L.tableAbilities();
 let abRows = '', abConsts = '';
 abilities.forEach((a, i) => {
 	const supported = L.SUPPORTED_ABILITIES.has(a.id);
@@ -183,7 +193,8 @@ for (const id of L.SUPPORTED_ABILITIES) if (!abilities.some(a => a.id === id)) t
 
 // Items
 const items = L.tableItems();
-let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },\n`;
+let itRows = `    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },\n`;
+let megaDefs = '';
 let itConsts = '    pub const NONE: u16 = 0;\n';
 items.forEach((item, i) => {
 	const supported = L.SUPPORTED_ITEMS.has(item.id);
@@ -193,8 +204,15 @@ items.forEach((item, i) => {
 	if (item.isChoice) fl.push('IF_CHOICE');
 	if (item.ignoreKlutz) fl.push('IF_IGNORE_KLUTZ');
 	const [cbs, mask, maskPre] = supported ? cbTable(`CB_IT_${item.id.toUpperCase()}`, item, 'item') : ['&[]', '0', '0'];
+	let mega = '&[]';
+	if (item.megaStone) {
+		// (species that can use the stone, the Mega it becomes)
+		const pairs = Object.entries(item.megaStone).map(([from, to]) => `(${speciesIndex(from)}, ${speciesIndex(to)})`);
+		megaDefs += `static MEGA_${item.id.toUpperCase()}: [(u16, u16); ${pairs.length}] = [${pairs.join(', ')}];\n`;
+		mega = `&MEGA_${item.id.toUpperCase()}`;
+	}
 	itConsts += `    pub const ${item.id.toUpperCase()}: u16 = ${i + 1};\n`;
-	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;
+	itRows += `    ItemData { id: ${rs(item.id)}, name: ${rs(item.name)}, flags: ${fl.join(' | ') || '0'}, supported: ${supported}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre}, mega: ${mega} },\n`;
 });
 for (const id of L.SUPPORTED_ITEMS) if (id && !items.some(a => a.id === id)) throw new Error('supported item not in table: ' + id);
 
@@ -210,6 +228,7 @@ out += `pub static STATUS_CONDS: [CondData; ${L.STATUSES.length + 1}] = [\n${sta
 out += `/// Ability indices into \`ABILITIES\`.\npub mod ab {\n${abConsts}}\n\n`;
 out += `pub static ABILITIES: [AbilityData; ${abilities.length}] = [\n${abRows}];\n\n`;
 out += `/// Item indices into \`ITEMS\`.\npub mod it {\n${itConsts}}\n\n`;
+out += megaDefs + '\n';
 out += `pub static ITEMS: [ItemData; ${items.length + 1}] = [\n${itRows}];\n`;
 fs.writeFileSync(path.join(__dirname, '..', 'src', 'tables.rs'), out);
 
@@ -219,7 +238,8 @@ const pool = {
 	species: [],
 	natures: dex.natures.all().map(n => n.name),
 	abilities: [...L.SUPPORTED_ABILITIES].filter(a => a !== 'noability').sort(),
-	items: [...L.SUPPORTED_ITEMS].filter(Boolean).sort(),
+	// Ordinary held items; Mega Stones are listed separately (`megastones`, and per species).
+	items: [...L.SUPPORTED_ITEMS].filter(id => id && !dex.items.get(id).megaStone).sort(),
 };
 const learnable = new Set();
 for (const s of L.legalSpecies()) {
@@ -228,8 +248,12 @@ for (const s of L.legalSpecies()) {
 	for (const id of all) learnable.add(id);
 	const ok = all.filter(id => supportedSet.has(id));
 	const own = [...new Set(Object.values(s.abilities).map(a => L.PS.toID(a)))].filter(a => L.SUPPORTED_ABILITIES.has(a));
-	if (ok.length >= 4) pool.species.push({ id: s.id, moves: ok, abilities: own, gender: s.gender || '' });
+	// Mega Stones this species can use, where the Mega's ability is modelled.
+	const megas = items.filter(i => i.megaStone && i.megaStone[s.name] &&
+		L.SUPPORTED_ABILITIES.has(L.PS.toID(dex.species.get(i.megaStone[s.name]).abilities['0']))).map(i => i.id);
+	if (ok.length >= 4) pool.species.push({ id: s.id, moves: ok, abilities: own, gender: s.gender || '', megas });
 }
+pool.megastones = items.filter(i => i.megaStone).map(i => i.id);
 fs.writeFileSync(path.join(__dirname, 'pool.json'), JSON.stringify(pool));
 
 const learnOk = [...learnable].filter(id => supportedSet.has(id));
@@ -237,6 +261,14 @@ const tally = {};
 for (const id of learnable) for (const w of report.unsupported[id] || []) tally[w] = (tally[w] || 0) + 1;
 const legalAb = L.legalAbilities();
 const heldItems = items.filter(i => !i.megaStone).map(i => i.id);
+// Every Mega a stone leads to, and what it waits for if its ability is not modelled.
+const megaList = [];
+for (const item of items) {
+	for (const to of Object.values(item.megaStone || {})) {
+		const ability = L.PS.toID(dex.species.get(to).abilities['0']);
+		megaList.push({ id: L.PS.toID(to), why: L.SUPPORTED_ABILITIES.has(ability) ? '' : `its ability ${ability} needs ${L.DEFERRED_ABILITIES[ability] || 'writing'}` });
+	}
+}
 for (const kind of ['abilities', 'items']) {
 	const supportedSet = kind === 'abilities' ? L.SUPPORTED_ABILITIES : L.SUPPORTED_ITEMS;
 	for (const id in L.DORMANT_PARTS[kind]) if (!supportedSet.has(id)) throw new Error(`dormant ${kind} entry ${id} is not modelled`);
@@ -253,6 +285,9 @@ fs.writeFileSync(path.join(__dirname, 'coverage.json'), JSON.stringify({
 		modelled: heldItems.filter(i => L.SUPPORTED_ITEMS.has(i)).length,
 		not_modelled: Object.fromEntries(heldItems.filter(i => !L.SUPPORTED_ITEMS.has(i)).map(i => [i, L.DEFERRED_ITEMS[i] || 'not yet written'])),
 		mega_stones: items.filter(i => i.megaStone).length,
+		megas: megaList.length,
+		megas_modelled: megaList.filter(m => !m.why).length,
+		megas_not_modelled: Object.fromEntries(megaList.filter(m => m.why).map(m => [m.id, m.why])),
 		dormant_parts: L.DORMANT_PARTS.items,
 	},
 	learnable_moves: learnable.size,

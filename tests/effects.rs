@@ -3,7 +3,7 @@
 //! `parity.rs` and `scripts/fuzz.sh`; these only pin down outcomes that do not
 //! depend on the random number generator.
 
-use vgc_engine::data::ATK;
+use vgc_engine::data::{ABILITIES, ATK, SPECIES, Type};
 use vgc_engine::{Battle, Choice, Error, PokemonSet};
 
 fn set(species: &str, moves: &[&str]) -> PokemonSet {
@@ -60,8 +60,8 @@ fn choice_scarf_locks_the_holder_into_its_first_move() -> Result<(), Error> {
     assert!(before.iter().any(|c| matches!(c, Choice::Move { slot: 1, .. })));
 
     // Use Rock Slide (slot 1); everyone else protects.
-    let protect = Choice::Move { slot: 1, target: 0 };
-    b.choose([[Choice::Move { slot: 1, target: 0 }, protect], [protect, protect]])?;
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(1, 0), protect], [protect, protect]])?;
     if b.ended || b.mon(b.active(0, 0)).fainted {
         return Ok(());
     }
@@ -89,8 +89,8 @@ fn levitate_and_air_balloon_avoid_ground_moves() -> Result<(), Error> {
     let mut b = Battle::new([&p1, &p2], seed())?;
     // Earthquake hits everyone adjacent, its own partner included. The other
     // three only raise their stats, so any lost HP would be Earthquake's doing.
-    let wait = Choice::Move { slot: 0, target: 0 };
-    b.choose([[Choice::Move { slot: 0, target: 0 }, wait], [wait, wait]])?;
+    let wait = Choice::mv(0, 0);
+    b.choose([[Choice::mv(0, 0), wait], [wait, wait]])?;
     for (side, pos) in [(0usize, 1usize), (1, 0), (1, 1)] {
         let m = b.mon(b.active(side, pos));
         assert_eq!(m.hp, m.max_hp(), "side {side} slot {pos} should not have been hit");
@@ -107,7 +107,51 @@ fn effects_that_are_not_modelled_are_refused() {
         Err(Error::Unsupported(what)) => assert!(what.contains("Drizzle")),
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
+    // A Mega whose ability is not modelled is refused up front, not when it evolves.
     let mut p2 = filler();
-    p2[0] = set("Venusaur", &["Sludge Bomb", "Protect"]).item("Venusaurite").unwrap();
-    assert!(matches!(Battle::new([&p1, &p2], seed()), Err(Error::Unsupported(_))));
+    p2[0] = set("Charizard", &["Flamethrower", "Protect"]).item("Charizardite Y").unwrap();
+    match Battle::new([&p1, &p2], seed()) {
+        Err(Error::Unsupported(what)) => assert!(what.contains("Drought"), "{what}"),
+        other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
+    }
+}
+
+#[test]
+fn mega_evolution_changes_stats_type_and_ability_once_per_side() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Charizard", &["Protect", "Flamethrower"]).ability("Blaze")?.item("Charizardite X")?;
+    p1[1] = set("Venusaur", &["Protect", "Sludge Bomb"]).item("Venusaurite")?;
+    let p2 = filler();
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let charizard = b.active(0, 0);
+    let before = b.mon(charizard).stats;
+    assert_eq!(SPECIES[b.mon(charizard).species as usize].name, "Charizard");
+
+    // Both could Mega Evolve, but not in the same turn.
+    let mega = Choice::Move { slot: 0, target: 0, mega: true };
+    assert!(b.legal_choices(0, 0).contains(&mega));
+    assert!(b.legal_choices(0, 1).contains(&mega));
+    assert!(!b.joint_ok(0, &[mega, mega]));
+
+    let protect = Choice::mv(1, 0);
+    b.choose([[mega, Choice::mv(0, 0)], [protect, protect]])?;
+    let m = b.mon(charizard);
+    assert_eq!(SPECIES[m.species as usize].name, "Charizard-Mega-X");
+    assert_eq!(m.types, [Type::Fire, Type::Dragon]);
+    assert_eq!(ABILITIES[m.ability as usize].name, "Tough Claws");
+    assert_eq!(m.stats[0], before[0], "max HP does not change");
+    assert!(m.stats[ATK + 1] > before[ATK + 1]);
+    // One Mega Evolution per side: Venusaur has lost its chance.
+    assert!(!b.legal_choices(0, 1).contains(&mega));
+    Ok(())
+}
+
+/// Search copies a `Battle` thousands of times per decision; keep it a small flat value.
+#[test]
+fn a_battle_is_a_small_copyable_value() {
+    fn assert_copy<T: Copy>() {}
+    assert_copy::<Battle>();
+    let size = std::mem::size_of::<Battle>();
+    println!("size of Battle: {size} bytes");
+    assert!(size < 16 * 1024, "Battle has grown to {size} bytes");
 }

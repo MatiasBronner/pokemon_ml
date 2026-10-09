@@ -4,7 +4,7 @@
 //
 //   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID]
 //                     [--max-turns 250] [--policy switch] [--plain] [--check-legal]
-//                     [--abilities id,id] [--items id,id]
+//                     [--abilities id,id] [--items id,id] [--mega-rate 0.5]
 //
 // --plain gives every Pokémon no ability, no item and no gender (the set-up the
 // engine's first version was checked with).
@@ -36,11 +36,13 @@ const FORCED_THEME = (args.abilities || args.items) ? { abilities: listArg('abil
 // --check-legal: at every move request, also ask Showdown itself about every
 // conceivable choice and insist that `legalOptions` lists exactly the accepted ones.
 const CHECK_LEGAL = !!args['check-legal'];
+// --mega-rate R: chance that a species with a Mega Stone holds it (default 0.5; 0 turns Megas off).
+const MEGA_RATE = args['mega-rate'] !== undefined ? parseFloat(args['mega-rate']) : 0.5;
 
 const pool = JSON.parse(fs.readFileSync(path.join(__dirname, 'pool.json'), 'utf8'));
 const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
 const STATS = args.stats || null;
-const tally = { moves: {}, events: {}, abilities: {}, items: {}, brought: { abilities: {}, items: {} } };
+const tally = { moves: {}, events: {}, abilities: {}, items: {}, megas: {}, brought: { abilities: {}, items: {} } };
 const bump = (table, key) => { table[key] = (table[key] || 0) + 1; };
 function tallyLog(log) {
 	for (const line of log) {
@@ -51,6 +53,7 @@ function tallyLog(log) {
 		for (const m of line.matchAll(/item: ([^|\]]+)/g)) bump(tally.items, PS.toID(m[1]));
 		if (kind === '-ability') bump(tally.abilities, PS.toID(parts[3]));
 		if (kind === '-enditem' || kind === '-item') bump(tally.items, PS.toID(parts[3]));
+		if (kind === '-mega') bump(tally.megas, PS.toID(parts[3]) + '>' + PS.toID(parts[4] || ''));
 		if (kind === 'move') bump(tally.moves, PS.toID(parts[3]));
 		else if (kind === '-status' || kind === 'cant') bump(tally.events, `${kind} ${parts[3]}`);
 		else if (kind === '-activate' && parts[3]) bump(tally.events, `-activate ${parts[3]}`);
@@ -104,6 +107,10 @@ function extras(rand, s) {
 	}
 	let item = (pool.items.length && rand() < 0.8) ? pick(rand, pool.items) : '';
 	if (item && theme && theme.items.length) item = pick(rand, theme.items);
+	// Mega Stones: usually the species' own, now and then a stone it cannot use.
+	const megaRoll = rand();
+	if (s.megas && s.megas.length && megaRoll < MEGA_RATE) item = pick(rand, s.megas);
+	else if (megaRoll > 0.98 && pool.megastones && pool.megastones.length && MEGA_RATE > 0) item = pick(rand, pool.megastones);
 	const gender = s.gender || (rand() < 0.5 ? 'M' : 'F');
 	return { ability, item, gender };
 }
@@ -230,6 +237,8 @@ function snapshot(battle) {
 				item_order: p.itemState.effectOrder || 0,
 				active_turns: p.activeTurns,
 				move_result: [p.moveThisTurnResult, p.moveLastTurnResult].map(resultCode).join(''),
+				base_species: p.baseSpecies.id,
+				can_mega: p.canMegaEvo ? PS.toID(p.canMegaEvo) : '',
 			})),
 		})),
 	};
@@ -275,14 +284,16 @@ function legalOptions(battle, side) {
 		const moves = p.getMoves();
 		// No usable move left: any move choice becomes Struggle.
 		if (!moves.length) opts.push('move 1');
-		moves.forEach((m, j) => {
-			if (m.disabled) return;
-			if (CHOOSABLE.has(m.target)) {
-				for (const loc of [1, 2, -1, -2]) if (battle.validTargetLoc(loc, p, m.target)) opts.push(`move ${j + 1} ${loc}`);
-			} else {
-				opts.push(`move ${j + 1}`);
-			}
-		});
+		for (const mega of (p.canMegaEvo && moves.length ? ['', ' mega'] : [''])) {
+			moves.forEach((m, j) => {
+				if (m.disabled) return;
+				if (CHOOSABLE.has(m.target)) {
+					for (const loc of [1, 2, -1, -2]) if (battle.validTargetLoc(loc, p, m.target)) opts.push(`move ${j + 1} ${loc}${mega}`);
+				} else {
+					opts.push(`move ${j + 1}${mega}`);
+				}
+			});
+		}
 		if (!p.trapped) for (const i of bench) opts.push(`switch ${i + 1}`);
 		return opts;
 	});
@@ -293,11 +304,13 @@ function checkLegal(battle, side, legal) {
 	const req = side.activeRequest;
 	if (!req || req.wait || req.forceSwitch) return;
 	const universe = ['pass'];
-	for (let m = 1; m <= 4; m++) for (const t of ['', ' 1', ' 2', ' -1', ' -2']) universe.push(`move ${m}${t}`);
+	for (const mega of ['', ' mega']) {
+		for (let m = 1; m <= 4; m++) for (const t of ['', ' 1', ' 2', ' -1', ' -2']) universe.push(`move ${m}${t}${mega}`);
+	}
 	for (let i = 1; i <= side.pokemon.length; i++) universe.push(`switch ${i}`);
 	for (let pos = 0; pos < 2; pos++) {
 		// Hold the other slot at something legal that cannot clash with a switch here.
-		const other = legal[1 - pos].find(o => !o.startsWith('switch')) || legal[1 - pos][0];
+		const other = legal[1 - pos].find(o => !o.startsWith('switch') && !o.endsWith('mega')) || legal[1 - pos][0];
 		const accepted = [];
 		for (const opt of universe) {
 			if (opt.startsWith('switch') && opt === other) continue;
@@ -310,6 +323,7 @@ function checkLegal(battle, side, legal) {
 		let got = accepted;
 		if (!p.fainted && !p.getMoves().length) {
 			// Out of usable moves: Showdown takes any move slot it listed and turns it into Struggle.
+			// (It also ignores a Mega flag on that Struggle, so `move 1 mega` is not listed.)
 			got = accepted.filter(o => !o.startsWith('move'));
 			if (accepted.some(o => o.startsWith('move'))) got.push('move 1');
 		}
@@ -336,13 +350,18 @@ function chooseFor(rand, options) {
 	const attackRate = POLICY === 'switch' ? 0 : 0.88;
 	for (let attempt = 0; attempt < 50; attempt++) {
 		const picks = options.map(opts => {
-			const moves = opts.filter(o => o.startsWith('move'));
+			let moves = opts.filter(o => o.startsWith('move'));
 			const others = opts.filter(o => !o.startsWith('move'));
+			// Mega Evolve at the first chance about half the time, so that it happens early and late.
+			const megas = moves.filter(o => o.endsWith('mega'));
+			if (megas.length) moves = rand() < 0.5 ? megas : moves.filter(o => !o.endsWith('mega'));
 			if (moves.length && (!others.length || rand() < attackRate)) return pick(rand, moves);
 			return pick(rand, others);
 		});
 		const switches = picks.filter(p => p.startsWith('switch'));
 		if (new Set(switches).size !== switches.length) continue;
+		// Only one Mega Evolution per side.
+		if (picks.filter(p => p.endsWith('mega')).length > 1) continue;
 		return picks;
 	}
 	throw new Error('could not find a consistent choice');
@@ -441,6 +460,8 @@ if (STATS) {
 	fs.writeFileSync(STATS, JSON.stringify({
 		battles: ids.length, decisions: steps, modelled_moves: ALL_MOVES.length, unused_moves: unused, least_used: least,
 		events: tally.events, moves: tally.moves,
+		// Mega Evolutions that happened, as "species>stone".
+		megas: tally.megas,
 		// For each modelled ability and item: [times brought, log lines naming it].
 		abilities: Object.fromEntries(pool.abilities.map(a => [a, [tally.brought.abilities[a] || 0, tally.abilities[a] || 0]])),
 		items: Object.fromEntries(pool.items.map(a => [a, [tally.brought.items[a] || 0, tally.items[a] || 0]])),

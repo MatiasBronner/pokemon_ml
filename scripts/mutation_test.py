@@ -22,6 +22,16 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(REPO, 'target', 'mutation')
 A, I, B, M, C, E = 'src/abilities.rs', 'src/items.rs', 'src/battle.rs', 'src/moves.rs', 'src/conditions.rs', 'src/events.rs'
 MUT = [
+ # --- Mega Evolution
+ ('mega keeps the old ability', B, "        self.set_ability_ex(r, ability, None, Eff::None, true);\n        self.mon_mut(r).base_ability = ability;", "        self.mon_mut(r).base_ability = ability;"),
+ ('mega ability asks permission', B, "self.set_ability_ex(r, ability, None, Eff::None, true);", "self.set_ability_ex(r, ability, None, Eff::None, false);"),
+ ('mega keeps the old stats', B, "        m.stats[1..].copy_from_slice(&stats[1..]);\n", ""),
+ ('mega keeps the old types', B, "        m.types = SPECIES[species as usize].types;\n        m.stats[1..]", "        m.stats[1..]"),
+ ('mega reverts on switching out', B, "        self.mon_mut(r).base_species = species;\n", ""),
+ ('second mega allowed', B, "            side.team[i].can_mega = NO_SPECIES;", "            side.team[i].can_mega = side.team[i].can_mega;"),
+ ('mega does not count as acting', B, "        self.mon_mut(r).move_this_turn = TRUE;\n", ""),
+ ('mega after moves', B, "Battle::blank_action(ActKind::MegaEvo, 104)", "Battle::blank_action(ActKind::MegaEvo, 204)"),
+ ('mega stone can be taken', I, "            return Res::Bool(!own);", "            return Res::Bool(true);"),
  # --- abilities
  ('hugepower x2 -> x1.5', A, "(ab::HUGEPOWER | ab::PUREPOWER, Ev::ModifyAtk, Pre::On) => self.chain_modify(2, 1),", "(ab::HUGEPOWER | ab::PUREPOWER, Ev::ModifyAtk, Pre::On) => self.chain_modify(3, 2),"),
  ('ironfist 4915 -> 5325', A, "ab::IRONFIST => (F_PUNCH, 4915),", "ab::IRONFIST => (F_PUNCH, 5325),"),

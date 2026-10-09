@@ -237,6 +237,10 @@ pub struct SpeciesData {
     /// The gender every member of the species has, if it is fixed (`N` for
     /// genderless species); `None` if it can be either.
     pub gender: Option<Gender>,
+    /// Index of the species' first ability: the one a forme change gives (a Mega's ability).
+    pub ability0: u16,
+    /// Weight in hectograms.
+    pub weight_hg: u16,
 }
 
 // --------------------------------------------------------------------- events
@@ -426,6 +430,8 @@ pub struct ItemData {
     pub cbs: &'static [CbInfo],
     pub events: u128,
     pub events_pre: u128,
+    /// For a Mega Stone: (species that can use it, the Mega it becomes), as indices into `SPECIES`.
+    pub mega: &'static [(u16, u16)],
 }
 
 /// A status or volatile condition.

@@ -17,6 +17,10 @@ impl Battle {
         let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false };
         let blank_mon = Pokemon {
             species: 0,
+            base_species: 0,
+            can_mega: NO_SPECIES,
+            nature: (0, 0),
+            stat_points: [0; 6],
             types: [Type::None; 2],
             level: 50,
             gender: Gender::N,
@@ -120,7 +124,23 @@ impl Battle {
                 b.event_mask |= ability.events | ability.events_pre | item.events | item.events_pre;
                 b.event_mask_pre |= ability.events_pre | item.events_pre;
                 let mut mon = blank_mon;
+                // `canMegaEvo`: holding the Mega Stone of this very species.
+                if let Some(&(_, mega)) = item.mega.iter().find(|&&(from, _)| from == set.species) {
+                    let mega_ability = &ABILITIES[SPECIES[mega as usize].ability0 as usize];
+                    if !mega_ability.supported {
+                        return Err(Error::Unsupported(format!(
+                            "{} (its ability, {}, is not modelled)",
+                            SPECIES[mega as usize].name, mega_ability.name
+                        )));
+                    }
+                    b.event_mask |= mega_ability.events | mega_ability.events_pre;
+                    b.event_mask_pre |= mega_ability.events_pre;
+                    mon.can_mega = mega;
+                }
                 mon.species = set.species;
+                mon.base_species = set.species;
+                mon.nature = set.nature;
+                mon.stat_points = set.stat_points;
                 mon.types = sp.types;
                 mon.gender = set.gender;
                 mon.ability = set.ability;
@@ -129,16 +149,7 @@ impl Battle {
                 mon.fainted = false;
                 mon.position = i as u8;
                 // Champions stats: base + stat points + 75 for HP, + 20 otherwise.
-                for k in 0..6 {
-                    let base = sp.base[k] as u32 + set.stat_points[k] as u32;
-                    let mut v = if k == 0 { base + 75 } else { base + 20 };
-                    if k as u8 == set.nature.0 && set.nature.0 != set.nature.1 {
-                        v = ((v * 110) & 0xFFFF) / 100;
-                    } else if k as u8 == set.nature.1 && set.nature.0 != set.nature.1 {
-                        v = ((v * 90) & 0xFFFF) / 100;
-                    }
-                    mon.stats[k] = v as u16;
-                }
+                mon.stats = calc_stats(set.species, set.nature, set.stat_points);
                 mon.hp = mon.stats[0];
                 mon.speed = mon.stats[5] as i32;
                 for (k, &id) in set.moves.iter().enumerate() {
@@ -205,21 +216,25 @@ impl Battle {
                     return out;
                 }
                 if !self.usable_moves(r) {
-                    out.push(Choice::Move { slot: 0, target: 0 });
+                    out.push(Choice::mv(0, 0));
                 } else {
+                    // Any usable move can be combined with Mega Evolution.
+                    let megas: &[bool] = if m.can_mega != NO_SPECIES { &[false, true] } else { &[false] };
                     for (i, slot) in m.moves[..m.n_moves as usize].iter().enumerate() {
                         if !Battle::slot_usable(slot) {
                             continue;
                         }
                         let t = MOVES[slot.id as usize].target;
-                        if t.is_chosen() {
-                            for loc in [1i8, 2, -1, -2] {
-                                if self.valid_target_loc(loc, r, t) {
-                                    out.push(Choice::Move { slot: i as u8, target: loc });
+                        for &mega in megas {
+                            if t.is_chosen() {
+                                for loc in [1i8, 2, -1, -2] {
+                                    if self.valid_target_loc(loc, r, t) {
+                                        out.push(Choice::Move { slot: i as u8, target: loc, mega });
+                                    }
                                 }
+                            } else {
+                                out.push(Choice::Move { slot: i as u8, target: 0, mega });
                             }
-                        } else {
-                            out.push(Choice::Move { slot: i as u8, target: 0 });
                         }
                     }
                 }
@@ -265,11 +280,15 @@ impl Battle {
                 Choice::Pass => m.fainted,
                 _ if m.fainted => false,
                 Choice::Switch { to } => m.trapped == Trapped::No && bench_ok(to),
-                Choice::Move { slot, target } => {
+                Choice::Move { slot, target, mega } => {
                     if !self.usable_moves(r) {
-                        return slot == 0 && target == 0;
+                        // Struggle; Showdown would ignore a Mega flag here, so it is not offered.
+                        return slot == 0 && target == 0 && !mega;
                     }
                     if slot >= m.n_moves || !Battle::slot_usable(&m.moves[slot as usize]) {
+                        return false;
+                    }
+                    if mega && m.can_mega == NO_SPECIES {
                         return false;
                     }
                     let t = MOVES[m.moves[slot as usize].id as usize].target;
@@ -285,13 +304,16 @@ impl Battle {
     }
 
     /// The constraints that tie a side's two slots together: no two slots
-    /// switching to the same Pokémon, and at a switch request every open slot
-    /// filled while replacements last.
+    /// switching to the same Pokémon, only one Mega Evolution, and at a switch
+    /// request every open slot filled while replacements last.
     fn pair_ok(&self, side: usize, c: &[Choice; ACTIVE]) -> bool {
         if let (Choice::Switch { to: a }, Choice::Switch { to: b }) = (c[0], c[1]) {
             if a == b {
                 return false;
             }
+        }
+        if let (Choice::Move { mega: true, .. }, Choice::Move { mega: true, .. }) = (c[0], c[1]) {
+            return false;
         }
         if self.request == Request::Switch {
             let passes =
@@ -347,8 +369,13 @@ impl Battle {
                 let r = self.active(side, pos);
                 match choices[side][pos] {
                     Choice::Pass => {}
-                    Choice::Move { slot, target } => {
+                    Choice::Move { slot, target, mega } => {
                         let id = if self.usable_moves(r) { self.mon(r).moves[slot as usize].id } else { struggle_id() };
+                        if mega {
+                            // Resolved (and queued) ahead of the move itself.
+                            let a = self.resolve_mega(r);
+                            self.queue.push(a);
+                        }
                         let a = self.resolve_move(r, id, target);
                         self.queue.push(a);
                     }

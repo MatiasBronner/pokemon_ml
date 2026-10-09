@@ -247,19 +247,26 @@ fn read<'a>(lines: impl Iterator<Item = &'a str>, loose: bool) -> Vec<Read> {
 /// Gives a Pokémon stat points, and a nature if it has none, by rule of thumb.
 ///
 /// A team sheet does not say how a Pokémon's 66 stat points are spent, and
-/// the engine needs them. This puts 32 in each of two stats and 2 in a third:
+/// the engine needs them. This puts 32 in each of two stats and 2 in a third.
 ///
-/// * with a nature that raises Speed, or none given and a fast attacker: its
-///   attacking stat and Speed, the rest in HP;
-/// * with a nature that raises a defence: HP and that defence;
-/// * otherwise an attacker gets HP and its attacking stat, and a Pokémon with
-///   no attacking moves HP and Defense.
+/// A Pokémon counts as an attacker if it has two or more attacking moves, or
+/// one and a nature that raises Attack or Special Attack; anything else is a
+/// support (a Whimsicott with Moonblast beside three status moves is one).
+/// It counts as fast if its nature raises Speed or, where the nature does
+/// not say (none given, or a neutral one), if its base Speed is 85 or more.
+///
+/// * fast attacker: its attacking stat and Speed, the rest in HP;
+/// * fast support: HP and Speed, the rest in Defense;
+/// * a nature that raises a defence: HP and that defence;
+/// * any other attacker: HP and its attacking stat;
+/// * any other support: HP and Defense.
 ///
 /// The attacking stat is the one more of its moves' power runs off. A nature
 /// that is not given is chosen to match (Jolly or Timid for the fast, Adamant
-/// or Modest for the rest, Brave or Quiet on a `trick_room` team, Bold for
-/// supports). Real spreads are finer than this; it is a stand-in until they
-/// are known or searched for.
+/// or Modest for other attackers, Brave or Quiet on a `trick_room` team,
+/// Bold or Impish for other supports). Real spreads are finer than this; it
+/// is a stand-in until they are known or searched for, and
+/// [`Sampler::sample`] can vary it from battle to battle.
 pub fn guess_spread(read: &mut Read, trick_room: bool) {
     if read.spread_given {
         return;
@@ -268,15 +275,16 @@ pub fn guess_spread(read: &mut Read, trick_room: bool) {
         return;
     };
     let base = SPECIES[species as usize].base;
-    let (mut physical, mut special) = (0u32, 0u32);
+    let (mut physical, mut special, mut attacking_moves) = (0u32, 0u32, 0);
     for m in &read.set.moves {
         if let Some(id) = move_id(&to_id(m)) {
             let data = &MOVES[id as usize];
             match data.category {
                 Category::Physical => physical += data.base_power.max(40) as u32,
                 Category::Special => special += data.base_power.max(40) as u32,
-                Category::Status => {}
+                Category::Status => continue,
             }
+            attacking_moves += 1;
         }
     }
     const HP: usize = 0;
@@ -285,40 +293,41 @@ pub fn guess_spread(read: &mut Read, trick_room: bool) {
     const SPA: usize = 3;
     const SPD: usize = 4;
     const SPE: usize = 5;
-    let attacks = physical + special > 0;
     let offence = if physical > special || (physical == special && base[ATK] >= base[SPA]) { ATK } else { SPA };
-    let (plus, minus) = if read.nature_given { nature(&read.set.nature).unwrap_or((0, 0)) } else { (0, 0) };
-    let (plus, minus) = (plus as usize, minus as usize);
+    let (plus, _minus) = if read.nature_given { nature(&read.set.nature).unwrap_or((0, 0)) } else { (0, 0) };
+    let plus = plus as usize;
+    // One attack beside three other moves is a support's parting shot, unless the nature says otherwise.
+    let attacker = attacking_moves >= 2 || (attacking_moves == 1 && (plus == ATK || plus == SPA));
     let slow_team_member = trick_room && base[SPE] <= 60;
-    let fast = if read.nature_given && (plus, minus) != (0, 0) {
-        plus == SPE
-    } else {
-        attacks && base[SPE] >= 85 && !slow_team_member
-    };
+    let fast = if plus != 0 { plus == SPE } else { base[SPE] >= 85 && !slow_team_member };
     let mut points = [0i32; 6];
-    if fast && attacks {
+    if fast && attacker {
         (points[offence], points[SPE], points[HP]) = (32, 32, 2);
     } else if fast {
         (points[HP], points[SPE], points[DEF]) = (32, 32, 2);
     } else if plus == DEF || plus == SPD {
         (points[HP], points[plus], points[if plus == DEF { SPD } else { DEF }]) = (32, 32, 2);
-    } else if attacks {
+    } else if attacker {
         (points[HP], points[offence], points[DEF]) = (32, 32, 2);
     } else {
         (points[HP], points[DEF], points[SPD]) = (32, 32, 2);
     }
-    let _ = minus;
     read.set.evs =
         ShowdownStats { hp: points[0], atk: points[1], def: points[2], spa: points[3], spd: points[4], spe: points[5] };
     if !read.nature_given {
-        let nature = match (attacks, fast, slow_team_member, offence == ATK) {
-            (true, true, _, true) => "Jolly",
-            (true, true, _, false) => "Timid",
-            (true, false, true, true) => "Brave",
-            (true, false, true, false) => "Quiet",
-            (true, false, false, true) => "Adamant",
-            (true, false, false, false) => "Modest",
-            (false, ..) => "Bold",
+        // (A nature that lowers the attacking stat a Pokémon does not use; for a support, one it has no move for.)
+        let physical_moves = physical > 0;
+        let nature = match (attacker, fast, slow_team_member) {
+            (true, true, _) if offence == ATK => "Jolly",
+            (true, true, _) => "Timid",
+            (true, false, true) if offence == ATK => "Brave",
+            (true, false, true) => "Quiet",
+            (true, false, false) if offence == ATK => "Adamant",
+            (true, false, false) => "Modest",
+            (false, true, _) if physical_moves => "Jolly",
+            (false, true, _) => "Timid",
+            (false, false, _) if physical_moves => "Impish",
+            (false, false, _) => "Bold",
         };
         read.set.nature = nature.to_string();
     }
@@ -372,4 +381,167 @@ impl Pool {
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("a pool is always serialisable")
     }
+}
+
+/// How [`Sampler::sample`] varies the teams it hands out.
+///
+/// The teams of a tournament are a few hundred points in a very large space,
+/// and the stat points on them are guesses besides. Varying them from battle
+/// to battle keeps a policy from learning one exact team by heart: the
+/// Garchomp it meets is sometimes a little bulkier or a little slower than
+/// the last, and now and then a team has a Pokémon or two it did not have
+/// at the tournament.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Variation {
+    /// The chance, for each Pokémon, that its stat points are moved around:
+    /// one to three times, some points are taken from one stat and given to
+    /// another it has a use for (never an attacking stat it has no move for).
+    pub respread: f64,
+    /// The most points one such move takes.
+    pub max_shift: u8,
+    /// The chance that one of the six is replaced by a Pokémon from another
+    /// team of the pool, as that team had it; and the chance that two are.
+    /// A replacement that would break the regulation (the same Pokémon or
+    /// the same item twice) is drawn again.
+    pub swap_one: f64,
+    pub swap_two: f64,
+}
+
+impl Variation {
+    /// Teams exactly as they are in the pool.
+    pub const NONE: Variation = Variation { respread: 0.0, max_shift: 0, swap_one: 0.0, swap_two: 0.0 };
+}
+
+impl Default for Variation {
+    /// A quarter of the Pokémon with their points moved; one team in seven
+    /// with a Pokémon swapped, one in twenty with two.
+    fn default() -> Variation {
+        Variation { respread: 0.25, max_shift: 12, swap_one: 0.15, swap_two: 0.05 }
+    }
+}
+
+/// A team from a [`Sampler`], and what was done to it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sampled {
+    /// Six Pokémon, legal under the regulation.
+    pub team: Vec<PokemonSet>,
+    /// The team of the pool it started as.
+    pub from: usize,
+    /// How many of its Pokémon were replaced, and how many had their stat points moved.
+    pub swapped: u8,
+    pub respread: u8,
+}
+
+/// Hands out teams of a pool, varied: see [`Variation`].
+#[derive(Clone, Debug)]
+pub struct Sampler {
+    teams: Vec<Vec<PokemonSet>>,
+    format: &'static crate::format::Format,
+}
+
+impl Sampler {
+    /// Every team of `pool`, ready to be handed out. They are checked
+    /// against the regulation the engine is built for.
+    pub fn new(pool: &Pool) -> Result<Sampler, Error> {
+        let format = crate::format::Format::current();
+        let mut teams = Vec::with_capacity(pool.teams.len());
+        for (i, t) in pool.teams.iter().enumerate() {
+            let sets = t.sets()?;
+            if let Some(problem) = format.check_team(&sets).first() {
+                return Err(Error::BadTeam(format!("team {i} of the pool ({}): {problem}", t.player)));
+            }
+            teams.push(sets);
+        }
+        if teams.is_empty() {
+            return Err(Error::BadTeam("an empty pool".to_string()));
+        }
+        Ok(Sampler { teams, format })
+    }
+
+    /// How many teams there are.
+    pub fn len(&self) -> usize {
+        self.teams.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.teams.is_empty()
+    }
+
+    /// A team of the pool drawn at random, varied as `how` says. Whatever was
+    /// done to it, it is legal.
+    pub fn sample(&self, rng: &mut crate::rng::Rng, how: &Variation) -> Sampled {
+        let happens = |rng: &mut crate::rng::Rng, chance: f64| {
+            chance > 0.0 && (rng.below(1_000_000) as f64) < chance * 1_000_000.0
+        };
+        let from = rng.below(self.teams.len() as u32) as usize;
+        let mut out = Sampled { team: self.teams[from].clone(), from, swapped: 0, respread: 0 };
+        // One draw decides between no swap, one and two.
+        let swaps = if self.teams.len() < 2 {
+            0
+        } else if happens(rng, how.swap_two) {
+            2
+        } else if happens(rng, how.swap_one / (1.0 - how.swap_two).max(f64::EPSILON)) {
+            1
+        } else {
+            0
+        };
+        let mut taken = [false; 6];
+        for _ in 0..swaps {
+            // A few tries at a replacement the regulation allows; if none turns up, the Pokémon stays.
+            for _ in 0..8 {
+                let slot = rng.below(out.team.len() as u32) as usize;
+                let donor = &self.teams[rng.below(self.teams.len() as u32) as usize];
+                let incoming = &donor[rng.below(donor.len() as u32) as usize];
+                if taken[slot] || *incoming == out.team[slot] {
+                    continue;
+                }
+                let outgoing = std::mem::replace(&mut out.team[slot], incoming.clone());
+                if self.format.check_team(&out.team).is_empty() {
+                    taken[slot] = true;
+                    out.swapped += 1;
+                    break;
+                }
+                out.team[slot] = outgoing;
+            }
+        }
+        for set in &mut out.team {
+            if happens(rng, how.respread) && shift_points(set, rng, how.max_shift) {
+                out.respread += 1;
+            }
+        }
+        out
+    }
+}
+
+/// Moves some of a Pokémon's stat points from one stat to another, one to
+/// three times. The total stays what it was and no stat goes over 32.
+fn shift_points(set: &mut PokemonSet, rng: &mut crate::rng::Rng, max_shift: u8) -> bool {
+    // The stats it has a use for: HP, the defences, Speed, and an attacking stat it has a move for.
+    let mut useful = vec![0usize, 2, 4, 5];
+    for &m in &set.moves {
+        match MOVES[m as usize].category {
+            Category::Physical if !useful.contains(&1) => useful.push(1),
+            Category::Special if !useful.contains(&3) => useful.push(3),
+            _ => {}
+        }
+    }
+    let mut moved = false;
+    for _ in 0..1 + rng.below(3) {
+        let from: Vec<usize> = (0..6).filter(|&k| set.stat_points[k] > 0).collect();
+        if from.is_empty() || max_shift == 0 {
+            break;
+        }
+        let donor = from[rng.below(from.len() as u32) as usize];
+        let to: Vec<usize> = useful.iter().copied().filter(|&k| k != donor && set.stat_points[k] < 32).collect();
+        if to.is_empty() {
+            continue;
+        }
+        let receiver = to[rng.below(to.len() as u32) as usize];
+        let most = set.stat_points[donor].min(32 - set.stat_points[receiver]).min(max_shift);
+        let amount = 1 + rng.below(most as u32) as u8;
+        set.stat_points[donor] -= amount;
+        set.stat_points[receiver] += amount;
+        moved = true;
+    }
+    moved
 }

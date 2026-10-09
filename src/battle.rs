@@ -21,7 +21,7 @@ use crate::state::*;
 use crate::trace;
 
 /// How a player describes one Pokémon to bring.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PokemonSet {
     pub species: u16,
     pub moves: Vec<u16>,

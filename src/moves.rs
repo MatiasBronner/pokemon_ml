@@ -197,7 +197,7 @@ impl Battle {
             source_effect = Eff::Vol(VolKind::Lockedmove);
         } else if self.deduct_pp(pokemon, a.move_id, 1) == 0 && a.move_id != mv::STRUGGLE {
             // `cant|pokemon|nopp|Move`
-            self.show_move(pokemon, a.move_id);
+            self.show_move_used(pokemon, a.move_id);
             self.clear_active_move(true);
             self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
@@ -318,10 +318,11 @@ impl Battle {
         // turns of a move it is locked into say nothing new. A bounced move names the ability
         // that bounced it.
         match source_effect {
-            Eff::None => self.show_move(pokemon, self.am[m].id),
+            Eff::None => self.show_move_used(pokemon, self.am[m].id),
             Eff::Move(s) if matches!(self.am[s as usize].id, id if id == mv::SLEEPTALK || id == self.am[m].id) => {
-                self.show_move(pokemon, self.am[m].id)
+                self.show_move_used(pokemon, self.am[m].id)
             }
+            Eff::Move(_) => self.show_move_borrowed(pokemon, self.am[m].id),
             Eff::Ability(a) => self.show_ability(pokemon, a),
             _ => {}
         }

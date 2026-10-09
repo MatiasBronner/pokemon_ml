@@ -55,19 +55,44 @@
 //!   corrected.
 //! * HP is the percentage Showdown reports (rounded down, never 0 for a
 //!   Pokémon that has not fainted), with the colour of the bar.
-//! * One thing the log says is untrue, and is repeated here. A Pokémon locked
-//!   in by a Choice item that is made to use another move fails with a line
-//!   like that of any move that failed. If that was the second turn of a
-//!   move borrowed with Copycat, it is credited with a move it does not have.
+//! * In one place the plain reading would be wrong, and is not followed. A
+//!   move borrowed with Copycat can carry on over the next turns (Uproar,
+//!   Fly), and a line that then names it, because Disable or a Choice item
+//!   stopped it, reads as if the move were the Pokémon's own. The first such
+//!   line after a borrowing is passed over.
 //!
 //! What is public anyway is not repeated here: stat stages, volatile
 //! conditions, the weather and each side's conditions are in the [`Battle`]
 //! itself. (Their timers are not public, though: the turns a Reflect has
-//! left give away a Light Clay.) PP is not tracked. And with Open Team
-//! Sheets, which Showdown's Champions formats offer and force in
-//! best-of-three, species, items, abilities and moves are on the table from
-//! the start; what stays hidden then is stat points and which four of the
-//! six were brought.
+//! left give away a Light Clay.) PP is not tracked.
+//!
+//! # Before the battle: Team Preview and team sheets
+//!
+//! Some things are known before anything is shown. Team Preview lists the
+//! species each player registered, and with open team sheets, which
+//! Showdown's Champions formats offer and force in a best-of-three, each
+//! player also has the other's sheet: every registered Pokémon's item,
+//! ability, moves and nature. [`Battle::with_rosters`] says what was
+//! registered and whether the sheets are open, and [`ShownSide::roster`]
+//! hands it out. A Pokémon that has been seen points at the entry it appears
+//! to be ([`ShownMon::listed`]).
+//!
+//! The sheet and the record are kept apart: the sheet is what a Pokémon came
+//! with, the record what the battle has shown of it since. What stays hidden
+//! with open sheets is the stat points, and which of the registered Pokémon
+//! were brought.
+//!
+//! # Illusion
+//!
+//! "The entry it appears to be" is as far as it goes on a team with an
+//! Illusion Pokémon, which comes in looking like a team-mate.
+//! [`ShownSide::illusion`] lists the registered Pokémon that have Illusion,
+//! as far as their opponent can know, and [`ShownMon::maybe_disguise`] marks
+//! every Pokémon that might be one of them in disguise. The mark comes off
+//! only when that is ruled out: the Illusion Pokémon has fainted, or has
+//! stood on the field as itself beside the Pokémon in question. Nothing
+//! cleverer is tried (a move that is on one sheet and not the other): that
+//! is inference, and left to whoever reads the record.
 
 use serde::{Deserialize, Serialize};
 
@@ -119,6 +144,16 @@ pub(crate) struct Shown {
     pub base_ability: u16,
     /// Its ability has been changed since it came in, so the next one shown is not the one it returns to.
     pub ability_changed: bool,
+    /// On the field: the move it last used that was not its own (Copycat's pick),
+    /// until it is seen to use anything else; `NO_MOVE` otherwise. See [`Shown::use_move`].
+    pub borrowed: u16,
+    /// The entry of its side's registered team it appears to be (`NOT_LISTED`: none fits).
+    pub listed: u8,
+    /// On the field now, and it may be the side's Illusion Pokémon in this shape.
+    pub suspect: bool,
+    /// It left the field while that was still open, so part of what is noted
+    /// here may be about the Illusion Pokémon instead.
+    pub tainted: bool,
 }
 
 pub(crate) const NOTHING_SHOWN: Shown = Shown {
@@ -134,6 +169,10 @@ pub(crate) const NOTHING_SHOWN: Shown = Shown {
     ability: UNKNOWN,
     base_ability: UNKNOWN,
     ability_changed: false,
+    borrowed: NO_MOVE,
+    listed: NOT_LISTED,
+    suspect: false,
+    tainted: false,
 };
 
 impl Shown {
@@ -147,6 +186,29 @@ impl Shown {
         }
         self.moves[self.n_moves as usize] = id;
         self.n_moves += 1;
+    }
+
+    /// A line has it using `id` as a move of its own, or failing to: a `move`
+    /// line that is not put down to another move, or a `cant` line.
+    ///
+    /// That shows the move, with one exception. A move it borrowed (Copycat
+    /// picking Uproar, or Fly) can carry on over the following turns, and
+    /// when something then stops it, the line that says so reads like any
+    /// other: `|cant|p1a: A|Disable|Uproar`, or, from a Choice item,
+    /// `|move|p1a: A|Fly||[still]`. So the first such line to name the move it
+    /// last borrowed shows nothing. (If the move was its own as well, the
+    /// next use shows it.)
+    pub(crate) fn use_move(&mut self, id: u16) {
+        let carried_on = self.borrowed == id;
+        self.borrowed = NO_MOVE;
+        if !carried_on {
+            self.add_move(id);
+        }
+    }
+
+    /// A line has it using `id` on another move's account (`[from] move: Copycat`).
+    pub(crate) fn borrow_move(&mut self, id: u16) {
+        self.borrowed = id;
     }
 
     /// A line credits it with `ability`.
@@ -169,10 +231,25 @@ impl Shown {
         self.ability_changed = true;
     }
 
-    /// Leaving the field: the ability goes back to its own.
+    /// `-end|pokemon|Illusion`, after its disguise has dropped: Illusion is what
+    /// was keeping the disguise up. Unless the Pokémon is a Mega: then the
+    /// disguise dropped because Mega Evolution replaced Illusion for good.
+    /// (No Pokémon that may have Illusion has a Mega Stone under the regulation.)
+    pub(crate) fn end_illusion(&mut self) {
+        let mega = ITEMS.iter().flat_map(|i| i.mega.iter()).any(|&(_, to)| to == self.species);
+        if !mega {
+            self.set_ability(ab::ILLUSION);
+        }
+    }
+
+    /// Leaving the field: the ability goes back to its own. And if it was
+    /// never settled whether this was the Pokémon it looked like, it never will be.
     pub(crate) fn leave(&mut self) {
         self.ability = self.base_ability;
         self.ability_changed = false;
+        self.borrowed = NO_MOVE;
+        self.tainted |= self.suspect;
+        self.suspect = false;
     }
 
     /// What `self` has that `before` did not: what was learned in between.
@@ -193,6 +270,88 @@ impl Shown {
             into.ability_changed = self.ability_changed;
         }
     }
+}
+
+/// Which entries of a registered team have Illusion, as far as their opponent
+/// can tell, as a bit mask. With open team sheets the sheet says. Without, it
+/// is the Pokémon whose species may have it under the regulation (Zoroark):
+/// a team is taken to be a legal one.
+pub(crate) fn illusionists(roster: &[Listed], open: bool) -> u8 {
+    let mut mask = 0;
+    for (j, listed) in roster.iter().enumerate() {
+        let has = if open {
+            listed.ability == ab::ILLUSION
+        } else {
+            let rule = crate::format::Format::current().rule(listed.species);
+            rule.is_some_and(|r| r.abilities.contains(&ab::ILLUSION))
+        };
+        if has {
+            mask |= 1 << j;
+        }
+    }
+    mask
+}
+
+/// The entry of a registered team that a Pokémon appearing as `species` is
+/// taken for: the first one of that species (and gender, if one fits) that no
+/// other Pokémon of the side has been taken for (`taken`, a mask of entries).
+pub(crate) fn listed_as(roster: &[Listed], species: u16, gender: Gender, taken: u8) -> u8 {
+    let base = |sp: u16| SPECIES[sp as usize].base_species;
+    for pass in 0..4 {
+        for (j, listed) in roster.iter().enumerate() {
+            if taken & (1 << j) != 0 || listed.species == NO_SPECIES {
+                continue;
+            }
+            let same = listed.species == species || (listed.any_forme && base(listed.species) == base(species));
+            let fits = match pass {
+                0 => same && listed.gender == gender,
+                1 => same,
+                2 => base(listed.species) == base(species) && listed.gender == gender,
+                _ => base(listed.species) == base(species),
+            };
+            if fits {
+                return j as u8;
+            }
+        }
+    }
+    NOT_LISTED
+}
+
+/// Whether a team's Illusion Pokémon cannot be told apart: there is more than
+/// one, or there are two of the same Pokémon and one of them has it. (Neither
+/// is a team the regulation allows.) Then every Pokémon of the team stays in doubt.
+pub(crate) fn muddled(roster: &[Listed], illusionists: u8) -> bool {
+    match illusionists.count_ones() {
+        0 => false,
+        1 => {
+            let base = |l: &Listed| SPECIES[l.species as usize].base_species;
+            let species = base(&roster[illusionists.trailing_zeros() as usize]);
+            roster.iter().filter(|l| l.species != NO_SPECIES && base(l) == species).count() > 1
+        }
+        _ => true,
+    }
+}
+
+/// Whether a Pokémon that looks like entry `listed` of its side's registered
+/// team (`roster`) may be an Illusion Pokémon in that shape. `illusionists`
+/// is the mask of entries that have Illusion; `accounted` says whether the
+/// only such Pokémon is known to be somewhere else: fainted, or on the field
+/// as itself.
+pub(crate) fn may_be_disguise(
+    roster: &[Listed],
+    illusionists: u8,
+    listed: u8,
+    accounted: impl FnOnce(u8) -> bool,
+) -> bool {
+    if illusionists == 0 {
+        return false;
+    }
+    if muddled(roster, illusionists) {
+        return true;
+    }
+    let only = illusionists.trailing_zeros() as u8;
+    // It looks like the Illusion Pokémon itself: a disguise is always someone else.
+    listed != only && !accounted(only)
 }
 
 /// What `-mega|pokemon|Species|Stone` says about the ability: a Mega has
@@ -267,6 +426,39 @@ pub struct ShownMon {
     pub base_ability: Option<String>,
     /// It has taken another Pokémon's shape (and `species` is that Pokémon's).
     pub transformed: bool,
+    /// The Pokémon of the registered team ([`ShownSide::roster`]) it appears
+    /// to be, as an index; `None` if none fits.
+    pub listed: Option<u8>,
+    /// Its side has a Pokémon with Illusion, and this may be that Pokémon in
+    /// disguise, or part of what is noted here may be about that Pokémon
+    /// from a time it was. `false` means it is who it appears to be: its side
+    /// has no Illusion Pokémon, or that one is accounted for (it has
+    /// fainted, or it stood on the field as itself beside this one).
+    pub maybe_disguise: bool,
+}
+
+/// One Pokémon of the team a player registered, as its opponent knows it.
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ListedMon {
+    /// As Team Preview showed it, as an id.
+    pub species: String,
+    /// "M", "F" or "N".
+    pub gender: String,
+    /// Its team sheet, when the sheets are open.
+    pub sheet: Option<Sheet>,
+}
+
+/// What an open team sheet says of one Pokémon besides its species: all but its stat points.
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Sheet {
+    /// An id; empty for no item.
+    pub item: String,
+    pub ability: String,
+    pub moves: Vec<String>,
+    /// An id. All five natures that change nothing are given as "hardy".
+    pub nature: String,
 }
 
 /// One side of the field as everyone watching knows it.
@@ -281,6 +473,44 @@ pub struct ShownSide {
     pub unseen: u8,
     /// How many have not fainted.
     pub left: u8,
+    /// The team this side registered, in the order registered: the species
+    /// Team Preview showed and, with open team sheets, each one's sheet. It
+    /// says nothing of which were brought. A Pokémon that has been seen
+    /// points here with [`ShownMon::listed`].
+    pub roster: Vec<ListedMon>,
+    /// The Pokémon of `roster` that have Illusion, by index. With open team
+    /// sheets that is what the sheets say. Without, it is those whose species
+    /// can have it under the regulation (a Zoroark, which Team Preview
+    /// shows): the team is taken to be a legal one.
+    pub illusion: Vec<u8>,
+}
+
+impl ShownSide {
+    /// The sheet of the Pokémon `mon` appears to be, with open team sheets.
+    /// (Mind [`ShownMon::maybe_disguise`].)
+    pub fn sheet_of(&self, mon: &ShownMon) -> Option<&Sheet> {
+        self.roster.get(mon.listed? as usize)?.sheet.as_ref()
+    }
+}
+
+/// A side's registered team as its opponent knows it.
+pub(crate) fn roster_shown(roster: &[Listed], open: bool) -> Vec<ListedMon> {
+    let listed = |l: &Listed| ListedMon {
+        species: SPECIES[l.species as usize].id.to_string(),
+        gender: l.gender.id().to_string(),
+        sheet: open.then(|| Sheet {
+            item: if l.item == it::NONE { String::new() } else { ITEMS[l.item as usize].id.to_string() },
+            ability: ABILITIES[l.ability as usize].id.to_string(),
+            moves: l.moves().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
+            nature: crate::position::nature_name(l.nature).to_string(),
+        }),
+    };
+    roster.iter().map(listed).collect()
+}
+
+/// A bit mask of roster entries as a list of indices.
+pub(crate) fn mask_list(mask: u8) -> Vec<u8> {
+    (0..8).filter(|j| mask & (1 << j) != 0).collect()
 }
 
 pub(crate) fn ability_name(a: u16) -> Option<String> {
@@ -308,6 +538,8 @@ impl ShownMon {
             ability: ability_name(rec.ability),
             base_ability: ability_name(rec.base_ability),
             transformed: false,
+            listed: (rec.listed != NOT_LISTED).then_some(rec.listed),
+            maybe_disguise: rec.suspect || rec.tainted,
         }
     }
 }
@@ -361,6 +593,22 @@ impl Battle {
             return;
         }
         self.show(r, MOVES[move_id as usize].id, |rec| rec.add_move(move_id));
+    }
+
+    /// `r` has used this move as its own, or been stopped from using it: see [`Shown::use_move`].
+    #[track_caller]
+    pub(crate) fn show_move_used(&mut self, r: MonRef, move_id: u16) {
+        if move_id == NO_MOVE || move_id == crate::battle::struggle_id() || self.mon(r).transformed {
+            return;
+        }
+        self.show(r, MOVES[move_id as usize].id, |rec| rec.use_move(move_id));
+    }
+
+    /// `r` has used this move on another move's account (Copycat's pick).
+    pub(crate) fn show_move_borrowed(&mut self, r: MonRef, move_id: u16) {
+        if move_id != NO_MOVE && !self.mon(r).transformed {
+            self.shown_mut(r).borrow_move(move_id);
+        }
     }
 
     /// `r`'s ability has been named.
@@ -442,10 +690,48 @@ impl Battle {
             side.shown[a].seen = side.n_seen;
         }
         side.shown[a].species = side.team[a].species;
+        if side.shown[a].listed == NOT_LISTED {
+            let (species, gender) = (side.team[a].species, side.team[a].gender);
+            side.shown[a].listed = listed_as(&side.roster[..side.n_roster as usize], species, gender, side.taken());
+        }
         let mut live = side.shown[a];
         live.fainted = false;
         live.leave();
         self.mon_mut(r).live = live;
+        self.mon_mut(r).live.suspect = self.shown_suspect(r);
+        self.shown_recheck(r.side as usize);
+    }
+
+    /// The entries of `side`'s registered team that have Illusion, as far as the other side can tell.
+    fn shown_illusionists(&self, side: usize) -> u8 {
+        let s = &self.sides[side];
+        illusionists(&s.roster[..s.n_roster as usize], self.open_team_sheets)
+    }
+
+    /// Whether `r`, on the field, may be its side's Illusion Pokémon in the shape it shows.
+    fn shown_suspect(&self, r: MonRef) -> bool {
+        let s = &self.sides[r.side as usize];
+        let listed = self.mon(r).live.listed;
+        may_be_disguise(&s.roster[..s.n_roster as usize], self.shown_illusionists(r.side as usize), listed, |only| {
+            let fainted =
+                (0..s.n as usize).any(|a| s.shown[a].seen != 0 && s.shown[a].listed == only && s.shown[a].fainted);
+            let beside = (0..s.n as usize).any(|a| {
+                a != r.idx as usize && s.team[a].is_active && s.team[a].live.seen != 0 && s.team[a].live.listed == only
+            });
+            fainted || beside
+        })
+    }
+
+    /// Something has happened that can settle who is who on `side`: a Pokémon
+    /// came in, fainted or dropped a disguise.
+    /// Whoever is on the field and need no longer be doubted is cleared.
+    pub(crate) fn shown_recheck(&mut self, side: usize) {
+        for pos in 0..ACTIVE.min(self.sides[side].n as usize) {
+            let r = MonRef { side: side as u8, idx: self.sides[side].order[pos] };
+            if self.has_live(r) && self.mon(r).live.suspect && !self.shown_suspect(r) {
+                self.mon_mut(r).live.suspect = false;
+            }
+        }
     }
 
     /// HP and status of `r` as the log has them now.
@@ -473,6 +759,9 @@ impl Battle {
         live.seen = self.sides[r.side as usize].shown[a].seen;
         self.sides[r.side as usize].shown[a] = live;
         self.mon_mut(r).live = NOTHING_SHOWN;
+        if fainted {
+            self.shown_recheck(r.side as usize);
+        }
     }
 
     /// Illusion ends (`replace`): the Pokémon in this position is, and has
@@ -489,11 +778,33 @@ impl Battle {
             side.shown[r.idx as usize].seen = side.n_seen;
         }
         side.shown[r.idx as usize].species = side.team[r.idx as usize].species;
+        if side.shown[r.idx as usize].listed == NOT_LISTED {
+            let (species, gender) = (side.team[r.idx as usize].species, side.team[r.idx as usize].gender);
+            let taken = side.taken();
+            side.shown[r.idx as usize].listed =
+                listed_as(&side.roster[..side.n_roster as usize], species, gender, taken);
+        }
         let mut own = side.shown[r.idx as usize];
         own.fainted = false;
         own.leave();
         live.learned_since(&before, &mut own);
+        // Whatever it looked like, this is what it is. (But where the Illusion Pokémon
+        // cannot be told apart, what was noted under the name it used may be another's.)
+        own.suspect = false;
         side.team[r.idx as usize].live = own;
+        if muddled(
+            &self.sides[r.side as usize].roster[..self.sides[r.side as usize].n_roster as usize],
+            self.shown_illusionists(r.side as usize),
+        ) {
+            self.mon_mut(r).live.tainted = true;
+        }
+        self.shown_recheck(r.side as usize);
+    }
+
+    /// `-end|pokemon|Illusion`: see [`Shown::end_illusion`].
+    #[track_caller]
+    pub(crate) fn show_illusion_ended(&mut self, r: MonRef) {
+        self.show(r, "illusion", Shown::end_illusion);
     }
 
     /// A benched (or fainted) Pokémon's HP or status changed in plain sight.
@@ -560,6 +871,13 @@ impl Battle {
         }
         bench.sort_by_key(|m| m.id);
         out.bench = bench;
+        out.roster = roster_shown(&s.roster[..s.n_roster as usize], self.open_team_sheets);
+        out.illusion = mask_list(self.shown_illusionists(side));
         out
+    }
+
+    /// Whether the players have each other's team sheets ([`Battle::with_rosters`]).
+    pub fn open_team_sheets(&self) -> bool {
+        self.open_team_sheets
     }
 }

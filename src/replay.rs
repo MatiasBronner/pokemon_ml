@@ -3,12 +3,12 @@
 //! binary and by the fixture test in `tests/`.
 
 use crate::data::{
-    ABILITIES, Gender, IF_CHOICE, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather, ab, it,
+    ABILITIES, Gender, ITEMS, MOVES, SPECIES, SideCond, SlotCond, Terrain, Type, VolKind, Weather, ab, it,
 };
 use crate::observer::Observer;
 use crate::position::BattleState;
 use crate::shown::{ItemShown, ShownMon, ShownSide};
-use crate::state::{ACTIVE, Cond, NO_SPECIES, Res, Trapped};
+use crate::state::{ACTIVE, Cond, NO_SPECIES, NOT_LISTED, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -193,7 +193,18 @@ pub struct Step {
 pub struct Case {
     pub id: u32,
     pub seed: [u16; 4],
+    /// The Pokémon each side brought, in the order picked.
     pub teams: [Vec<SetJson>; 2],
+    /// The teams the sides registered, which Team Preview showed, and for
+    /// each Pokémon brought its index there. (Absent from battles recorded
+    /// before the recorder kept them.)
+    #[serde(default)]
+    pub rosters: Option<[Vec<SetJson>; 2]>,
+    #[serde(default)]
+    pub picks: Option<[Vec<usize>; 2]>,
+    /// The battle was played with open team sheets (`gen_cases.js --open-sheets`).
+    #[serde(default)]
+    pub open_sheets: bool,
     pub initial: Snap,
     pub steps: Vec<Step>,
 }
@@ -205,6 +216,31 @@ pub enum Outcome {
     Unsupported(String),
     /// Diverged; carries a human-readable report.
     Fail(Vec<String>),
+}
+
+impl Case {
+    /// The battle as it stood after the opening switch-ins.
+    fn start(&self, open_team_sheets: bool) -> Result<Battle, Outcome> {
+        let sets = |teams: &[Vec<SetJson>; 2]| -> Result<Vec<Vec<PokemonSet>>, Outcome> {
+            let all: Result<Vec<Vec<PokemonSet>>, String> =
+                teams.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
+            all.map_err(|e| Outcome::Fail(vec![e]))
+        };
+        let built = match (&self.rosters, &self.picks) {
+            (Some(rosters), Some(picks)) => {
+                let rosters = sets(rosters)?;
+                Battle::with_rosters([&rosters[0], &rosters[1]], [&picks[0], &picks[1]], open_team_sheets, self.seed)
+            }
+            _ => {
+                let teams = sets(&self.teams)?;
+                Battle::new([&teams[0], &teams[1]], self.seed)
+            }
+        };
+        built.map_err(|e| match e {
+            Error::Unsupported(what) => Outcome::Unsupported(what),
+            e => Outcome::Fail(vec![e.to_string()]),
+        })
+    }
 }
 
 fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
@@ -718,17 +754,10 @@ pub fn check_case(c: &Case) -> Outcome {
 
 /// [`check_case`], optionally rebuilding the battle from its exported position at every decision.
 pub fn check_case_with(c: &Case, mode: Rebuild) -> Outcome {
-    let sets: Result<Vec<Vec<PokemonSet>>, String> =
-        c.teams.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
-    let sets = match sets {
-        Ok(s) => s,
-        Err(e) => return Outcome::Fail(vec![e]),
-    };
     trace::take();
-    let mut b = match Battle::new([&sets[0], &sets[1]], c.seed) {
+    let mut b = match c.start(c.open_sheets) {
         Ok(b) => b,
-        Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
-        Err(e) => return Outcome::Fail(vec![e.to_string()]),
+        Err(outcome) => return outcome,
     };
     let d = diff(&b, &c.initial);
     if !d.is_empty() {
@@ -796,18 +825,19 @@ pub fn check_case_with(c: &Case, mode: Rebuild) -> Outcome {
 /// idea of what has been shown differed from what the log says, and every
 /// time the log's reader believed something untrue, each with how often and
 /// where it first happened.
-///
-/// One untrue belief is expected and kept apart, in `expected`. A Pokémon
-/// locked in by a Choice item that is made to use another move fails with a
-/// `move` line like that of any move that failed. When that is the second
-/// turn of a move Copycat borrowed, the log credits it with a move it does
-/// not have, and so does the engine.
 #[derive(Default, Debug)]
 pub struct ShownTally {
     pub decisions: usize,
     pub mismatches: std::collections::BTreeMap<String, (usize, String)>,
     pub untrue: std::collections::BTreeMap<String, (usize, String)>,
-    pub expected: std::collections::BTreeMap<String, (usize, String)>,
+    /// On sides that brought a Pokémon with Illusion (and, with closed
+    /// sheets, only Pokémon that may have it), at each decision, the
+    /// Pokémon on the field that were really in disguise and were marked as
+    /// possibly so; those that were themselves and marked all the same; and
+    /// those that were themselves and known to be.
+    pub disguised_marked: usize,
+    pub genuine_marked: usize,
+    pub genuine_known: usize,
 }
 
 impl ShownTally {
@@ -817,12 +847,16 @@ impl ShownTally {
     }
 }
 
-fn shown_mon_diffs(what: &str, ours: &ShownMon, theirs: &ShownMon, out: &mut Vec<String>) {
+fn shown_mon_diffs(what: &str, ours: &ShownMon, theirs: &ShownMon, rosters: bool, out: &mut Vec<String>) {
     let mut field = |name: &str, a: String, b: String| {
         if a != b {
             out.push(format!("{what} {name}: engine {a}, log {b}"));
         }
     };
+    if rosters {
+        field("listed", format!("{:?}", ours.listed), format!("{:?}", theirs.listed));
+        field("maybe a disguise", ours.maybe_disguise.to_string(), theirs.maybe_disguise.to_string());
+    }
     field("id", ours.id.to_string(), theirs.id.to_string());
     field("species", ours.species.clone(), theirs.species.clone());
     field("gender", ours.gender.clone(), theirs.gender.clone());
@@ -848,8 +882,38 @@ fn shown_mon_diffs(what: &str, ours: &ShownMon, theirs: &ShownMon, out: &mut Vec
     }
 }
 
-fn shown_diffs(ours: &ShownSide, theirs: &ShownSide) -> Vec<String> {
+/// `rosters`: the battle was recorded with the teams as registered, so what
+/// each side knows of the other's registered team can be compared too.
+fn shown_diffs(ours: &ShownSide, theirs: &ShownSide, rosters: bool) -> Vec<String> {
     let mut out = Vec::new();
+    if rosters {
+        if ours.roster.len() != theirs.roster.len() {
+            out.push(format!("roster: engine lists {}, log {}", ours.roster.len(), theirs.roster.len()));
+        }
+        for (j, (a, b)) in ours.roster.iter().zip(&theirs.roster).enumerate() {
+            if (&a.species, &a.gender) != (&b.species, &b.gender) {
+                out.push(format!("roster {j}: engine {} {}, log {} {}", a.species, a.gender, b.species, b.gender));
+            }
+            match (&a.sheet, &b.sheet) {
+                (Some(a), Some(b)) => {
+                    let mut field = |name: &str, a: &str, b: &str| {
+                        if a != b {
+                            out.push(format!("sheet {name}: engine {a}, log {b}"));
+                        }
+                    };
+                    field("item", &a.item, &b.item);
+                    field("ability", &a.ability, &b.ability);
+                    field("nature", &a.nature, &b.nature);
+                    field("moves", &a.moves.join(","), &b.moves.join(","));
+                }
+                (None, None) => {}
+                (a, _) => out.push(format!("sheet: only in the {}", if a.is_some() { "engine" } else { "log" })),
+            }
+        }
+        if ours.illusion != theirs.illusion {
+            out.push(format!("who has Illusion: engine {:?}, log {:?}", ours.illusion, theirs.illusion));
+        }
+    }
     if ours.unseen != theirs.unseen {
         out.push(format!("unseen: engine {}, log {}", ours.unseen, theirs.unseen));
     }
@@ -858,7 +922,7 @@ fn shown_diffs(ours: &ShownSide, theirs: &ShownSide) -> Vec<String> {
     }
     for (a, b) in ours.active.iter().zip(&theirs.active) {
         match (a, b) {
-            (Some(a), Some(b)) => shown_mon_diffs("active", a, b, &mut out),
+            (Some(a), Some(b)) => shown_mon_diffs("active", a, b, rosters, &mut out),
             (None, None) => {}
             (a, _) => {
                 out.push(format!("active: {} only in the engine", if a.is_some() { "someone" } else { "nobody" }))
@@ -869,7 +933,7 @@ fn shown_diffs(ours: &ShownSide, theirs: &ShownSide) -> Vec<String> {
         out.push(format!("bench: engine has {}, log {}", ours.bench.len(), theirs.bench.len()));
     }
     for (a, b) in ours.bench.iter().zip(&theirs.bench) {
-        shown_mon_diffs("bench", a, b, &mut out);
+        shown_mon_diffs("bench", a, b, rosters, &mut out);
     }
     out
 }
@@ -901,31 +965,45 @@ fn adopt_shown(b: &mut Battle, obs: &Observer) -> Result<(), String> {
     Ok(())
 }
 
-/// What `untrue_beliefs` puts in front of the one belief that is expected to be untrue:
-/// see [`ShownTally`].
-const CHOICE_LOCK: &str = "choice lock: ";
+/// Whether the other side can know which of `side`'s Pokémon have Illusion:
+/// always with open team sheets, and with closed ones as long as only
+/// Pokémon that may have it under the regulation do. (The recorder also
+/// hands Illusion to Pokémon that may not, and those battles say nothing
+/// about closed sheets.)
+fn illusion_knowable(b: &Battle, side: usize) -> bool {
+    let s = &b.sides[side];
+    let public = b.shown(side).illusion;
+    // (By the ability each was registered with: a Mega Evolution replaces it.)
+    s.roster[..s.n_roster as usize]
+        .iter()
+        .enumerate()
+        .all(|(j, l)| l.ability != ab::ILLUSION || l.brought == NOT_LISTED || public.contains(&(j as u8)))
+}
 
-/// Whether what the log reader believes about the Pokémon of an honest
-/// battle (one without Illusion) is true of them.
-fn untrue_beliefs(b: &Battle, out: &mut Vec<String>) {
+/// Whether what the log reader believes about the Pokémon is true of them.
+///
+/// In an `honest` battle (one without Illusion) that goes for every record.
+/// In one with Illusion it goes for the records that are not marked as
+/// possibly a disguise's, on a side whose Illusion Pokémon can be known:
+/// what is noted there has to be about the Pokémon it is filed under.
+fn untrue_beliefs(b: &Battle, honest: bool, out: &mut Vec<String>) {
     for side in 0..2 {
         let s = &b.sides[side];
+        if !honest && !illusion_knowable(b, side) {
+            continue;
+        }
         for a in 0..s.n as usize {
             let m = &s.team[a];
             let live = m.is_active && m.live.seen != 0;
             let rec = if live { &m.live } else { &s.shown[a] };
-            if rec.seen == 0 {
+            if rec.seen == 0 || (!honest && (rec.suspect || rec.tainted)) {
                 continue;
             }
             let own =
                 if m.transformed { &m.base_moves[..m.base_n_moves as usize] } else { &m.moves[..m.n_moves as usize] };
-            // See `ShownTally::expected`.
-            let choice = |i: u16| ITEMS[i as usize].flags & IF_CHOICE != 0;
-            let locked = choice(m.item) || matches!(rec.item, ItemShown::Lost(i) if choice(i));
             for &mv in rec.moves() {
                 if !own.iter().any(|slot| slot.id == mv) {
-                    let how = if locked { CHOICE_LOCK } else { "" };
-                    out.push(format!("{how}move {}: not one of its own", MOVES[mv as usize].id));
+                    out.push(format!("move {}: not one of its own", MOVES[mv as usize].id));
                 }
             }
             match rec.item {
@@ -939,11 +1017,57 @@ fn untrue_beliefs(b: &Battle, out: &mut Vec<String>) {
             }
             let name = |x: u16| ABILITIES[x as usize].id;
             let current = if live || m.fainted { m.ability } else { m.base_ability };
+            // A Pokémon with Illusion that Mega Evolved in disguise. The log put the Mega
+            // Evolution down to the Pokémon it looked like, so nothing says that this
+            // one's Illusion has been replaced for good. (Only the recorder builds such a
+            // Pokémon: none that may have Illusion has a Mega Stone under the regulation.)
+            let mega = ITEMS.iter().flat_map(|i| i.mega.iter()).any(|&(_, to)| to == m.species);
+            if mega && rec.base_ability == ab::ILLUSION {
+                continue;
+            }
             if rec.ability != crate::shown::UNKNOWN && rec.ability != current && !m.fainted {
                 out.push(format!("ability {}: it has {}", name(rec.ability), name(current)));
             }
             if rec.base_ability != crate::shown::UNKNOWN && rec.base_ability != m.base_ability {
                 out.push(format!("base ability {}: it is {}", name(rec.base_ability), name(m.base_ability)));
+            }
+        }
+    }
+}
+
+/// Whether what the record says about who is who is true: a Pokémon on the
+/// field that is in fact disguised must be marked as possibly so, and one
+/// that is itself must point at its own entry of the registered team.
+/// (The first where the other side can know which Pokémon have Illusion:
+/// see `illusion_knowable`.)
+fn untrue_identities(b: &Battle, out: &mut Vec<String>, tally: &mut [usize; 3]) {
+    for side in 0..2 {
+        let s = &b.sides[side];
+        let roster = &s.roster[..s.n_roster as usize];
+        let brought_one = roster.iter().any(|l| l.ability == ab::ILLUSION && l.brought != NOT_LISTED);
+        let knowable = illusion_knowable(b, side);
+        for pos in 0..ACTIVE.min(s.n as usize) {
+            let idx = s.order[pos] as usize;
+            let m = &s.team[idx];
+            if !m.is_active || m.live.seen == 0 {
+                continue;
+            }
+            let name = SPECIES[m.set_species as usize].id;
+            if brought_one && knowable {
+                let which = if m.illusion != 0 { 0 } else { 1 + usize::from(!m.live.suspect) };
+                tally[which] += 1;
+            }
+            if m.illusion != 0 {
+                if knowable && !m.live.suspect {
+                    out.push(format!("{name} is in disguise and is not marked as possibly one"));
+                }
+                continue;
+            }
+            // (A team with the same Pokémon twice gives no way to tell which entry is which.)
+            let twins = roster.iter().filter(|l| l.species == m.set_species).count() > 1;
+            let own = roster.iter().position(|l| l.brought == idx as u8);
+            if !twins && own.map(|j| j as u8) != Some(m.live.listed) {
+                out.push(format!("{name} is listed as entry {} of its team, and is {own:?}", m.live.listed));
             }
         }
     }
@@ -962,38 +1086,51 @@ pub fn check_shown(c: &Case, tally: &mut ShownTally) -> Outcome {
 /// before every decision (see [`Rebuild`]): what has been shown is part of
 /// a position and has to survive the trip.
 pub fn check_shown_with(c: &Case, mode: Rebuild, tally: &mut ShownTally) -> Outcome {
-    let sets: Result<Vec<Vec<PokemonSet>>, String> =
-        c.teams.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
-    let sets = match sets {
-        Ok(s) => s,
-        Err(e) => return Outcome::Fail(vec![e]),
-    };
+    check_shown_as(c, mode, false, tally)
+}
+
+/// [`check_shown_with`]; with `closed`, a battle recorded with open team
+/// sheets is replayed as if the sheets had stayed closed: the engine is told
+/// so, and the log's reader is not given the lines that show them.
+pub fn check_shown_as(c: &Case, mode: Rebuild, closed: bool, tally: &mut ShownTally) -> Outcome {
     trace::take();
-    let mut b = match Battle::new([&sets[0], &sets[1]], c.seed) {
+    let mut b = match c.start(c.open_sheets && !closed) {
         Ok(b) => b,
-        Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
-        Err(e) => return Outcome::Fail(vec![e.to_string()]),
+        Err(outcome) => return outcome,
     };
     if c.initial.log.is_empty() {
         return Outcome::Fail(vec!["the battle was recorded without its log (gen_cases.js --log)".to_string()]);
     }
-    let honest = !sets.iter().flatten().any(|set| set.ability == ab::ILLUSION);
+    // Recorded with the teams as registered? Then the reader gets Team Preview too.
+    let rosters = c.rosters.is_some() && c.picks.is_some();
+    let honest = !b.sides.iter().any(|s| s.team[..s.n as usize].iter().any(|m| m.base_ability == ab::ILLUSION));
     let mut obs = Observer::new();
     let mut compare = |b: &mut Battle, obs: &mut Observer, log: &[String], at: String| -> Result<(), Vec<String>> {
-        obs.lines(log).map_err(|e| vec![format!("{at}: the log could not be read: {e}")])?;
+        let skipped = |line: &&String| {
+            (closed && line.starts_with("|showteam|"))
+                || (!rosters && ["|poke|", "|clearpoke", "|showteam|"].iter().any(|k| line.starts_with(k)))
+        };
+        let log: Vec<&String> = log.iter().filter(|line| !skipped(line)).collect();
+        obs.lines(&log).map_err(|e| vec![format!("{at}: the log could not be read: {e}")])?;
         for side in 0..2 {
-            for d in shown_diffs(&b.shown(side), &obs.shown(side)) {
+            for d in shown_diffs(&b.shown(side), &obs.shown(side), rosters) {
                 ShownTally::note(&mut tally.mismatches, d, &at);
             }
         }
         adopt_shown(b, obs).map_err(|e| vec![format!("{at}: {e}")])?;
-        if honest {
-            let mut untrue = Vec::new();
-            untrue_beliefs(b, &mut untrue);
-            for u in untrue {
-                let map = if u.starts_with(CHOICE_LOCK) { &mut tally.expected } else { &mut tally.untrue };
-                ShownTally::note(map, u, &at);
-            }
+        let mut untrue = Vec::new();
+        if honest || rosters {
+            untrue_beliefs(b, honest, &mut untrue);
+        }
+        if rosters {
+            let mut counts = [0; 3];
+            untrue_identities(b, &mut untrue, &mut counts);
+            tally.disguised_marked += counts[0];
+            tally.genuine_marked += counts[1];
+            tally.genuine_known += counts[2];
+        }
+        for u in untrue {
+            ShownTally::note(&mut tally.untrue, u, &at);
         }
         tally.decisions += 1;
         Ok(())

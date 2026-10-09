@@ -8,7 +8,7 @@
 
 use vgc_engine::observer::{Observer, Who, holder};
 use vgc_engine::position::{BattleState, PokemonState, ShownState, SideState};
-use vgc_engine::replay::{Case, Outcome, ShownTally, check_shown};
+use vgc_engine::replay::{Case, Outcome, Rebuild, ShownTally, check_shown_as};
 use vgc_engine::shown::Bar;
 use vgc_engine::{Battle, Choice, Error, PokemonSet, Request};
 
@@ -196,6 +196,121 @@ fn a_disguise_takes_the_credit_until_it_is_broken() -> Result<(), Error> {
     Ok(())
 }
 
+/// Six registered, four brought: Incineroar and Garchomp lead, Milotic and Sylveon wait.
+fn registered() -> Vec<PokemonSet> {
+    vec![
+        set("Incineroar", &["Fake Out", "Flare Blitz", "Parting Shot", "Protect"]).ability("Intimidate").unwrap(),
+        set("Rotom", &["Thunderbolt", "Protect"]).ability("Levitate").unwrap(),
+        set("Garchomp", &["Earthquake", "Rock Slide", "Protect"])
+            .ability("Rough Skin")
+            .unwrap()
+            .item("Life Orb")
+            .unwrap(),
+        set("Milotic", &["Scald", "Recover"]).ability("Marvel Scale").unwrap().item("Leftovers").unwrap(),
+        set("Snorlax", &["Body Slam", "Protect"]).ability("Thick Fat").unwrap(),
+        set("Sylveon", &["Hyper Voice", "Protect"]).ability("Pixilate").unwrap(),
+    ]
+}
+
+#[test]
+fn team_preview_shows_the_six_and_open_sheets_what_they_carry() -> Result<(), Error> {
+    let (ours, theirs) = (registered(), filler());
+    let brought = [0, 2, 3, 5];
+    let everyone = [0, 1, 2, 3];
+
+    // Sheets closed: the six species are known from Team Preview, and nothing else.
+    let b = Battle::with_rosters([&ours, &theirs], [&brought, &everyone], false, seed())?;
+    assert!(!b.open_team_sheets());
+    let shown = b.shown(0);
+    let species: Vec<_> = shown.roster.iter().map(|l| l.species.as_str()).collect();
+    assert_eq!(species, ["incineroar", "rotom", "garchomp", "milotic", "snorlax", "sylveon"]);
+    assert!(shown.roster.iter().all(|l| l.sheet.is_none()));
+    // The leads point at their entries. Two of the four brought are still unseen, and
+    // nothing says which two of the other four those are.
+    let leads: Vec<_> = shown.active.iter().flatten().map(|m| (m.species.as_str(), m.listed)).collect();
+    assert_eq!(leads, [("incineroar", Some(0)), ("garchomp", Some(2))]);
+    assert_eq!(shown.unseen, 2);
+    // Garchomp has done nothing yet, so its item is not known...
+    let garchomp = shown.active[1].as_ref().unwrap();
+    assert_eq!(garchomp.item, None);
+    assert_eq!(shown.sheet_of(garchomp), None);
+
+    // ...unless the sheets are open. Then every item, ability, move and nature is on the
+    // table from the start, for all six. (Never the stat points.)
+    let b = Battle::with_rosters([&ours, &theirs], [&brought, &everyone], true, seed())?;
+    assert!(b.open_team_sheets());
+    let shown = b.shown(0);
+    let garchomp = shown.active[1].as_ref().unwrap();
+    let sheet = shown.sheet_of(garchomp).unwrap();
+    assert_eq!((sheet.item.as_str(), sheet.ability.as_str(), sheet.nature.as_str()), ("lifeorb", "roughskin", "hardy"));
+    assert_eq!(sheet.moves, ["earthquake", "rockslide", "protect"]);
+    let rotom = shown.roster[1].sheet.as_ref().unwrap();
+    assert_eq!((rotom.ability.as_str(), rotom.item.as_str()), ("levitate", ""), "left at home, and on the sheet");
+    // What the battle itself has shown is still kept apart: the sheet says what Garchomp
+    // came with, the record what has happened to it since.
+    assert_eq!(garchomp.item, None);
+    assert!(garchomp.moves.is_empty());
+    // The play is the same either way; only what is known differs.
+    assert_eq!(shown.active[0].as_ref().unwrap().ability.as_deref(), Some("intimidate"));
+    Ok(())
+}
+
+#[test]
+fn a_team_with_illusion_puts_who_is_who_in_doubt() -> Result<(), Error> {
+    // Zoroark leads, looking like the last Pokémon of its team, Garchomp.
+    let ours = vec![
+        set("Zoroark", &["Nasty Plot", "Night Daze"]).ability("Illusion")?,
+        set("Milotic", &["Scald", "Protect"]),
+        set("Arcanine", &["Flamethrower", "Protect"]),
+        set("Garchomp", &["Earthquake", "Protect"]),
+    ];
+    let everyone = [0, 1, 2, 3];
+    for open in [true, false] {
+        let mut b = Battle::with_rosters([&ours, &filler()], [&everyone, &everyone], open, seed())?;
+        let shown = b.shown(0);
+        // That this team has an Illusion Pokémon is known: from the sheet if the sheets are
+        // open, and otherwise because Team Preview showed a Zoroark, which has no other ability.
+        assert_eq!(shown.illusion, [0]);
+        // So neither Pokémon on the field can be taken at face value. "Garchomp" points at
+        // Garchomp's entry, and may be Zoroark; so, for all anyone can tell, may Milotic.
+        let (first, second) = (shown.active[0].as_ref().unwrap(), shown.active[1].as_ref().unwrap());
+        assert_eq!((first.species.as_str(), first.listed, first.maybe_disguise), ("garchomp", Some(3), true));
+        assert_eq!((second.species.as_str(), second.listed, second.maybe_disguise), ("milotic", Some(1), true));
+
+        // A hit breaks the disguise. Now it is Zoroark, beyond doubt, and since Zoroark is
+        // there to be seen, the Milotic beside it is a Milotic.
+        b.choose([[mv(0, 0), PROTECT], [mv(0, 1), PROTECT]])?;
+        let shown = b.shown(0);
+        let (first, second) = (shown.active[0].as_ref().unwrap(), shown.active[1].as_ref().unwrap());
+        assert_eq!((first.species.as_str(), first.listed, first.maybe_disguise), ("zoroark", Some(0), false));
+        assert!(!second.maybe_disguise);
+
+        // Zoroark goes back to the bench, and Arcanine comes in. Or is it Zoroark again?
+        // (It is Arcanine: Zoroark would look like Garchomp. But the other side has no way
+        // to know the order of this team.) Milotic has not left the field, and stays known.
+        b.choose([[Choice::Switch { to: 2 }, PROTECT], [PROTECT, PROTECT]])?;
+        let shown = b.shown(0);
+        let (first, second) = (shown.active[0].as_ref().unwrap(), shown.active[1].as_ref().unwrap());
+        assert_eq!((first.species.as_str(), first.maybe_disguise), ("arcanine", true));
+        assert_eq!((second.species.as_str(), second.maybe_disguise), ("milotic", false));
+    }
+
+    // A Zoroark with nobody behind it to copy comes in as itself. There is nothing to doubt
+    // about a Pokémon that looks like the one with Illusion, nor about the one beside it.
+    let pair = vec![set("Milotic", &["Scald", "Protect"]), set("Zoroark", &["Night Daze"]).ability("Illusion")?];
+    let b = Battle::with_rosters([&pair, &filler()], [&[0, 1], &everyone], false, seed())?;
+    let shown = b.shown(0);
+    let seen: Vec<_> = shown.active.iter().flatten().map(|m| (m.species.as_str(), m.maybe_disguise)).collect();
+    assert_eq!(seen, [("milotic", false), ("zoroark", false)]);
+
+    // A team with no such Pokémon is never in doubt.
+    let b = Battle::with_rosters([&registered(), &filler()], [&[0, 2, 3, 5], &everyone], true, seed())?;
+    let shown = b.shown(0);
+    assert!(shown.illusion.is_empty());
+    assert!(shown.active.iter().flatten().all(|m| !m.maybe_disguise));
+    Ok(())
+}
+
 /// Plays the same choices in two battles and requires that both show the same at every decision.
 fn shows_the_same(teams_a: [&[PokemonSet]; 2], teams_b: [&[PokemonSet]; 2]) -> Result<(), Error> {
     let mut a = Battle::new(teams_a, seed())?;
@@ -252,6 +367,16 @@ fn a_position_carries_what_has_been_shown() -> Result<(), Error> {
     }
     assert_eq!(rebuilt.shown(0).bench[0].ability.as_deref(), Some("intimidate"));
 
+    // So are the teams as registered, and the sheets if they are open.
+    let mut b = Battle::with_rosters([&registered(), &filler()], [&[0, 2, 3, 5], &[0, 1, 2, 3]], true, seed())?;
+    b.choose([[mv(0, 1), PROTECT], [mv(0, 1), PROTECT]])?;
+    let rebuilt = Battle::from_state(&BattleState::from_json(&b.to_state().to_json())?)?;
+    assert!(rebuilt.open_team_sheets());
+    for side in 0..2 {
+        assert_eq!(b.shown(side), rebuilt.shown(side));
+    }
+    assert_eq!(rebuilt.shown(0).roster.len(), 6);
+
     // Written by hand: say what has been seen, or say nothing and only the Pokémon on the field have been.
     let mon = |species: &str, moves: &[&str]| PokemonState::new(species, moves);
     let mut garchomp = mon("Garchomp", &["Earthquake", "Dragon Claw", "Protect"]).item("Choice Scarf");
@@ -281,32 +406,38 @@ fn a_position_carries_what_has_been_shown() -> Result<(), Error> {
 
 #[test]
 fn the_log_reader_agrees_on_recorded_battles() {
-    // 30 battles recorded from Showdown with their logs (`gen_cases.js --log`), from
-    // batches built around Illusion, Transform, items changing hands and abilities being
-    // replaced. Three are here for what they caught: Big Pecks blocking Octolock's drop,
-    // which Showdown does in silence; Symbiosis passing an item to a Pokémon whose berry has
-    // just halved a hit, between the two lines that berry gets; and a Poison Touch that
-    // poisons after Wandering Spirit has already taken its place.
+    // 33 battles recorded from Showdown with their logs, their teams as registered and open
+    // team sheets (`gen_cases.js --log --open-sheets`), from batches built around Illusion,
+    // Transform, items changing hands and abilities being replaced. Three are here for what
+    // they caught: Big Pecks blocking Octolock's drop, which Showdown does in silence;
+    // Symbiosis passing an item to a Pokémon whose berry has just halved a hit, between the
+    // two lines that berry gets; and a Poison Touch that poisons after Wandering Spirit has
+    // already taken its place. Three have a Zoroark on an otherwise ordinary team.
     let text = include_str!("fixtures/shown_cases.jsonl");
-    let mut tally = ShownTally::default();
-    let mut battles = 0;
-    for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        let case: Case = serde_json::from_str(line).expect("malformed fixture line");
-        match check_shown(&case, &mut tally) {
-            Outcome::Pass(_) => battles += 1,
-            Outcome::Unsupported(what) => panic!("case {}: {what} is not modelled", case.id),
-            Outcome::Fail(report) => panic!("case {}: {}", case.id, report.join("\n")),
+    // Once as recorded, and once as if the sheets had stayed closed.
+    for closed in [false, true] {
+        let mut tally = ShownTally::default();
+        let mut battles = 0;
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let case: Case = serde_json::from_str(line).expect("malformed fixture line");
+            assert!(case.open_sheets && case.rosters.is_some());
+            match check_shown_as(&case, Rebuild::No, closed, &mut tally) {
+                Outcome::Pass(_) => battles += 1,
+                Outcome::Unsupported(what) => panic!("case {}: {what} is not modelled", case.id),
+                Outcome::Fail(report) => panic!("case {}: {}", case.id, report.join("\n")),
+            }
         }
+        assert!(battles >= 30 && tally.decisions > 300, "{battles} battles, {} decisions", tally.decisions);
+        assert!(tally.mismatches.is_empty(), "the engine and the log disagree: {:?}", tally.mismatches);
+        // Nothing the reader believes about a Pokémon is false; no Pokémon in disguise goes
+        // unmarked (there were some), and not every Pokémon beside one stays in doubt.
+        assert!(tally.untrue.is_empty(), "the log's reader believes something untrue: {:?}", tally.untrue);
+        assert!(tally.disguised_marked > 10 && tally.genuine_known > 10, "{tally:?}");
+        // (The last battle is there for a belief that would be untrue. A Maushold holding a
+        // Choice Scarf borrows Sky Attack with Copycat, and on the second turn the scarf stops
+        // it with `|move|p1a: Maushold|Sky Attack||[still]`, a line like that of any move
+        // that failed. Sky Attack is not put down as one of Maushold's moves.)
     }
-    assert!(battles >= 20 && tally.decisions > 200, "{battles} battles, {} decisions", tally.decisions);
-    assert!(tally.mismatches.is_empty(), "the engine and the log disagree: {:?}", tally.mismatches);
-    assert!(tally.untrue.is_empty(), "the log's reader believes something untrue: {:?}", tally.untrue);
-    // The one untrue belief there is. In the last battle a Maushold holding a Choice Scarf
-    // borrows Sky Attack with Copycat. On the second turn the scarf stops it, with
-    // `|move|p1a: Maushold|Sky Attack||[still]`: a line like that of any move that failed.
-    // Both the log's reader and the engine take Sky Attack for one of Maushold's moves.
-    let expected: Vec<_> = tally.expected.keys().map(String::as_str).collect();
-    assert_eq!(expected, ["choice lock: move skyattack: not one of its own"]);
 }
 
 #[test]

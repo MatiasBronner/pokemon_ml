@@ -93,6 +93,8 @@ impl Battle {
             slot_conds: [SlotConds::new(SlotCond::FIRST); ACTIVE],
             shown: [crate::shown::NOTHING_SHOWN; MAX_TEAM],
             n_seen: 0,
+            roster: [Listed::NONE; MAX_ROSTER],
+            n_roster: 0,
         };
         let nobody = MonRef { side: 0, idx: 0 };
         Battle {
@@ -129,6 +131,7 @@ impl Battle {
             active_target: None,
             speed_order: [0; 4],
             n_speed_order: 0,
+            open_team_sheets: false,
         }
     }
 
@@ -200,21 +203,79 @@ impl Battle {
     /// Builds a battle from the four Pokémon each side picked at team preview,
     /// in the order picked (the first two lead), and plays the opening
     /// switch-ins. `seed` is Showdown's four 16-bit seed words.
+    ///
+    /// Nothing is said here about the teams the players registered, so each
+    /// side's registered team is taken to be what it brought, and the team
+    /// sheets to be closed. [`Battle::with_rosters`] says otherwise.
     pub fn new(teams: [&[PokemonSet]; 2], seed: [u16; 4]) -> Result<Battle, Error> {
+        let all: [Vec<usize>; 2] = [(0..teams[0].len()).collect(), (0..teams[1].len()).collect()];
+        Battle::with_rosters(teams, [&all[0], &all[1]], false, seed)
+    }
+
+    /// Builds a battle from the teams the players registered. `rosters` are
+    /// those teams (up to six Pokémon each), which Team Preview has shown to
+    /// both players, and `picks[side]` the Pokémon that side brings, as
+    /// indices into its roster in the order picked (the first two lead).
+    ///
+    /// With `open_team_sheets`, each player has also been given the other's
+    /// team sheet: every registered Pokémon's item, ability, moves and
+    /// nature, though not its stat points, and not which of them are
+    /// brought. Showdown's Champions formats do this when both players
+    /// agree, and always in a best-of-three. It changes nothing about how the
+    /// battle plays, only what [`Battle::shown`] has to say from the start.
+    pub fn with_rosters(
+        rosters: [&[PokemonSet]; 2],
+        picks: [&[usize]; 2],
+        open_team_sheets: bool,
+        seed: [u16; 4],
+    ) -> Result<Battle, Error> {
         let mut b = Battle::blank(seed);
-        for (s, team) in teams.iter().enumerate() {
-            if team.len() < ACTIVE || team.len() > MAX_TEAM {
+        b.open_team_sheets = open_team_sheets;
+        for s in 0..2 {
+            let (roster, picks) = (rosters[s], picks[s]);
+            if roster.len() > MAX_ROSTER {
+                return Err(Error::BadTeam(format!(
+                    "side {} registers {} Pokémon; at most {MAX_ROSTER}",
+                    s + 1,
+                    roster.len()
+                )));
+            }
+            if picks.len() < ACTIVE || picks.len() > MAX_TEAM {
                 return Err(Error::BadTeam(format!(
                     "side {} brings {} Pokémon; need {ACTIVE} to {MAX_TEAM}",
                     s + 1,
-                    team.len()
+                    picks.len()
                 )));
             }
-            for (i, set) in team.iter().enumerate() {
-                b.sides[s].team[i] = b.new_mon(set, i)?;
+            for (j, set) in roster.iter().enumerate() {
+                if set.moves.len() > MAX_MOVES {
+                    return Err(Error::BadTeam(format!("side {}: a Pokémon with more than {MAX_MOVES} moves", s + 1)));
+                }
+                let mut listed = Listed {
+                    species: set.species,
+                    gender: set.gender,
+                    item: set.item,
+                    ability: set.ability,
+                    n_moves: set.moves.len() as u8,
+                    nature: set.nature,
+                    ..Listed::NONE
+                };
+                listed.moves[..set.moves.len()].copy_from_slice(&set.moves);
+                b.sides[s].roster[j] = listed;
             }
-            b.sides[s].n = team.len() as u8;
-            b.sides[s].pokemon_left = team.len() as u8;
+            b.sides[s].n_roster = roster.len() as u8;
+            for (i, &j) in picks.iter().enumerate() {
+                if j >= roster.len() || b.sides[s].roster[j].brought != NOT_LISTED {
+                    return Err(Error::BadTeam(format!(
+                        "side {}: the Pokémon brought must be different members of its roster",
+                        s + 1
+                    )));
+                }
+                b.sides[s].roster[j].brought = i as u8;
+                b.sides[s].team[i] = b.new_mon(&roster[j], i)?;
+            }
+            b.sides[s].n = picks.len() as u8;
+            b.sides[s].pokemon_left = picks.len() as u8;
         }
 
         // Team preview picks are queued as 'team' actions and sorted like any

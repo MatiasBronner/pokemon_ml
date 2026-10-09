@@ -613,7 +613,7 @@ impl Battle {
                     self.mon_mut(holder).illusion = 0;
                     // `replace`, then `-end|pokemon|Illusion`.
                     self.shown_unmask(holder, was);
-                    self.show_ability(holder, ab::ILLUSION);
+                    self.show_illusion_ended(holder);
                 }
                 Res::Undef
             }

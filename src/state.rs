@@ -13,6 +13,10 @@ pub const MAX_TEAM: usize = 6;
 /// Active Pokémon per side (doubles).
 pub const ACTIVE: usize = 2;
 pub const MAX_MOVES: usize = 4;
+/// The most Pokémon a player registers (of which up to `MAX_TEAM` are brought).
+pub const MAX_ROSTER: usize = 6;
+/// "No entry" where an index into a side's registered team is kept.
+pub(crate) const NOT_LISTED: u8 = u8::MAX;
 /// Most volatile conditions one Pokémon can hold at once. Far more than any
 /// real game state reaches; adding one beyond it fails like an immunity would.
 pub const VOL_CAP: usize = 20;
@@ -372,6 +376,60 @@ pub struct Side {
     /// and how many have appeared.
     pub(crate) shown: [Shown; MAX_TEAM],
     pub(crate) n_seen: u8,
+    /// The team this side registered, in the order registered: what Team Preview showed.
+    pub(crate) roster: [Listed; MAX_ROSTER],
+    pub(crate) n_roster: u8,
+}
+
+/// One Pokémon of the team a player registered. Team Preview shows its
+/// species and gender; open team sheets add its item, ability, moves and
+/// nature. (Never its stat points, and never whether it was brought.)
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct Listed {
+    pub species: u16,
+    /// Team Preview gave the Pokémon without its forme (`Zacian-*`). Showdown
+    /// does that for a few species in some formats; not in Champions.
+    pub any_forme: bool,
+    pub gender: Gender,
+    pub item: u16,
+    pub ability: u16,
+    pub moves: [u16; MAX_MOVES],
+    pub n_moves: u8,
+    pub nature: (u8, u8),
+    /// Its team index if it was brought, else `NOT_LISTED`. (The engine's own
+    /// knowledge: nothing that is shown depends on it.)
+    pub brought: u8,
+}
+
+impl Side {
+    /// The entries of the registered team that Pokémon seen so far have been taken for, as a bit mask.
+    pub(crate) fn taken(&self) -> u8 {
+        let mut mask = 0;
+        for rec in &self.shown[..self.n as usize] {
+            if rec.seen != 0 && rec.listed != NOT_LISTED {
+                mask |= 1 << rec.listed;
+            }
+        }
+        mask
+    }
+}
+
+impl Listed {
+    pub(crate) const NONE: Listed = Listed {
+        species: NO_SPECIES,
+        any_forme: false,
+        gender: Gender::N,
+        item: 0,
+        ability: crate::data::ab::NOABILITY,
+        moves: [NO_MOVE; MAX_MOVES],
+        n_moves: 0,
+        nature: (0, 0),
+        brought: NOT_LISTED,
+    };
+
+    pub(crate) fn moves(&self) -> &[u16] {
+        &self.moves[..self.n_moves as usize]
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -1021,4 +1079,6 @@ pub struct Battle {
     /// Field positions (side + 2 * position) in the speed order fixed at the last switch-in.
     pub(crate) speed_order: [u8; 4],
     pub(crate) n_speed_order: u8,
+    /// Both players' team sheets are open: see [`Battle::with_rosters`].
+    pub(crate) open_team_sheets: bool,
 }

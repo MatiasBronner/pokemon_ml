@@ -25,6 +25,9 @@
 //! assert_eq!((rex.moves, rex.item.as_deref(), rex.hp), (vec!["earthquake".to_string()], Some("lifeorb"), 90));
 //! ```
 //!
+//! Given the log from its first line, it also takes in Team Preview (`|poke|`)
+//! and open team sheets (`|showteam|`): see [`ShownSide::roster`].
+//!
 //! Lines are the ones every player and spectator receives. Where Showdown
 //! sends a private and a public version of a line (`|split|`), give this the
 //! public one, or hand the raw log to [`Observer::lines`], which picks it.
@@ -40,7 +43,10 @@
 //! Pokémon mentioned really had the thing (`oracle/gen_cases.js --holders`).
 
 use crate::data::*;
-use crate::shown::{Bar, ItemShown, NOTHING_SHOWN, Shown, ShownMon, ShownSide};
+use crate::shown::{
+    Bar, ItemShown, NOTHING_SHOWN, Shown, ShownMon, ShownSide, illusionists, listed_as, mask_list, may_be_disguise,
+    muddled, roster_shown,
+};
 use crate::state::*;
 
 /// One Pokémon as the log names it.
@@ -74,6 +80,10 @@ struct ObsSide {
     /// Pokémon brought (`|teamsize|`), and how many of them have fainted.
     size: u8,
     fainted: u8,
+    /// The registered team as Team Preview listed it (`|poke|`), and whether
+    /// its sheet has been shown as well (`|showteam|`).
+    roster: Vec<Listed>,
+    open: bool,
 }
 
 /// A reader of Showdown's battle log. See the module notes.
@@ -227,7 +237,77 @@ impl Shown {
     }
 }
 
+/// One Pokémon of `|showteam|p1|…`, Showdown's packed team format:
+/// `Species||Item|Ability|Move,Move|Nature||Gender|||Level|`, with the species
+/// second if the Pokémon has a nickname.
+fn sheet(packed: &str) -> Result<Listed, String> {
+    let f: Vec<&str> = packed.split('|').collect();
+    let field = |i: usize| f.get(i).copied().unwrap_or("");
+    let name = if field(1).is_empty() { field(0) } else { field(1) };
+    let species = species_id(&to_id(name)).ok_or_else(|| format!("unknown species {name:?}"))?;
+    let mut out = Listed { species, ..Listed::NONE };
+    out.item = if field(2).is_empty() { it::NONE } else { item(field(2))? };
+    out.ability = ability(field(3))?;
+    for name in field(4).split(',').filter(|m| !m.is_empty()) {
+        if out.n_moves as usize == MAX_MOVES {
+            return Err("a team sheet with more than four moves".to_string());
+        }
+        out.moves[out.n_moves as usize] = a_move(name)?;
+        out.n_moves += 1;
+    }
+    out.nature = if field(5).is_empty() {
+        (0, 0)
+    } else {
+        nature(field(5)).ok_or_else(|| format!("unknown nature {:?}", field(5)))?
+    };
+    out.gender = match field(7) {
+        "M" => Gender::M,
+        "F" => Gender::F,
+        _ => Gender::N,
+    };
+    Ok(out)
+}
+
 impl ObsSide {
+    /// The entries of the registered team that Pokémon seen so far have been taken for.
+    fn taken(&self) -> u8 {
+        self.team.iter().filter(|e| e.rec.listed != NOT_LISTED).fold(0, |mask, e| mask | 1 << e.rec.listed)
+    }
+
+    /// The entry of the registered team this Pokémon, appearing with these details, is taken for.
+    fn list(&mut self, entry: usize, species: u16, gender: Gender) {
+        if self.team[entry].rec.listed == NOT_LISTED {
+            self.team[entry].rec.listed = listed_as(&self.roster, species, gender, self.taken());
+        }
+    }
+
+    /// The entries of the registered team that have Illusion, as far as can be told.
+    fn illusionists(&self) -> u8 {
+        illusionists(&self.roster, self.open)
+    }
+
+    /// Whether whoever is in `pos` may be the side's Illusion Pokémon in the shape it shows.
+    fn suspect(&self, pos: usize) -> bool {
+        let Some(live) = self.active[pos].as_ref().filter(|l| !l.gone) else {
+            return false;
+        };
+        may_be_disguise(&self.roster, self.illusionists(), live.rec.listed, |only| {
+            let fainted = self.team.iter().any(|e| e.rec.listed == only && e.rec.fainted);
+            let beside = (0..ACTIVE)
+                .any(|p| p != pos && self.active[p].as_ref().is_some_and(|l| !l.gone && l.rec.listed == only));
+            fainted || beside
+        })
+    }
+
+    /// Clears the doubt about whoever on the field need no longer be doubted.
+    fn recheck(&mut self) {
+        for pos in 0..ACTIVE {
+            if self.active[pos].as_ref().is_some_and(|l| !l.gone && l.rec.suspect) && !self.suspect(pos) {
+                self.active[pos].as_mut().unwrap().rec.suspect = false;
+            }
+        }
+    }
+
     fn entry(&mut self, name: &str) -> usize {
         if let Some(i) = self.team.iter().position(|e| e.name == name) {
             return i;
@@ -320,6 +400,20 @@ impl Observer {
         }
     }
 
+    /// `id` has used this move as its own, or been stopped from using it
+    /// (`borrowed`: used it on another move's account). See [`Shown::use_move`].
+    fn used_move(&mut self, id: &Ident, mv: u16, borrowed: bool) {
+        let transformed = self.sides[id.side].live(id).is_some_and(|l| l.transformed);
+        if transformed {
+            return;
+        }
+        if borrowed {
+            self.rec(id).borrow_move(mv);
+        } else if mv != crate::battle::struggle_id() {
+            self.rec(id).use_move(mv);
+        }
+    }
+
     /// Takes in the `[from]` and `[of]` tags of a line about `subject`.
     fn tags(&mut self, kind: &str, subject: &Ident, parts: &[&str]) -> Result<(), String> {
         let from = parts.iter().find_map(|p| p.strip_prefix("[from] "));
@@ -363,6 +457,26 @@ impl Observer {
 
     /// Reads one line of the log.
     pub fn line(&mut self, line: &str) -> Result<(), String> {
+        self.read(line)?;
+        // Whatever it said may have settled who is who.
+        self.sides.iter_mut().for_each(ObsSide::recheck);
+        Ok(())
+    }
+
+    fn read(&mut self, line: &str) -> Result<(), String> {
+        if let Some(rest) = line.strip_prefix("|showteam|") {
+            // `|showteam|p1|Garchomp||LifeOrb|RoughSkin|Earthquake,Protect|Jolly||M|||50|]…`: an open
+            // team sheet, in the order Team Preview listed the team.
+            let (side, packed) = rest.split_once('|').ok_or("an empty team sheet")?;
+            let side = &mut self.sides[if side == "p1" { 0 } else { 1 }];
+            let sheets = packed.split(']').filter(|p| !p.is_empty()).map(sheet).collect::<Result<Vec<_>, _>>()?;
+            if !side.roster.is_empty() && side.roster.len() != sheets.len() {
+                return Err("a team sheet for a different number of Pokémon than Team Preview showed".to_string());
+            }
+            side.roster = sheets;
+            side.open = true;
+            return Ok(());
+        }
         let parts: Vec<&str> = line.split('|').collect();
         if parts.len() < 2 || !parts[0].is_empty() {
             return Ok(());
@@ -375,6 +489,25 @@ impl Observer {
         let of = parts.iter().find_map(|p| p.strip_prefix("[of] ")).and_then(ident);
         let from = parts.iter().find_map(|p| p.strip_prefix("[from] ")).unwrap_or("");
         match kind {
+            "clearpoke" => {
+                // Team Preview begins.
+                for side in &mut self.sides {
+                    side.roster.clear();
+                    side.open = false;
+                }
+                return Ok(());
+            }
+            "poke" => {
+                // `|poke|p1|Garchomp, L50, M|`: one Pokémon of a registered team. A few species are
+                // listed without their forme in some formats (`Zacian-*`).
+                let side = if arg(2) == "p1" { 0 } else { 1 };
+                let shown = arg(3);
+                let name = shown.split(", ").next().unwrap_or("");
+                let any_forme = name.ends_with("-*");
+                let (species, gender) = details(&shown.replacen("-*", "", 1))?;
+                self.sides[side].roster.push(Listed { species, any_forme, gender, ..Listed::NONE });
+                return Ok(());
+            }
             "teamsize" => {
                 let side = if arg(2) == "p1" { 0 } else { 1 };
                 self.sides[side].size = arg(3).parse().map_err(|_| "unreadable team size".to_string())?;
@@ -389,11 +522,14 @@ impl Observer {
                 side.leave(pos);
                 let i = side.entry(id.name);
                 (side.team[i].species, side.team[i].gender, side.team[i].rec.species) = (species, gender, species);
+                side.list(i, species, gender);
                 let mut rec = side.team[i].rec;
                 rec.fainted = false;
                 rec.leave();
                 (rec.hp, rec.bar, rec.status) = (hp, bar, status);
                 side.active[pos] = Some(Live { entry: i, species, gender, rec, transformed: false, gone: false });
+                let suspect = side.suspect(pos);
+                side.active[pos].as_mut().unwrap().rec.suspect = suspect;
                 return Ok(());
             }
             "swap" => {
@@ -417,10 +553,15 @@ impl Observer {
                 let before = side.team[old.entry].rec;
                 let i = side.entry(id.name);
                 (side.team[i].species, side.team[i].gender, side.team[i].rec.species) = (species, gender, species);
+                side.list(i, species, gender);
                 let mut rec = side.team[i].rec;
                 rec.fainted = false;
                 rec.leave();
                 old.rec.learned_since(&before, &mut rec);
+                // Whatever it looked like, this is what it is. (But where the Illusion Pokémon
+                // cannot be told apart, what was noted under the name it used may be another's.)
+                rec.suspect = false;
+                rec.tainted |= muddled(&side.roster, side.illusionists());
                 (rec.hp, rec.bar, rec.status) = (old.rec.hp, old.rec.bar, old.rec.status);
                 side.active[pos] = Some(Live { entry: i, species, gender, rec, transformed: false, gone: false });
                 return Ok(());
@@ -455,17 +596,14 @@ impl Observer {
                 // A move used outright is its own, and so is one Sleep Talk picks or a Round sung
                 // after another. One borrowed by Copycat is not, and the later turns of a move
                 // it is locked into (`[from] lockedmove`) say nothing the first did not.
-                //
-                // One line says more than is true. A Pokémon locked in by a Choice item that is
-                // made to use another move fails with `|move|p1a: A|Fly||[still]`, a line like
-                // that of any move that failed. That can be the second turn of a Fly that
-                // Copycat borrowed, and then A is credited with a move it does not have.
                 let own = match from {
                     "" | "move: Sleep Talk" => true,
                     f => f.strip_prefix("move: ").is_some_and(|caller| to_id(caller) == to_id(arg(3))),
                 };
                 if own {
-                    self.own_move(&id, mv);
+                    self.used_move(&id, mv, false);
+                } else if from.starts_with("move: ") {
+                    self.used_move(&id, mv, true);
                 }
                 self.tags(kind, &id, &parts)?;
             }
@@ -477,7 +615,7 @@ impl Observer {
                 self.named(kind, false, &id, of.as_ref(), reason)?;
                 let mv = arg(4);
                 if !reason.starts_with("ability: ") && !mv.is_empty() && !mv.starts_with('[') {
-                    self.own_move(&id, a_move(mv)?);
+                    self.used_move(&id, a_move(mv)?, false);
                 }
             }
             "-singleturn" if matches!(arg(3), "move: Focus Punch" | "move: Beak Blast") => {
@@ -490,7 +628,7 @@ impl Observer {
             }
             "-end" if arg(3) == "Illusion" => {
                 // After `replace`: the ability that was keeping up the disguise.
-                self.rec(&id).set_ability(ab::ILLUSION);
+                self.rec(&id).end_illusion();
             }
             "-end" if arg(3).starts_with("ability: ") => {
                 // `|-end|p1a: A|ability: Flash Fire`: what an ability it had was doing has stopped,
@@ -717,6 +855,8 @@ impl Observer {
         }
         out.bench.sort_by_key(|m| m.id);
         out.unseen = s.size.saturating_sub(s.team.len() as u8);
+        out.roster = roster_shown(&s.roster, s.open);
+        out.illusion = mask_list(s.illusionists());
         out
     }
 

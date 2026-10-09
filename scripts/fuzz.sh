@@ -4,7 +4,8 @@
 #   scripts/fuzz.sh [battles] [seed]            compare state after every decision
 #   TRACE=1 scripts/fuzz.sh [battles] [seed]    also compare every RNG draw (slower, large files)
 #   REBUILD=1 scripts/fuzz.sh [battles] [seed]  also rebuild the battle from its exported position at every decision
-#   SHOWN=1 scripts/fuzz.sh [battles] [seed]    also check what each side has been shown against Showdown's log
+#   SHOWN=1 scripts/fuzz.sh [battles] [seed]    also check what each side has been shown against Showdown's log,
+#                                               with open team sheets and as if they had stayed closed
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,9 +24,10 @@ if [ -n "${TRACE:-}" ]; then
   node oracle/gen_cases.js --n "$N" --seed "$SEED" --out "$OUT" --trace
   cargo run --quiet --release --features trace --bin difftest -- "$OUT"
 else
-  node oracle/gen_cases.js --n "$N" --seed "$SEED" --out "$OUT" --stats oracle/last_fuzz_stats.json ${SHOWN:+--log}
+  node oracle/gen_cases.js --n "$N" --seed "$SEED" --out "$OUT" --stats oracle/last_fuzz_stats.json ${SHOWN:+--log --open-sheets}
   cargo run --quiet --release --bin difftest -- "$OUT" ${REBUILD:+--by-hand}
   if [ -n "${SHOWN:-}" ]; then
     cargo run --quiet --release --bin difftest -- "$OUT" --shown ${REBUILD:+--by-hand}
+    cargo run --quiet --release --bin difftest -- "$OUT" --shown --closed-sheets ${REBUILD:+--by-hand}
   fi
 fi

@@ -1,13 +1,15 @@
 //! Replays battles recorded from Pokémon Showdown and checks that this engine
 //! reaches the same state, RNG seed and legal choices after every decision.
 //!
-//!     difftest cases.jsonl [--max-failures N] [--quiet] [--rebuild | --by-hand | --shown]
+//!     difftest cases.jsonl [--max-failures N] [--quiet] [--rebuild | --by-hand] [--shown [--closed-sheets]]
 //!
 //! `--shown` checks something else: that what the engine says each side has
 //! been shown (`Battle::shown`) is, at every decision, what a reader of
 //! Showdown's log makes of it. The battles must have been recorded with
 //! their logs (`gen_cases.js --log`). It can be combined with `--rebuild` or
-//! `--by-hand`.
+//! `--by-hand`. A battle recorded with open team sheets (`--open-sheets`) is
+//! checked as one; `--closed-sheets` checks it as if the sheets had stayed
+//! closed, by keeping them from both the engine and the log's reader.
 //!
 //! `--rebuild` also writes the position down at every decision
 //! (`Battle::to_state`), builds a battle back from it and carries on with
@@ -15,7 +17,7 @@
 //! built from the position without the simulator's bookkeeping comes out the same.
 
 use std::io::{BufRead, BufReader};
-use vgc_engine::replay::{Case, Outcome, Rebuild, ShownTally, check_case_with, check_shown_with};
+use vgc_engine::replay::{Case, Outcome, Rebuild, ShownTally, check_case_with, check_shown_as};
 
 fn main() {
     let mut path = None;
@@ -23,6 +25,7 @@ fn main() {
     let mut quiet = false;
     let mut mode = Rebuild::No;
     let mut shown = false;
+    let mut closed = false;
     let mut tally = ShownTally::default();
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -34,6 +37,7 @@ fn main() {
             "--rebuild" => mode = Rebuild::Exact,
             "--by-hand" => mode = Rebuild::ByHand,
             "--shown" => shown = true,
+            "--closed-sheets" => closed = true,
             _ => path = Some(a),
         }
     }
@@ -47,7 +51,8 @@ fn main() {
             continue;
         }
         let case: Case = serde_json::from_str(&line).expect("malformed case");
-        let outcome = if shown { check_shown_with(&case, mode, &mut tally) } else { check_case_with(&case, mode) };
+        let outcome =
+            if shown { check_shown_as(&case, mode, closed, &mut tally) } else { check_case_with(&case, mode) };
         match outcome {
             Outcome::Pass(n) => {
                 passed += 1;
@@ -79,10 +84,13 @@ fn main() {
             total(&tally.untrue),
             failed.len()
         );
-        let expected = "expected, a Choice item's failure line naming a borrowed move";
-        for (title, map) in
-            [("differences", &tally.mismatches), ("untrue beliefs", &tally.untrue), (expected, &tally.expected)]
-        {
+        if tally.disguised_marked + tally.genuine_marked + tally.genuine_known > 0 {
+            println!(
+                "on sides that brought an Illusion Pokémon: {} in disguise (marked as possibly so), {} themselves but marked, {} themselves and known to be",
+                tally.disguised_marked, tally.genuine_marked, tally.genuine_known
+            );
+        }
+        for (title, map) in [("differences", &tally.mismatches), ("untrue beliefs", &tally.untrue)] {
             if !quiet && !map.is_empty() {
                 println!("{title}:");
                 let mut rows: Vec<_> = map.iter().collect();

@@ -6,8 +6,9 @@
 #   scripts/targeted.sh [dir]              record every batch into dir (default: a temp dir) and replay it
 #   ONLY=darts scripts/targeted.sh [dir]   only the batches whose name contains "darts"
 #   JOBS=4 scripts/targeted.sh [dir]       record that many batches at a time (default 2)
-#   SHOWN=1 scripts/targeted.sh [dir]      also record Showdown's log and check what each side has been
-#                                          shown against it (files are about fifty times larger)
+#   SHOWN=1 scripts/targeted.sh [dir]      also record Showdown's log, with open team sheets, and check what
+#                                          each side has been shown against it, with the sheets open and as
+#                                          if they had stayed closed (files are about fifty times larger)
 #
 # Keep the directory to hand the batches to the mutation test:
 #   scripts/targeted.sh corpus && scripts/mutation_test.py corpus/*.jsonl
@@ -92,13 +93,17 @@ symbiosis-resist-berry|300|9944|--abilities symbiosis,noability --items yacheber
 ability-swapped-mid-hit|300|9945|--abilities wanderingspirit,mummy,poisontouch,noability --moves doublehit,doubleedge,closecombat,uturn,protect --items pechaberry,lumberry
 fling-eaten-first|200|9946|--moves fling,protect --abilities spicyspray,noability --items lumberry,rawstberry --moves-per 2
 healing-wish-ally-switch|600|9949|--moves healingwish,allyswitch,fakeout --moves-per 3
+borrowed-move-stopped|300|9951|--moves copycat,uproar,outrage,thrash,petaldance,disable,protect --abilities cursedbody,noability --moves-per 3
+zoroark-disguises|400|7101|--species zoroark,zoroarkhisui --moves uturn,protect,nightdaze,flamethrower,knockoff,poisonjab,toxic,willowisp,explosion
+zoroark-on-the-team|600|7103|--species zoroark,zoroarkhisui,garchomp,milotic,arcanine,sylveon,snorlax,scizor,dragapult,gengar,politoed,azumarill
+perish-trap|600|9950|--species gengar,umbreon,politoed,azumarill,slowbro,snorlax,dragapult,kommoo --moves perishsong,meanlook,block,protect,uturn,batonpass,roar,whirlwind --abilities shadowtag,soundproof,noability --items gengarite,shedshell,ejectbutton,redcard --check-legal
 EOF
 }
 
 record() {
   IFS='|' read -r name n seed args <<<"$1"
   # shellcheck disable=SC2086
-  node oracle/gen_cases.js --n "$n" --seed "$seed" $args ${SHOWN:+--log} --out "$2/$name.jsonl" >"$2/$name.gen.log" 2>&1 ||
+  node oracle/gen_cases.js --n "$n" --seed "$seed" $args ${SHOWN:+--log --open-sheets} --out "$2/$name.jsonl" >"$2/$name.gen.log" 2>&1 ||
     { echo "$name: recording failed: $(grep -m 1 '^Error' "$2/$name.gen.log" || tail -n 1 "$2/$name.gen.log")" >&2; exit 255; }
 }
 export -f record
@@ -110,8 +115,10 @@ while IFS='|' read -r name _; do
   line="$(./target/release/difftest "$OUT/$name.jsonl" --quiet | tail -n 1)" || status=1
   printf '%-26s %s\n' "$name" "$line"
   if [ -n "${SHOWN:-}" ]; then
-    line="$(./target/release/difftest "$OUT/$name.jsonl" --shown | tail -n 1)" || status=1
-    printf '%-26s %s\n' "" "$line"
+    for sheets in "" --closed-sheets; do
+      report="$(./target/release/difftest "$OUT/$name.jsonl" --shown $sheets --quiet)" || status=1
+      printf '%-26s %s\n' "" "${report%%$'\n'*}"
+    done
   fi
 done < <(batches | grep -- "${ONLY:-}")
 exit $status

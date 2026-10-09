@@ -128,6 +128,25 @@ pub(crate) fn round_div(a: u32, num: u32, den: u32) -> u32 {
     (2 * a * num + den) / (2 * den)
 }
 
+/// Champions stats for a species with a nature and stat points
+/// (`Battle#spreadModify` with the Champions `statModify`): max HP, then Atk..Spe.
+pub(crate) fn calc_stats(species: u16, nature: (u8, u8), stat_points: [u8; 6]) -> [u16; 6] {
+    let sp = &SPECIES[species as usize];
+    let mut out = [0u16; 6];
+    for k in 0..6 {
+        let base = sp.base[k] as u32 + stat_points[k] as u32;
+        let mut v = if k == 0 { base + 75 } else { base + 20 };
+        // Natures are applied with 16-bit truncation.
+        if k as u8 == nature.0 && nature.0 != nature.1 {
+            v = ((v * 110) & 0xFFFF) / 100;
+        } else if k as u8 == nature.1 && nature.0 != nature.1 {
+            v = ((v * 90) & 0xFFFF) / 100;
+        }
+        out[k] = v as u16;
+    }
+    out
+}
+
 pub(crate) fn struggle_id() -> u16 {
     move_id("struggle").expect("struggle is always in the move table")
 }
@@ -600,6 +619,14 @@ impl Battle {
         }
     }
 
+    /// `BattleQueue#resolveAction` for a Mega Evolution, which is queued ahead of the Pokémon's move.
+    pub(crate) fn resolve_mega(&mut self, user: MonRef) -> Action {
+        let mut a = Battle::blank_action(ActKind::MegaEvo, 104);
+        a.mon = Some(user);
+        self.resolve_speed(&mut a);
+        a
+    }
+
     /// `BattleQueue#resolveAction` for a move.
     pub(crate) fn resolve_move(&mut self, user: MonRef, move_id: u16, loc: i8) -> Action {
         let d = &MOVES[move_id as usize];
@@ -693,9 +720,62 @@ impl Battle {
         m.move_last_turn = Res::Undef;
         m.was_attacked = false;
         m.last_attack_damage = 0;
-        // `setSpecies` restores the species' types and resets the cached speed to the raw stat.
-        m.types = SPECIES[m.species as usize].types;
+        let base = m.base_species;
+        self.set_species(r, base);
+    }
+
+    /// `Pokemon#setSpecies`: species, types and stats (never max HP, which
+    /// is fixed when the Pokémon is created), and the cached speed back to
+    /// the raw stat. The `ModifySpecies` event only has rule listeners.
+    pub(crate) fn set_species(&mut self, r: MonRef, species: u16) {
+        let m = self.mon_mut(r);
+        let stats = calc_stats(species, m.nature, m.stat_points);
+        m.species = species;
+        m.types = SPECIES[species as usize].types;
+        m.stats[1..].copy_from_slice(&stats[1..]);
         m.speed = m.stats[5] as i32;
+    }
+
+    /// `Pokemon#updateMaxHp`: the species changed for good; keep the damage taken.
+    fn update_max_hp(&mut self, r: MonRef) {
+        let m = self.mon_mut(r);
+        let new = calc_stats(m.species, m.nature, m.stat_points)[0];
+        let old = m.stats[0];
+        if new == old {
+            return;
+        }
+        if m.hp > 0 {
+            m.hp = (new as i32 - (old as i32 - m.hp as i32)).max(1) as u16;
+        }
+        m.stats[0] = new;
+    }
+
+    /// `Pokemon#formeChange(species, item, true)`: the permanent forme change
+    /// of Mega Evolution. The new forme brings its own ability.
+    fn mega_forme_change(&mut self, r: MonRef, species: u16) {
+        self.set_species(r, species);
+        self.mon_mut(r).base_species = species;
+        self.update_max_hp(r);
+        // Mega Evolution counts as having acted.
+        self.mon_mut(r).move_this_turn = TRUE;
+        let ability = SPECIES[species as usize].ability0;
+        self.set_ability_ex(r, ability, None, Eff::None, true);
+        self.mon_mut(r).base_ability = ability;
+    }
+
+    /// `BattleActions#runMegaEvo`.
+    fn run_mega_evo(&mut self, r: MonRef) {
+        let species = self.mon(r).can_mega;
+        if species == NO_SPECIES {
+            return;
+        }
+        self.mega_forme_change(r, species);
+        // One Mega Evolution per side.
+        let side = &mut self.sides[r.side as usize];
+        for i in 0..side.n as usize {
+            side.team[i].can_mega = NO_SPECIES;
+        }
+        self.run_event(Ev::AfterMega, Some(r), None, Eff::None, Res::Undef);
     }
 
     /// `BattleActions#switchIn`.
@@ -1435,16 +1515,31 @@ impl Battle {
 
     /// `Pokemon#setAbility`: returns whether the ability was changed.
     pub(crate) fn set_ability(&mut self, r: MonRef, ability: u16, source: Option<MonRef>, source_effect: Eff) -> bool {
+        self.set_ability_ex(r, ability, source, source_effect, false)
+    }
+
+    /// `Pokemon#setAbility` with its `isFromFormeChange` flag: a forme change
+    /// replaces even abilities that cannot otherwise be replaced, and asks nobody.
+    pub(crate) fn set_ability_ex(
+        &mut self,
+        r: MonRef,
+        ability: u16,
+        source: Option<MonRef>,
+        source_effect: Eff,
+        from_forme_change: bool,
+    ) -> bool {
         if self.mon(r).hp == 0 {
             return false;
         }
         let source_effect = if source_effect == Eff::None { self.effect } else { source_effect };
         let old = self.mon(r).ability;
-        if (ABILITIES[ability as usize].flags | ABILITIES[old as usize].flags) & AF_CANTSUPPRESS != 0 {
-            return false;
-        }
-        if !self.run_event(Ev::SetAbility, Some(r), source, source_effect, Res::Undef).truthy() {
-            return false;
+        if !from_forme_change {
+            if (ABILITIES[ability as usize].flags | ABILITIES[old as usize].flags) & AF_CANTSUPPRESS != 0 {
+                return false;
+            }
+            if !self.run_event(Ev::SetAbility, Some(r), source, source_effect, Res::Undef).truthy() {
+                return false;
+            }
         }
         self.single_event(Ev::End, Eff::Ability(old), Some(r), Some(r), source, Eff::None, Res::Undef);
         self.mon_mut(r).ability = ability;
@@ -1518,6 +1613,7 @@ impl Battle {
                 let pos = self.mon(out).position as usize;
                 self.switch_in(a.switch_to.unwrap(), pos, false);
             }
+            ActKind::MegaEvo => self.run_mega_evo(a.mon.unwrap()),
             ActKind::RunSwitch => self.run_switch(a.mon.unwrap()),
             ActKind::BeforeTurn => self.each_event(Ev::BeforeTurn),
             ActKind::Residual => {

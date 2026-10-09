@@ -93,6 +93,20 @@
    "redcard": "forced switching"
   },
   "mega_stones": 81,
+  "megas": 82,
+  "megas_modelled": 72,
+  "megas_not_modelled": {
+   "abomasnowmega": "its ability snowwarning needs weather",
+   "charizardmegay": "its ability drought needs weather",
+   "froslassmega": "its ability snowwarning needs weather",
+   "garchompmega": "its ability sandforce needs weather",
+   "houndoommega": "its ability solarpower needs weather",
+   "meganiummega": "its ability megasol needs weather",
+   "raichumegax": "its ability electricsurge needs terrain",
+   "steelixmega": "its ability sandforce needs weather",
+   "swampertmega": "its ability swiftswim needs weather",
+   "tyranitarmega": "its ability sandstream needs weather"
+  },
   "dormant_parts": {
    "bigroot": "boosting Leech Seed, Ingrain, Aqua Ring and Strength Sap (only draining moves are modelled)",
    "bindingband": "boosts binding moves, which are not modelled",

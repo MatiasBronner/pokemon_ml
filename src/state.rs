@@ -11,6 +11,9 @@ pub const ACTIVE: usize = 2;
 pub const MAX_MOVES: usize = 4;
 const MAX_VOLATILES: usize = crate::data::N_VOLATILES;
 
+/// "No species" in fields that hold an optional species index.
+pub const NO_SPECIES: u16 = u16::MAX;
+
 /// A Pokémon identified by side and by its fixed index in that side's team.
 /// The index never changes, unlike its field position.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -119,7 +122,16 @@ pub enum Trapped {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pokemon {
+    /// Current species (index into `data::SPECIES`); changes on Mega Evolution.
     pub species: u16,
+    /// The species the Pokémon returns to when it leaves the field. Mega
+    /// Evolution changes this too, so a Mega stays a Mega.
+    pub base_species: u16,
+    /// The Mega this Pokémon can still evolve into (`NO_SPECIES` if none).
+    pub can_mega: u16,
+    /// The set's nature and stat points, kept to recompute stats when the species changes.
+    pub(crate) nature: (u8, u8),
+    pub(crate) stat_points: [u8; 6],
     /// Current types; an effect can change them until the Pokémon leaves the field.
     pub types: [Type; 2],
     pub level: u8,
@@ -212,9 +224,11 @@ pub enum Choice {
     /// `slot` is the move slot (0-based). `target` is Showdown's target
     /// location: +1/+2 are the foe's slots, -1/-2 your own, 0 for moves that
     /// do not take a target.
+    /// `mega`: Mega Evolve before moving.
     Move {
         slot: u8,
         target: i8,
+        mega: bool,
     },
     /// Switch to the Pokémon currently at this position (0-based) in the side's order.
     Switch {
@@ -223,29 +237,52 @@ pub enum Choice {
 }
 
 impl Choice {
-    /// The choice in Showdown's notation: `move 2 1`, `move 3`, `switch 4`, `pass`.
+    /// A move choice without Mega Evolution.
+    pub fn mv(slot: u8, target: i8) -> Choice {
+        Choice::Move { slot, target, mega: false }
+    }
+
+    /// The choice in Showdown's notation: `move 2 1`, `move 3`, `move 1 2 mega`, `switch 4`, `pass`.
     pub fn to_showdown(self) -> String {
         match self {
             Choice::Pass => "pass".into(),
-            Choice::Move { slot, target: 0 } => format!("move {}", slot + 1),
-            Choice::Move { slot, target } => format!("move {} {}", slot + 1, target),
+            Choice::Move { slot, target, mega } => {
+                let mut s = format!("move {}", slot + 1);
+                if target != 0 {
+                    s.push_str(&format!(" {target}"));
+                }
+                if mega {
+                    s.push_str(" mega");
+                }
+                s
+            }
             Choice::Switch { to } => format!("switch {}", to + 1),
         }
     }
 
     /// Parses one slot's choice from Showdown's notation.
     pub fn parse(s: &str) -> Option<Choice> {
-        let mut parts = s.split_whitespace();
+        let mut parts: Vec<&str> = s.split_whitespace().collect();
+        let mega = parts.last() == Some(&"mega");
+        if mega {
+            parts.pop();
+        }
+        let mut parts = parts.into_iter();
         let kind = parts.next()?;
         let mut num = || parts.next().and_then(|p| p.parse::<i32>().ok());
+        if mega && kind != "move" {
+            return None;
+        }
         match kind {
             "pass" => Some(Choice::Pass),
             "move" => {
                 let slot = num()?;
                 let target = num().unwrap_or(0);
-                (1..=MAX_MOVES as i32)
-                    .contains(&slot)
-                    .then_some(Choice::Move { slot: (slot - 1) as u8, target: target as i8 })
+                (1..=MAX_MOVES as i32).contains(&slot).then_some(Choice::Move {
+                    slot: (slot - 1) as u8,
+                    target: target as i8,
+                    mega,
+                })
             }
             "switch" => {
                 let to = num()?;
@@ -278,6 +315,7 @@ pub(crate) enum ActKind {
     BeforeTurn,
     RunSwitch,
     Switch,
+    MegaEvo,
     Move,
     Residual,
 }

@@ -35,7 +35,9 @@ fn choice_validation_agrees_with_enumeration() {
     let mut universe = vec![Choice::Pass];
     for slot in 0..5 {
         for target in -3..=3 {
-            universe.push(Choice::Move { slot, target });
+            for mega in [false, true] {
+                universe.push(Choice::Move { slot, target, mega });
+            }
         }
     }
     for to in 0..7 {

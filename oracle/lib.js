@@ -186,7 +186,8 @@ const DORMANT_PARTS = {
 		terrainextender: 'extends terrain, which is not modelled',
 	},
 };
-// Items: everything except Mega Stones and the ones listed here with the mechanic they wait for.
+// Items: everything except the ones listed here with the mechanic they wait for. (A Mega Stone is
+// accepted on any Pokémon; whether the Mega it leads to is modelled is checked when the battle is built.)
 const DEFERRED_ITEMS = {
 	ejectbutton: 'switching out mid-turn',
 	redcard: 'forced switching',
@@ -198,7 +199,6 @@ const DEFERRED_ITEMS = {
 const SUPPORTED_ITEMS = new Set(['']);
 for (const item of dex.items.all()) {
 	if (!item.exists || item.isNonstandard) continue;
-	if (item.megaStone) { DEFERRED_ITEMS[item.id] = 'Mega Evolution'; continue; }
 	if (!DEFERRED_ITEMS[item.id]) SUPPORTED_ITEMS.add(item.id);
 }
 

@@ -37,398 +37,398 @@ pub static STATUS_IMMUNE: [[bool; 18]; 8] = [
 ];
 
 pub static SPECIES: [SpeciesData; 392] = [
-    SpeciesData { id: "abomasnow", name: "Abomasnow", base_species: "abomasnow", types: [Type::Grass, Type::Ice], base: [90, 92, 75, 92, 85, 60], gender: None },
-    SpeciesData { id: "abomasnowmega", name: "Abomasnow-Mega", base_species: "abomasnow", types: [Type::Grass, Type::Ice], base: [90, 132, 105, 132, 105, 30], gender: None },
-    SpeciesData { id: "absol", name: "Absol", base_species: "absol", types: [Type::Dark, Type::None], base: [65, 130, 60, 75, 60, 75], gender: None },
-    SpeciesData { id: "absolmega", name: "Absol-Mega", base_species: "absol", types: [Type::Dark, Type::None], base: [65, 150, 60, 115, 60, 115], gender: None },
-    SpeciesData { id: "absolmegaz", name: "Absol-Mega-Z", base_species: "absol", types: [Type::Dark, Type::Ghost], base: [65, 154, 60, 75, 60, 151], gender: None },
-    SpeciesData { id: "aegislash", name: "Aegislash", base_species: "aegislash", types: [Type::Steel, Type::Ghost], base: [60, 50, 140, 50, 140, 60], gender: None },
-    SpeciesData { id: "aegislashblade", name: "Aegislash-Blade", base_species: "aegislash", types: [Type::Steel, Type::Ghost], base: [60, 140, 50, 140, 50, 60], gender: None },
-    SpeciesData { id: "aerodactyl", name: "Aerodactyl", base_species: "aerodactyl", types: [Type::Rock, Type::Flying], base: [80, 105, 65, 60, 75, 130], gender: None },
-    SpeciesData { id: "aerodactylmega", name: "Aerodactyl-Mega", base_species: "aerodactyl", types: [Type::Rock, Type::Flying], base: [80, 135, 85, 70, 95, 150], gender: None },
-    SpeciesData { id: "aggron", name: "Aggron", base_species: "aggron", types: [Type::Steel, Type::Rock], base: [70, 110, 180, 60, 60, 50], gender: None },
-    SpeciesData { id: "aggronmega", name: "Aggron-Mega", base_species: "aggron", types: [Type::Steel, Type::None], base: [70, 140, 230, 60, 80, 50], gender: None },
-    SpeciesData { id: "alakazam", name: "Alakazam", base_species: "alakazam", types: [Type::Psychic, Type::None], base: [55, 50, 45, 135, 95, 120], gender: None },
-    SpeciesData { id: "alakazammega", name: "Alakazam-Mega", base_species: "alakazam", types: [Type::Psychic, Type::None], base: [55, 50, 65, 175, 105, 150], gender: None },
-    SpeciesData { id: "alcremie", name: "Alcremie", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremiecaramelswirl", name: "Alcremie-Caramel-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremielemoncream", name: "Alcremie-Lemon-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremiematchacream", name: "Alcremie-Matcha-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremiemintcream", name: "Alcremie-Mint-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremierainbowswirl", name: "Alcremie-Rainbow-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremierubycream", name: "Alcremie-Ruby-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "alcremierubyswirl", name: "Alcremie-Ruby-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F) },
-    SpeciesData { id: "altaria", name: "Altaria", base_species: "altaria", types: [Type::Dragon, Type::Flying], base: [75, 70, 90, 70, 105, 80], gender: None },
-    SpeciesData { id: "altariamega", name: "Altaria-Mega", base_species: "altaria", types: [Type::Dragon, Type::Fairy], base: [75, 110, 110, 110, 105, 80], gender: None },
-    SpeciesData { id: "ampharos", name: "Ampharos", base_species: "ampharos", types: [Type::Electric, Type::None], base: [90, 75, 85, 115, 90, 55], gender: None },
-    SpeciesData { id: "ampharosmega", name: "Ampharos-Mega", base_species: "ampharos", types: [Type::Electric, Type::Dragon], base: [90, 95, 105, 165, 110, 45], gender: None },
-    SpeciesData { id: "annihilape", name: "Annihilape", base_species: "annihilape", types: [Type::Fighting, Type::Ghost], base: [110, 115, 80, 50, 90, 90], gender: None },
-    SpeciesData { id: "appletun", name: "Appletun", base_species: "appletun", types: [Type::Grass, Type::Dragon], base: [110, 85, 80, 100, 80, 30], gender: None },
-    SpeciesData { id: "araquanid", name: "Araquanid", base_species: "araquanid", types: [Type::Water, Type::Bug], base: [68, 70, 92, 50, 132, 42], gender: None },
-    SpeciesData { id: "arbok", name: "Arbok", base_species: "arbok", types: [Type::Poison, Type::None], base: [60, 95, 69, 65, 79, 80], gender: None },
-    SpeciesData { id: "arboliva", name: "Arboliva", base_species: "arboliva", types: [Type::Grass, Type::Normal], base: [78, 69, 90, 125, 109, 39], gender: None },
-    SpeciesData { id: "arcanine", name: "Arcanine", base_species: "arcanine", types: [Type::Fire, Type::None], base: [90, 110, 80, 100, 80, 95], gender: None },
-    SpeciesData { id: "arcaninehisui", name: "Arcanine-Hisui", base_species: "arcanine", types: [Type::Fire, Type::Rock], base: [95, 115, 80, 95, 80, 90], gender: None },
-    SpeciesData { id: "archaludon", name: "Archaludon", base_species: "archaludon", types: [Type::Steel, Type::Dragon], base: [90, 105, 130, 125, 65, 85], gender: None },
-    SpeciesData { id: "ariados", name: "Ariados", base_species: "ariados", types: [Type::Bug, Type::Poison], base: [70, 90, 70, 60, 70, 40], gender: None },
-    SpeciesData { id: "armarouge", name: "Armarouge", base_species: "armarouge", types: [Type::Fire, Type::Psychic], base: [85, 60, 100, 125, 80, 75], gender: None },
-    SpeciesData { id: "aromatisse", name: "Aromatisse", base_species: "aromatisse", types: [Type::Fairy, Type::None], base: [101, 72, 72, 99, 89, 29], gender: None },
-    SpeciesData { id: "audino", name: "Audino", base_species: "audino", types: [Type::Normal, Type::None], base: [103, 60, 86, 60, 86, 50], gender: None },
-    SpeciesData { id: "audinomega", name: "Audino-Mega", base_species: "audino", types: [Type::Normal, Type::Fairy], base: [103, 60, 126, 80, 126, 50], gender: None },
-    SpeciesData { id: "aurorus", name: "Aurorus", base_species: "aurorus", types: [Type::Rock, Type::Ice], base: [123, 77, 72, 99, 92, 58], gender: None },
-    SpeciesData { id: "avalugg", name: "Avalugg", base_species: "avalugg", types: [Type::Ice, Type::None], base: [95, 117, 184, 44, 46, 28], gender: None },
-    SpeciesData { id: "avalugghisui", name: "Avalugg-Hisui", base_species: "avalugg", types: [Type::Ice, Type::Rock], base: [95, 127, 184, 34, 36, 38], gender: None },
-    SpeciesData { id: "azumarill", name: "Azumarill", base_species: "azumarill", types: [Type::Water, Type::Fairy], base: [100, 50, 80, 60, 80, 50], gender: None },
-    SpeciesData { id: "banette", name: "Banette", base_species: "banette", types: [Type::Ghost, Type::None], base: [64, 115, 65, 83, 63, 65], gender: None },
-    SpeciesData { id: "banettemega", name: "Banette-Mega", base_species: "banette", types: [Type::Ghost, Type::None], base: [64, 165, 75, 93, 83, 75], gender: None },
-    SpeciesData { id: "barbaracle", name: "Barbaracle", base_species: "barbaracle", types: [Type::Rock, Type::Water], base: [72, 105, 115, 54, 86, 68], gender: None },
-    SpeciesData { id: "barbaraclemega", name: "Barbaracle-Mega", base_species: "barbaracle", types: [Type::Rock, Type::Fighting], base: [72, 140, 130, 64, 106, 88], gender: None },
-    SpeciesData { id: "basculegion", name: "Basculegion", base_species: "basculegion", types: [Type::Water, Type::Ghost], base: [120, 112, 65, 80, 75, 78], gender: Some(Gender::M) },
-    SpeciesData { id: "basculegionf", name: "Basculegion-F", base_species: "basculegion", types: [Type::Water, Type::Ghost], base: [120, 92, 65, 100, 75, 78], gender: Some(Gender::F) },
-    SpeciesData { id: "bastiodon", name: "Bastiodon", base_species: "bastiodon", types: [Type::Rock, Type::Steel], base: [60, 52, 168, 47, 138, 30], gender: None },
-    SpeciesData { id: "baxcalibur", name: "Baxcalibur", base_species: "baxcalibur", types: [Type::Dragon, Type::Ice], base: [115, 145, 92, 75, 86, 87], gender: None },
-    SpeciesData { id: "baxcaliburmega", name: "Baxcalibur-Mega", base_species: "baxcalibur", types: [Type::Dragon, Type::Ice], base: [115, 175, 117, 105, 101, 87], gender: None },
-    SpeciesData { id: "beartic", name: "Beartic", base_species: "beartic", types: [Type::Ice, Type::None], base: [95, 130, 80, 70, 80, 50], gender: None },
-    SpeciesData { id: "beedrill", name: "Beedrill", base_species: "beedrill", types: [Type::Bug, Type::Poison], base: [65, 90, 40, 45, 80, 75], gender: None },
-    SpeciesData { id: "beedrillmega", name: "Beedrill-Mega", base_species: "beedrill", types: [Type::Bug, Type::Poison], base: [65, 150, 40, 15, 80, 145], gender: None },
-    SpeciesData { id: "bellibolt", name: "Bellibolt", base_species: "bellibolt", types: [Type::Electric, Type::None], base: [109, 64, 91, 103, 83, 45], gender: None },
-    SpeciesData { id: "blastoise", name: "Blastoise", base_species: "blastoise", types: [Type::Water, Type::None], base: [79, 83, 100, 85, 105, 78], gender: None },
-    SpeciesData { id: "blastoisemega", name: "Blastoise-Mega", base_species: "blastoise", types: [Type::Water, Type::None], base: [79, 103, 120, 135, 115, 78], gender: None },
-    SpeciesData { id: "blaziken", name: "Blaziken", base_species: "blaziken", types: [Type::Fire, Type::Fighting], base: [80, 120, 70, 110, 70, 80], gender: None },
-    SpeciesData { id: "blazikenmega", name: "Blaziken-Mega", base_species: "blaziken", types: [Type::Fire, Type::Fighting], base: [80, 160, 80, 130, 80, 100], gender: None },
-    SpeciesData { id: "camerupt", name: "Camerupt", base_species: "camerupt", types: [Type::Fire, Type::Ground], base: [70, 100, 70, 105, 75, 40], gender: None },
-    SpeciesData { id: "cameruptmega", name: "Camerupt-Mega", base_species: "camerupt", types: [Type::Fire, Type::Ground], base: [70, 120, 100, 145, 105, 20], gender: None },
-    SpeciesData { id: "castform", name: "Castform", base_species: "castform", types: [Type::Normal, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None },
-    SpeciesData { id: "castformrainy", name: "Castform-Rainy", base_species: "castform", types: [Type::Water, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None },
-    SpeciesData { id: "castformsnowy", name: "Castform-Snowy", base_species: "castform", types: [Type::Ice, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None },
-    SpeciesData { id: "castformsunny", name: "Castform-Sunny", base_species: "castform", types: [Type::Fire, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None },
-    SpeciesData { id: "ceruledge", name: "Ceruledge", base_species: "ceruledge", types: [Type::Fire, Type::Ghost], base: [75, 125, 80, 60, 100, 85], gender: None },
-    SpeciesData { id: "chandelure", name: "Chandelure", base_species: "chandelure", types: [Type::Ghost, Type::Fire], base: [60, 55, 90, 145, 90, 80], gender: None },
-    SpeciesData { id: "chandeluremega", name: "Chandelure-Mega", base_species: "chandelure", types: [Type::Ghost, Type::Fire], base: [60, 75, 110, 175, 110, 90], gender: None },
-    SpeciesData { id: "charizard", name: "Charizard", base_species: "charizard", types: [Type::Fire, Type::Flying], base: [78, 84, 78, 109, 85, 100], gender: None },
-    SpeciesData { id: "charizardmegax", name: "Charizard-Mega-X", base_species: "charizard", types: [Type::Fire, Type::Dragon], base: [78, 130, 111, 130, 85, 100], gender: None },
-    SpeciesData { id: "charizardmegay", name: "Charizard-Mega-Y", base_species: "charizard", types: [Type::Fire, Type::Flying], base: [78, 104, 78, 159, 115, 100], gender: None },
-    SpeciesData { id: "chesnaught", name: "Chesnaught", base_species: "chesnaught", types: [Type::Grass, Type::Fighting], base: [88, 107, 122, 74, 75, 64], gender: None },
-    SpeciesData { id: "chesnaughtmega", name: "Chesnaught-Mega", base_species: "chesnaught", types: [Type::Grass, Type::Fighting], base: [88, 137, 172, 74, 115, 44], gender: None },
-    SpeciesData { id: "chimecho", name: "Chimecho", base_species: "chimecho", types: [Type::Psychic, Type::None], base: [75, 50, 80, 95, 90, 65], gender: None },
-    SpeciesData { id: "chimechomega", name: "Chimecho-Mega", base_species: "chimecho", types: [Type::Psychic, Type::Steel], base: [75, 50, 110, 135, 120, 65], gender: None },
-    SpeciesData { id: "cinderace", name: "Cinderace", base_species: "cinderace", types: [Type::Fire, Type::None], base: [80, 116, 75, 65, 75, 119], gender: None },
-    SpeciesData { id: "clawitzer", name: "Clawitzer", base_species: "clawitzer", types: [Type::Water, Type::None], base: [71, 73, 88, 120, 89, 59], gender: None },
-    SpeciesData { id: "clefable", name: "Clefable", base_species: "clefable", types: [Type::Fairy, Type::None], base: [95, 70, 73, 95, 90, 60], gender: None },
-    SpeciesData { id: "clefablemega", name: "Clefable-Mega", base_species: "clefable", types: [Type::Fairy, Type::Flying], base: [95, 80, 93, 135, 110, 70], gender: None },
-    SpeciesData { id: "cofagrigus", name: "Cofagrigus", base_species: "cofagrigus", types: [Type::Ghost, Type::None], base: [58, 50, 145, 95, 105, 30], gender: None },
-    SpeciesData { id: "conkeldurr", name: "Conkeldurr", base_species: "conkeldurr", types: [Type::Fighting, Type::None], base: [105, 140, 95, 55, 65, 45], gender: None },
-    SpeciesData { id: "corviknight", name: "Corviknight", base_species: "corviknight", types: [Type::Flying, Type::Steel], base: [98, 87, 105, 53, 85, 67], gender: None },
-    SpeciesData { id: "crabominable", name: "Crabominable", base_species: "crabominable", types: [Type::Fighting, Type::Ice], base: [97, 132, 77, 62, 67, 43], gender: None },
-    SpeciesData { id: "crabominablemega", name: "Crabominable-Mega", base_species: "crabominable", types: [Type::Fighting, Type::Ice], base: [97, 157, 122, 62, 107, 33], gender: None },
-    SpeciesData { id: "cramorantgorging", name: "Cramorant-Gorging", base_species: "cramorant", types: [Type::Flying, Type::Water], base: [70, 85, 55, 85, 95, 85], gender: None },
-    SpeciesData { id: "cramorantgulping", name: "Cramorant-Gulping", base_species: "cramorant", types: [Type::Flying, Type::Water], base: [70, 85, 55, 85, 95, 85], gender: None },
-    SpeciesData { id: "decidueye", name: "Decidueye", base_species: "decidueye", types: [Type::Grass, Type::Ghost], base: [78, 107, 75, 100, 100, 70], gender: None },
-    SpeciesData { id: "decidueyehisui", name: "Decidueye-Hisui", base_species: "decidueye", types: [Type::Grass, Type::Fighting], base: [88, 112, 80, 95, 95, 60], gender: None },
-    SpeciesData { id: "dedenne", name: "Dedenne", base_species: "dedenne", types: [Type::Electric, Type::Fairy], base: [67, 58, 57, 81, 67, 101], gender: None },
-    SpeciesData { id: "delphox", name: "Delphox", base_species: "delphox", types: [Type::Fire, Type::Psychic], base: [75, 69, 72, 114, 100, 104], gender: None },
-    SpeciesData { id: "delphoxmega", name: "Delphox-Mega", base_species: "delphox", types: [Type::Fire, Type::Psychic], base: [75, 69, 72, 159, 125, 134], gender: None },
-    SpeciesData { id: "diggersby", name: "Diggersby", base_species: "diggersby", types: [Type::Normal, Type::Ground], base: [85, 56, 77, 50, 77, 78], gender: None },
-    SpeciesData { id: "ditto", name: "Ditto", base_species: "ditto", types: [Type::Normal, Type::None], base: [48, 48, 48, 48, 48, 48], gender: Some(Gender::N) },
-    SpeciesData { id: "dragalge", name: "Dragalge", base_species: "dragalge", types: [Type::Poison, Type::Dragon], base: [65, 75, 90, 97, 123, 44], gender: None },
-    SpeciesData { id: "dragalgemega", name: "Dragalge-Mega", base_species: "dragalge", types: [Type::Poison, Type::Dragon], base: [65, 85, 105, 132, 163, 44], gender: None },
-    SpeciesData { id: "dragapult", name: "Dragapult", base_species: "dragapult", types: [Type::Dragon, Type::Ghost], base: [88, 120, 75, 100, 75, 142], gender: None },
-    SpeciesData { id: "dragonite", name: "Dragonite", base_species: "dragonite", types: [Type::Dragon, Type::Flying], base: [91, 134, 95, 100, 100, 80], gender: None },
-    SpeciesData { id: "dragonitemega", name: "Dragonite-Mega", base_species: "dragonite", types: [Type::Dragon, Type::Flying], base: [91, 124, 115, 145, 125, 100], gender: None },
-    SpeciesData { id: "drampa", name: "Drampa", base_species: "drampa", types: [Type::Normal, Type::Dragon], base: [78, 60, 85, 135, 91, 36], gender: None },
-    SpeciesData { id: "drampamega", name: "Drampa-Mega", base_species: "drampa", types: [Type::Normal, Type::Dragon], base: [78, 85, 110, 160, 116, 36], gender: None },
-    SpeciesData { id: "eelektross", name: "Eelektross", base_species: "eelektross", types: [Type::Electric, Type::None], base: [85, 115, 80, 105, 80, 50], gender: None },
-    SpeciesData { id: "eelektrossmega", name: "Eelektross-Mega", base_species: "eelektross", types: [Type::Electric, Type::None], base: [85, 145, 80, 135, 90, 80], gender: None },
-    SpeciesData { id: "eiscuenoice", name: "Eiscue-Noice", base_species: "eiscue", types: [Type::Ice, Type::None], base: [75, 80, 70, 65, 50, 130], gender: None },
-    SpeciesData { id: "emboar", name: "Emboar", base_species: "emboar", types: [Type::Fire, Type::Fighting], base: [110, 123, 65, 100, 65, 65], gender: None },
-    SpeciesData { id: "emboarmega", name: "Emboar-Mega", base_species: "emboar", types: [Type::Fire, Type::Fighting], base: [110, 148, 75, 110, 110, 75], gender: None },
-    SpeciesData { id: "emolga", name: "Emolga", base_species: "emolga", types: [Type::Electric, Type::Flying], base: [55, 75, 60, 75, 60, 103], gender: None },
-    SpeciesData { id: "empoleon", name: "Empoleon", base_species: "empoleon", types: [Type::Water, Type::Steel], base: [84, 86, 88, 111, 101, 60], gender: None },
-    SpeciesData { id: "espathra", name: "Espathra", base_species: "espathra", types: [Type::Psychic, Type::None], base: [95, 60, 60, 101, 60, 105], gender: None },
-    SpeciesData { id: "espeon", name: "Espeon", base_species: "espeon", types: [Type::Psychic, Type::None], base: [65, 65, 60, 130, 95, 110], gender: None },
-    SpeciesData { id: "excadrill", name: "Excadrill", base_species: "excadrill", types: [Type::Ground, Type::Steel], base: [110, 135, 60, 50, 65, 88], gender: None },
-    SpeciesData { id: "excadrillmega", name: "Excadrill-Mega", base_species: "excadrill", types: [Type::Ground, Type::Steel], base: [110, 165, 100, 65, 65, 103], gender: None },
-    SpeciesData { id: "falinks", name: "Falinks", base_species: "falinks", types: [Type::Fighting, Type::None], base: [65, 100, 100, 70, 60, 75], gender: Some(Gender::N) },
-    SpeciesData { id: "falinksmega", name: "Falinks-Mega", base_species: "falinks", types: [Type::Fighting, Type::None], base: [65, 135, 135, 70, 65, 100], gender: Some(Gender::N) },
-    SpeciesData { id: "farfetchd", name: "Farfetch’d", base_species: "farfetchd", types: [Type::Normal, Type::Flying], base: [52, 90, 55, 58, 62, 60], gender: None },
-    SpeciesData { id: "farigiraf", name: "Farigiraf", base_species: "farigiraf", types: [Type::Normal, Type::Psychic], base: [120, 90, 70, 110, 70, 60], gender: None },
-    SpeciesData { id: "feraligatr", name: "Feraligatr", base_species: "feraligatr", types: [Type::Water, Type::None], base: [85, 105, 100, 79, 83, 78], gender: None },
-    SpeciesData { id: "feraligatrmega", name: "Feraligatr-Mega", base_species: "feraligatr", types: [Type::Water, Type::Dragon], base: [85, 160, 125, 89, 93, 78], gender: None },
-    SpeciesData { id: "flapple", name: "Flapple", base_species: "flapple", types: [Type::Grass, Type::Dragon], base: [70, 110, 80, 95, 60, 70], gender: None },
-    SpeciesData { id: "flareon", name: "Flareon", base_species: "flareon", types: [Type::Fire, Type::None], base: [65, 130, 60, 95, 110, 65], gender: None },
-    SpeciesData { id: "floetteeternal", name: "Floette-Eternal", base_species: "floette", types: [Type::Fairy, Type::None], base: [74, 65, 67, 125, 128, 92], gender: Some(Gender::F) },
-    SpeciesData { id: "floettemega", name: "Floette-Mega", base_species: "floette", types: [Type::Fairy, Type::None], base: [74, 85, 87, 155, 148, 102], gender: Some(Gender::F) },
-    SpeciesData { id: "florges", name: "Florges", base_species: "florges", types: [Type::Fairy, Type::None], base: [78, 65, 68, 112, 154, 75], gender: Some(Gender::F) },
-    SpeciesData { id: "forretress", name: "Forretress", base_species: "forretress", types: [Type::Bug, Type::Steel], base: [75, 90, 140, 60, 60, 40], gender: None },
-    SpeciesData { id: "froslass", name: "Froslass", base_species: "froslass", types: [Type::Ice, Type::Ghost], base: [70, 80, 70, 80, 70, 110], gender: Some(Gender::F) },
-    SpeciesData { id: "froslassmega", name: "Froslass-Mega", base_species: "froslass", types: [Type::Ice, Type::Ghost], base: [70, 80, 70, 140, 100, 120], gender: Some(Gender::F) },
-    SpeciesData { id: "furfrou", name: "Furfrou", base_species: "furfrou", types: [Type::Normal, Type::None], base: [75, 80, 60, 65, 90, 102], gender: None },
-    SpeciesData { id: "gallade", name: "Gallade", base_species: "gallade", types: [Type::Psychic, Type::Fighting], base: [68, 125, 65, 65, 115, 80], gender: Some(Gender::M) },
-    SpeciesData { id: "gallademega", name: "Gallade-Mega", base_species: "gallade", types: [Type::Psychic, Type::Fighting], base: [68, 165, 95, 65, 115, 110], gender: Some(Gender::M) },
-    SpeciesData { id: "garbodor", name: "Garbodor", base_species: "garbodor", types: [Type::Poison, Type::None], base: [80, 95, 82, 60, 82, 75], gender: None },
-    SpeciesData { id: "garchomp", name: "Garchomp", base_species: "garchomp", types: [Type::Dragon, Type::Ground], base: [108, 130, 95, 80, 85, 102], gender: None },
-    SpeciesData { id: "garchompmega", name: "Garchomp-Mega", base_species: "garchomp", types: [Type::Dragon, Type::Ground], base: [108, 170, 115, 120, 95, 92], gender: None },
-    SpeciesData { id: "garchompmegaz", name: "Garchomp-Mega-Z", base_species: "garchomp", types: [Type::Dragon, Type::None], base: [108, 130, 85, 141, 85, 151], gender: None },
-    SpeciesData { id: "gardevoir", name: "Gardevoir", base_species: "gardevoir", types: [Type::Psychic, Type::Fairy], base: [68, 65, 65, 125, 115, 80], gender: None },
-    SpeciesData { id: "gardevoirmega", name: "Gardevoir-Mega", base_species: "gardevoir", types: [Type::Psychic, Type::Fairy], base: [68, 85, 65, 165, 135, 100], gender: None },
-    SpeciesData { id: "garganacl", name: "Garganacl", base_species: "garganacl", types: [Type::Rock, Type::None], base: [100, 100, 130, 45, 90, 35], gender: None },
-    SpeciesData { id: "gengar", name: "Gengar", base_species: "gengar", types: [Type::Ghost, Type::Poison], base: [60, 65, 60, 130, 75, 110], gender: None },
-    SpeciesData { id: "gengarmega", name: "Gengar-Mega", base_species: "gengar", types: [Type::Ghost, Type::Poison], base: [60, 65, 80, 170, 95, 130], gender: None },
-    SpeciesData { id: "gholdengo", name: "Gholdengo", base_species: "gholdengo", types: [Type::Steel, Type::Ghost], base: [87, 60, 95, 133, 91, 84], gender: Some(Gender::N) },
-    SpeciesData { id: "glaceon", name: "Glaceon", base_species: "glaceon", types: [Type::Ice, Type::None], base: [65, 60, 110, 130, 95, 65], gender: None },
-    SpeciesData { id: "glalie", name: "Glalie", base_species: "glalie", types: [Type::Ice, Type::None], base: [80, 80, 80, 80, 80, 80], gender: None },
-    SpeciesData { id: "glaliemega", name: "Glalie-Mega", base_species: "glalie", types: [Type::Ice, Type::None], base: [80, 120, 80, 120, 80, 100], gender: None },
-    SpeciesData { id: "glimmora", name: "Glimmora", base_species: "glimmora", types: [Type::Rock, Type::Poison], base: [83, 55, 90, 130, 81, 86], gender: None },
-    SpeciesData { id: "glimmoramega", name: "Glimmora-Mega", base_species: "glimmora", types: [Type::Rock, Type::Poison], base: [83, 90, 105, 150, 96, 101], gender: None },
-    SpeciesData { id: "gliscor", name: "Gliscor", base_species: "gliscor", types: [Type::Ground, Type::Flying], base: [75, 95, 125, 45, 75, 95], gender: None },
-    SpeciesData { id: "gogoat", name: "Gogoat", base_species: "gogoat", types: [Type::Grass, Type::None], base: [123, 100, 62, 97, 81, 68], gender: None },
-    SpeciesData { id: "golisopod", name: "Golisopod", base_species: "golisopod", types: [Type::Bug, Type::Water], base: [75, 125, 140, 60, 90, 40], gender: None },
-    SpeciesData { id: "golisopodmega", name: "Golisopod-Mega", base_species: "golisopod", types: [Type::Bug, Type::Steel], base: [75, 150, 175, 70, 120, 40], gender: None },
-    SpeciesData { id: "golurk", name: "Golurk", base_species: "golurk", types: [Type::Ground, Type::Ghost], base: [89, 124, 80, 55, 80, 55], gender: Some(Gender::N) },
-    SpeciesData { id: "golurkmega", name: "Golurk-Mega", base_species: "golurk", types: [Type::Ground, Type::Ghost], base: [89, 159, 105, 70, 105, 55], gender: Some(Gender::N) },
-    SpeciesData { id: "goodra", name: "Goodra", base_species: "goodra", types: [Type::Dragon, Type::None], base: [90, 100, 70, 110, 150, 80], gender: None },
-    SpeciesData { id: "goodrahisui", name: "Goodra-Hisui", base_species: "goodra", types: [Type::Steel, Type::Dragon], base: [80, 100, 100, 110, 150, 60], gender: None },
-    SpeciesData { id: "gourgeist", name: "Gourgeist", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [65, 90, 122, 58, 75, 84], gender: None },
-    SpeciesData { id: "gourgeistlarge", name: "Gourgeist-Large", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [75, 95, 122, 58, 75, 69], gender: None },
-    SpeciesData { id: "gourgeistsmall", name: "Gourgeist-Small", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [55, 85, 122, 58, 75, 99], gender: None },
-    SpeciesData { id: "gourgeistsuper", name: "Gourgeist-Super", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [85, 100, 122, 58, 75, 54], gender: None },
-    SpeciesData { id: "grapploct", name: "Grapploct", base_species: "grapploct", types: [Type::Fighting, Type::None], base: [80, 118, 90, 70, 80, 42], gender: None },
-    SpeciesData { id: "greninja", name: "Greninja", base_species: "greninja", types: [Type::Water, Type::Dark], base: [72, 95, 67, 103, 71, 122], gender: None },
-    SpeciesData { id: "greninjamega", name: "Greninja-Mega", base_species: "greninja", types: [Type::Water, Type::Dark], base: [72, 125, 77, 133, 81, 142], gender: None },
-    SpeciesData { id: "grimmsnarl", name: "Grimmsnarl", base_species: "grimmsnarl", types: [Type::Dark, Type::Fairy], base: [95, 120, 65, 95, 75, 60], gender: Some(Gender::M) },
-    SpeciesData { id: "gyarados", name: "Gyarados", base_species: "gyarados", types: [Type::Water, Type::Flying], base: [95, 125, 79, 60, 100, 81], gender: None },
-    SpeciesData { id: "gyaradosmega", name: "Gyarados-Mega", base_species: "gyarados", types: [Type::Water, Type::Dark], base: [95, 155, 109, 70, 130, 81], gender: None },
-    SpeciesData { id: "hatterene", name: "Hatterene", base_species: "hatterene", types: [Type::Psychic, Type::Fairy], base: [57, 90, 95, 136, 103, 29], gender: Some(Gender::F) },
-    SpeciesData { id: "hawlucha", name: "Hawlucha", base_species: "hawlucha", types: [Type::Fighting, Type::Flying], base: [78, 92, 75, 74, 63, 118], gender: None },
-    SpeciesData { id: "hawluchamega", name: "Hawlucha-Mega", base_species: "hawlucha", types: [Type::Fighting, Type::Flying], base: [78, 137, 100, 74, 93, 118], gender: None },
-    SpeciesData { id: "heliolisk", name: "Heliolisk", base_species: "heliolisk", types: [Type::Electric, Type::Normal], base: [62, 55, 52, 109, 94, 109], gender: None },
-    SpeciesData { id: "heracross", name: "Heracross", base_species: "heracross", types: [Type::Bug, Type::Fighting], base: [80, 125, 75, 40, 95, 85], gender: None },
-    SpeciesData { id: "heracrossmega", name: "Heracross-Mega", base_species: "heracross", types: [Type::Bug, Type::Fighting], base: [80, 185, 115, 40, 105, 75], gender: None },
-    SpeciesData { id: "hippowdon", name: "Hippowdon", base_species: "hippowdon", types: [Type::Ground, Type::None], base: [108, 112, 118, 68, 72, 47], gender: None },
-    SpeciesData { id: "houndoom", name: "Houndoom", base_species: "houndoom", types: [Type::Dark, Type::Fire], base: [75, 90, 50, 110, 80, 95], gender: None },
-    SpeciesData { id: "houndoommega", name: "Houndoom-Mega", base_species: "houndoom", types: [Type::Dark, Type::Fire], base: [75, 90, 90, 140, 90, 115], gender: None },
-    SpeciesData { id: "houndstone", name: "Houndstone", base_species: "houndstone", types: [Type::Ghost, Type::None], base: [72, 101, 100, 50, 97, 68], gender: None },
-    SpeciesData { id: "hydrapple", name: "Hydrapple", base_species: "hydrapple", types: [Type::Grass, Type::Dragon], base: [106, 80, 110, 120, 80, 44], gender: None },
-    SpeciesData { id: "hydreigon", name: "Hydreigon", base_species: "hydreigon", types: [Type::Dark, Type::Dragon], base: [92, 105, 90, 125, 90, 98], gender: None },
-    SpeciesData { id: "incineroar", name: "Incineroar", base_species: "incineroar", types: [Type::Fire, Type::Dark], base: [95, 115, 90, 80, 90, 60], gender: None },
-    SpeciesData { id: "indeedee", name: "Indeedee", base_species: "indeedee", types: [Type::Psychic, Type::Normal], base: [60, 65, 55, 105, 95, 95], gender: Some(Gender::M) },
-    SpeciesData { id: "indeedeef", name: "Indeedee-F", base_species: "indeedee", types: [Type::Psychic, Type::Normal], base: [70, 55, 65, 95, 105, 85], gender: Some(Gender::F) },
-    SpeciesData { id: "infernape", name: "Infernape", base_species: "infernape", types: [Type::Fire, Type::Fighting], base: [76, 104, 71, 104, 71, 108], gender: None },
-    SpeciesData { id: "inteleon", name: "Inteleon", base_species: "inteleon", types: [Type::Water, Type::None], base: [70, 85, 65, 125, 65, 120], gender: None },
-    SpeciesData { id: "jolteon", name: "Jolteon", base_species: "jolteon", types: [Type::Electric, Type::None], base: [65, 65, 60, 110, 95, 130], gender: None },
-    SpeciesData { id: "kangaskhan", name: "Kangaskhan", base_species: "kangaskhan", types: [Type::Normal, Type::None], base: [105, 95, 80, 40, 80, 90], gender: Some(Gender::F) },
-    SpeciesData { id: "kangaskhanmega", name: "Kangaskhan-Mega", base_species: "kangaskhan", types: [Type::Normal, Type::None], base: [105, 125, 100, 60, 100, 100], gender: Some(Gender::F) },
-    SpeciesData { id: "kingambit", name: "Kingambit", base_species: "kingambit", types: [Type::Dark, Type::Steel], base: [100, 135, 120, 60, 85, 50], gender: None },
-    SpeciesData { id: "kleavor", name: "Kleavor", base_species: "kleavor", types: [Type::Bug, Type::Rock], base: [70, 135, 95, 45, 70, 85], gender: None },
-    SpeciesData { id: "klefki", name: "Klefki", base_species: "klefki", types: [Type::Steel, Type::Fairy], base: [57, 80, 91, 80, 87, 75], gender: None },
-    SpeciesData { id: "kommoo", name: "Kommo-o", base_species: "kommoo", types: [Type::Dragon, Type::Fighting], base: [75, 110, 125, 100, 105, 85], gender: None },
-    SpeciesData { id: "krookodile", name: "Krookodile", base_species: "krookodile", types: [Type::Ground, Type::Dark], base: [95, 117, 80, 65, 70, 92], gender: None },
-    SpeciesData { id: "leafeon", name: "Leafeon", base_species: "leafeon", types: [Type::Grass, Type::None], base: [65, 110, 130, 60, 65, 95], gender: None },
-    SpeciesData { id: "liepard", name: "Liepard", base_species: "liepard", types: [Type::Dark, Type::None], base: [64, 88, 50, 88, 50, 106], gender: None },
-    SpeciesData { id: "lopunny", name: "Lopunny", base_species: "lopunny", types: [Type::Normal, Type::None], base: [65, 76, 84, 54, 96, 105], gender: None },
-    SpeciesData { id: "lopunnymega", name: "Lopunny-Mega", base_species: "lopunny", types: [Type::Normal, Type::Fighting], base: [65, 136, 94, 54, 96, 135], gender: None },
-    SpeciesData { id: "lucario", name: "Lucario", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 110, 70, 115, 70, 90], gender: None },
-    SpeciesData { id: "lucariomega", name: "Lucario-Mega", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 145, 88, 140, 70, 112], gender: None },
-    SpeciesData { id: "lucariomegaz", name: "Lucario-Mega-Z", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 100, 70, 164, 70, 151], gender: None },
-    SpeciesData { id: "luxray", name: "Luxray", base_species: "luxray", types: [Type::Electric, Type::None], base: [80, 120, 79, 95, 79, 70], gender: None },
-    SpeciesData { id: "lycanroc", name: "Lycanroc", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [75, 115, 65, 55, 65, 112], gender: None },
-    SpeciesData { id: "lycanrocdusk", name: "Lycanroc-Dusk", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [75, 117, 65, 55, 65, 110], gender: None },
-    SpeciesData { id: "lycanrocmidnight", name: "Lycanroc-Midnight", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [85, 115, 75, 55, 75, 82], gender: None },
-    SpeciesData { id: "mabosstiff", name: "Mabosstiff", base_species: "mabosstiff", types: [Type::Dark, Type::None], base: [80, 120, 90, 60, 70, 85], gender: None },
-    SpeciesData { id: "machamp", name: "Machamp", base_species: "machamp", types: [Type::Fighting, Type::None], base: [90, 130, 80, 65, 85, 55], gender: None },
-    SpeciesData { id: "malamar", name: "Malamar", base_species: "malamar", types: [Type::Dark, Type::Psychic], base: [86, 92, 88, 68, 75, 73], gender: None },
-    SpeciesData { id: "malamarmega", name: "Malamar-Mega", base_species: "malamar", types: [Type::Dark, Type::Psychic], base: [86, 102, 88, 98, 120, 88], gender: None },
-    SpeciesData { id: "mamoswine", name: "Mamoswine", base_species: "mamoswine", types: [Type::Ice, Type::Ground], base: [110, 130, 80, 70, 60, 80], gender: None },
-    SpeciesData { id: "manectric", name: "Manectric", base_species: "manectric", types: [Type::Electric, Type::None], base: [70, 75, 60, 105, 60, 105], gender: None },
-    SpeciesData { id: "manectricmega", name: "Manectric-Mega", base_species: "manectric", types: [Type::Electric, Type::None], base: [70, 75, 80, 135, 80, 135], gender: None },
-    SpeciesData { id: "maushold", name: "Maushold", base_species: "maushold", types: [Type::Normal, Type::None], base: [74, 75, 70, 65, 75, 111], gender: Some(Gender::N) },
-    SpeciesData { id: "mausholdfour", name: "Maushold-Four", base_species: "maushold", types: [Type::Normal, Type::None], base: [74, 75, 70, 65, 75, 111], gender: Some(Gender::N) },
-    SpeciesData { id: "mawile", name: "Mawile", base_species: "mawile", types: [Type::Steel, Type::Fairy], base: [50, 85, 85, 55, 55, 50], gender: None },
-    SpeciesData { id: "mawilemega", name: "Mawile-Mega", base_species: "mawile", types: [Type::Steel, Type::Fairy], base: [50, 105, 125, 55, 95, 50], gender: None },
-    SpeciesData { id: "medicham", name: "Medicham", base_species: "medicham", types: [Type::Fighting, Type::Psychic], base: [60, 60, 75, 60, 75, 80], gender: None },
-    SpeciesData { id: "medichammega", name: "Medicham-Mega", base_species: "medicham", types: [Type::Fighting, Type::Psychic], base: [60, 100, 85, 80, 85, 100], gender: None },
-    SpeciesData { id: "meganium", name: "Meganium", base_species: "meganium", types: [Type::Grass, Type::None], base: [80, 82, 100, 83, 100, 80], gender: None },
-    SpeciesData { id: "meganiummega", name: "Meganium-Mega", base_species: "meganium", types: [Type::Grass, Type::Fairy], base: [80, 92, 115, 143, 115, 80], gender: None },
-    SpeciesData { id: "meloettapirouette", name: "Meloetta-Pirouette", base_species: "meloetta", types: [Type::Normal, Type::Fighting], base: [100, 128, 90, 77, 77, 128], gender: Some(Gender::N) },
-    SpeciesData { id: "meowscarada", name: "Meowscarada", base_species: "meowscarada", types: [Type::Grass, Type::Dark], base: [76, 110, 70, 81, 70, 123], gender: None },
-    SpeciesData { id: "meowstic", name: "Meowstic", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 83, 81, 104], gender: Some(Gender::M) },
-    SpeciesData { id: "meowsticf", name: "Meowstic-F", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 83, 81, 104], gender: Some(Gender::F) },
-    SpeciesData { id: "meowsticfmega", name: "Meowstic-F-Mega", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 143, 101, 124], gender: Some(Gender::F) },
-    SpeciesData { id: "meowsticmmega", name: "Meowstic-M-Mega", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 143, 101, 124], gender: Some(Gender::M) },
-    SpeciesData { id: "metagross", name: "Metagross", base_species: "metagross", types: [Type::Steel, Type::Psychic], base: [80, 135, 130, 95, 90, 70], gender: Some(Gender::N) },
-    SpeciesData { id: "metagrossmega", name: "Metagross-Mega", base_species: "metagross", types: [Type::Steel, Type::Psychic], base: [80, 145, 150, 105, 110, 110], gender: Some(Gender::N) },
-    SpeciesData { id: "milotic", name: "Milotic", base_species: "milotic", types: [Type::Water, Type::None], base: [95, 60, 79, 100, 125, 81], gender: None },
-    SpeciesData { id: "mimikyu", name: "Mimikyu", base_species: "mimikyu", types: [Type::Ghost, Type::Fairy], base: [55, 90, 80, 50, 105, 96], gender: None },
-    SpeciesData { id: "mimikyubusted", name: "Mimikyu-Busted", base_species: "mimikyu", types: [Type::Ghost, Type::Fairy], base: [55, 90, 80, 50, 105, 96], gender: None },
-    SpeciesData { id: "miniormeteor", name: "Minior-Meteor", base_species: "minior", types: [Type::Rock, Type::Flying], base: [60, 60, 100, 60, 100, 60], gender: Some(Gender::N) },
-    SpeciesData { id: "morpeko", name: "Morpeko", base_species: "morpeko", types: [Type::Electric, Type::Dark], base: [58, 95, 58, 70, 58, 97], gender: None },
-    SpeciesData { id: "morpekohangry", name: "Morpeko-Hangry", base_species: "morpeko", types: [Type::Electric, Type::Dark], base: [58, 95, 58, 70, 58, 97], gender: None },
-    SpeciesData { id: "mrmime", name: "Mr. Mime", base_species: "mrmime", types: [Type::Psychic, Type::Fairy], base: [40, 45, 65, 100, 120, 90], gender: None },
-    SpeciesData { id: "mrrime", name: "Mr. Rime", base_species: "mrrime", types: [Type::Ice, Type::Psychic], base: [80, 85, 75, 110, 100, 70], gender: None },
-    SpeciesData { id: "mudsdale", name: "Mudsdale", base_species: "mudsdale", types: [Type::Ground, Type::None], base: [100, 125, 100, 55, 85, 35], gender: None },
-    SpeciesData { id: "musharna", name: "Musharna", base_species: "musharna", types: [Type::Psychic, Type::None], base: [116, 55, 85, 107, 95, 29], gender: None },
-    SpeciesData { id: "ninetales", name: "Ninetales", base_species: "ninetales", types: [Type::Fire, Type::None], base: [73, 76, 75, 81, 100, 100], gender: None },
-    SpeciesData { id: "ninetalesalola", name: "Ninetales-Alola", base_species: "ninetales", types: [Type::Ice, Type::Fairy], base: [73, 67, 75, 81, 100, 109], gender: None },
-    SpeciesData { id: "noivern", name: "Noivern", base_species: "noivern", types: [Type::Flying, Type::Dragon], base: [85, 70, 80, 97, 80, 123], gender: None },
-    SpeciesData { id: "ogerponcornerstonetera", name: "Ogerpon-Cornerstone-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Rock], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F) },
-    SpeciesData { id: "ogerponhearthflametera", name: "Ogerpon-Hearthflame-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Fire], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F) },
-    SpeciesData { id: "ogerpontealtera", name: "Ogerpon-Teal-Tera", base_species: "ogerpon", types: [Type::Grass, Type::None], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F) },
-    SpeciesData { id: "ogerponwellspringtera", name: "Ogerpon-Wellspring-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Water], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F) },
-    SpeciesData { id: "oranguru", name: "Oranguru", base_species: "oranguru", types: [Type::Normal, Type::Psychic], base: [90, 60, 80, 90, 110, 60], gender: None },
-    SpeciesData { id: "orthworm", name: "Orthworm", base_species: "orthworm", types: [Type::Steel, Type::None], base: [70, 85, 145, 60, 55, 65], gender: None },
-    SpeciesData { id: "overqwil", name: "Overqwil", base_species: "overqwil", types: [Type::Dark, Type::Poison], base: [85, 115, 95, 65, 65, 85], gender: None },
-    SpeciesData { id: "palafin", name: "Palafin", base_species: "palafin", types: [Type::Water, Type::None], base: [100, 70, 72, 53, 62, 100], gender: None },
-    SpeciesData { id: "palafinhero", name: "Palafin-Hero", base_species: "palafin", types: [Type::Water, Type::None], base: [100, 160, 97, 106, 87, 100], gender: None },
-    SpeciesData { id: "pangoro", name: "Pangoro", base_species: "pangoro", types: [Type::Fighting, Type::Dark], base: [95, 124, 78, 69, 71, 58], gender: None },
-    SpeciesData { id: "passimian", name: "Passimian", base_species: "passimian", types: [Type::Fighting, Type::None], base: [100, 120, 90, 40, 60, 80], gender: None },
-    SpeciesData { id: "pawmot", name: "Pawmot", base_species: "pawmot", types: [Type::Electric, Type::Fighting], base: [70, 115, 70, 70, 60, 105], gender: None },
-    SpeciesData { id: "pelipper", name: "Pelipper", base_species: "pelipper", types: [Type::Water, Type::Flying], base: [60, 50, 100, 95, 70, 65], gender: None },
-    SpeciesData { id: "perrserker", name: "Perrserker", base_species: "perrserker", types: [Type::Steel, Type::None], base: [70, 110, 100, 50, 60, 50], gender: None },
-    SpeciesData { id: "persian", name: "Persian", base_species: "persian", types: [Type::Normal, Type::None], base: [65, 70, 60, 65, 65, 115], gender: None },
-    SpeciesData { id: "persianalola", name: "Persian-Alola", base_species: "persian", types: [Type::Dark, Type::None], base: [65, 60, 60, 75, 65, 115], gender: None },
-    SpeciesData { id: "pidgeot", name: "Pidgeot", base_species: "pidgeot", types: [Type::Normal, Type::Flying], base: [83, 80, 75, 70, 70, 101], gender: None },
-    SpeciesData { id: "pidgeotmega", name: "Pidgeot-Mega", base_species: "pidgeot", types: [Type::Normal, Type::Flying], base: [83, 80, 80, 135, 80, 121], gender: None },
-    SpeciesData { id: "pikachu", name: "Pikachu", base_species: "pikachu", types: [Type::Electric, Type::None], base: [35, 55, 40, 50, 50, 90], gender: None },
-    SpeciesData { id: "pincurchin", name: "Pincurchin", base_species: "pincurchin", types: [Type::Electric, Type::None], base: [48, 101, 95, 91, 85, 15], gender: None },
-    SpeciesData { id: "pinsir", name: "Pinsir", base_species: "pinsir", types: [Type::Bug, Type::None], base: [65, 125, 100, 55, 70, 85], gender: None },
-    SpeciesData { id: "pinsirmega", name: "Pinsir-Mega", base_species: "pinsir", types: [Type::Bug, Type::Flying], base: [65, 155, 120, 65, 90, 105], gender: None },
-    SpeciesData { id: "politoed", name: "Politoed", base_species: "politoed", types: [Type::Water, Type::None], base: [90, 75, 75, 90, 100, 70], gender: None },
-    SpeciesData { id: "polteageist", name: "Polteageist", base_species: "polteageist", types: [Type::Ghost, Type::None], base: [60, 65, 65, 134, 114, 70], gender: Some(Gender::N) },
-    SpeciesData { id: "polteageistantique", name: "Polteageist-Antique", base_species: "polteageist", types: [Type::Ghost, Type::None], base: [60, 65, 65, 134, 114, 70], gender: Some(Gender::N) },
-    SpeciesData { id: "primarina", name: "Primarina", base_species: "primarina", types: [Type::Water, Type::Fairy], base: [80, 74, 74, 126, 116, 60], gender: None },
-    SpeciesData { id: "pyroar", name: "Pyroar", base_species: "pyroar", types: [Type::Fire, Type::Normal], base: [86, 68, 72, 109, 66, 106], gender: None },
-    SpeciesData { id: "pyroarmega", name: "Pyroar-Mega", base_species: "pyroar", types: [Type::Fire, Type::Normal], base: [86, 88, 92, 129, 86, 126], gender: None },
-    SpeciesData { id: "quaquaval", name: "Quaquaval", base_species: "quaquaval", types: [Type::Water, Type::Fighting], base: [85, 120, 80, 85, 75, 85], gender: None },
-    SpeciesData { id: "qwilfish", name: "Qwilfish", base_species: "qwilfish", types: [Type::Water, Type::Poison], base: [65, 95, 85, 55, 55, 85], gender: None },
-    SpeciesData { id: "raichu", name: "Raichu", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 90, 55, 90, 80, 110], gender: None },
-    SpeciesData { id: "raichualola", name: "Raichu-Alola", base_species: "raichu", types: [Type::Electric, Type::Psychic], base: [60, 85, 50, 95, 85, 110], gender: None },
-    SpeciesData { id: "raichumegax", name: "Raichu-Mega-X", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 135, 95, 90, 95, 110], gender: None },
-    SpeciesData { id: "raichumegay", name: "Raichu-Mega-Y", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 100, 55, 160, 80, 130], gender: None },
-    SpeciesData { id: "rampardos", name: "Rampardos", base_species: "rampardos", types: [Type::Rock, Type::None], base: [97, 165, 60, 65, 50, 58], gender: None },
-    SpeciesData { id: "reuniclus", name: "Reuniclus", base_species: "reuniclus", types: [Type::Psychic, Type::None], base: [110, 65, 75, 125, 85, 30], gender: None },
-    SpeciesData { id: "rhyperior", name: "Rhyperior", base_species: "rhyperior", types: [Type::Ground, Type::Rock], base: [115, 140, 130, 55, 55, 40], gender: None },
-    SpeciesData { id: "rillaboom", name: "Rillaboom", base_species: "rillaboom", types: [Type::Grass, Type::None], base: [100, 125, 90, 60, 70, 85], gender: None },
-    SpeciesData { id: "roserade", name: "Roserade", base_species: "roserade", types: [Type::Grass, Type::Poison], base: [60, 70, 65, 125, 105, 90], gender: None },
-    SpeciesData { id: "rotom", name: "Rotom", base_species: "rotom", types: [Type::Electric, Type::Ghost], base: [50, 50, 77, 95, 77, 91], gender: Some(Gender::N) },
-    SpeciesData { id: "rotomfan", name: "Rotom-Fan", base_species: "rotom", types: [Type::Electric, Type::Flying], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N) },
-    SpeciesData { id: "rotomfrost", name: "Rotom-Frost", base_species: "rotom", types: [Type::Electric, Type::Ice], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N) },
-    SpeciesData { id: "rotomheat", name: "Rotom-Heat", base_species: "rotom", types: [Type::Electric, Type::Fire], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N) },
-    SpeciesData { id: "rotommow", name: "Rotom-Mow", base_species: "rotom", types: [Type::Electric, Type::Grass], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N) },
-    SpeciesData { id: "rotomwash", name: "Rotom-Wash", base_species: "rotom", types: [Type::Electric, Type::Water], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N) },
-    SpeciesData { id: "runerigus", name: "Runerigus", base_species: "runerigus", types: [Type::Ground, Type::Ghost], base: [58, 95, 145, 50, 105, 30], gender: None },
-    SpeciesData { id: "sableye", name: "Sableye", base_species: "sableye", types: [Type::Dark, Type::Ghost], base: [50, 75, 75, 65, 65, 50], gender: None },
-    SpeciesData { id: "sableyemega", name: "Sableye-Mega", base_species: "sableye", types: [Type::Dark, Type::Ghost], base: [50, 85, 125, 85, 115, 20], gender: None },
-    SpeciesData { id: "salamence", name: "Salamence", base_species: "salamence", types: [Type::Dragon, Type::Flying], base: [95, 135, 80, 110, 80, 100], gender: None },
-    SpeciesData { id: "salamencemega", name: "Salamence-Mega", base_species: "salamence", types: [Type::Dragon, Type::Flying], base: [95, 145, 130, 120, 90, 120], gender: None },
-    SpeciesData { id: "salazzle", name: "Salazzle", base_species: "salazzle", types: [Type::Poison, Type::Fire], base: [68, 64, 60, 111, 60, 117], gender: Some(Gender::F) },
-    SpeciesData { id: "samurott", name: "Samurott", base_species: "samurott", types: [Type::Water, Type::None], base: [95, 100, 85, 108, 70, 70], gender: None },
-    SpeciesData { id: "samurotthisui", name: "Samurott-Hisui", base_species: "samurott", types: [Type::Water, Type::Dark], base: [90, 108, 80, 100, 65, 85], gender: None },
-    SpeciesData { id: "sandaconda", name: "Sandaconda", base_species: "sandaconda", types: [Type::Ground, Type::None], base: [72, 107, 125, 65, 70, 71], gender: None },
-    SpeciesData { id: "sceptile", name: "Sceptile", base_species: "sceptile", types: [Type::Grass, Type::None], base: [70, 85, 65, 105, 85, 120], gender: None },
-    SpeciesData { id: "sceptilemega", name: "Sceptile-Mega", base_species: "sceptile", types: [Type::Grass, Type::Dragon], base: [70, 110, 75, 145, 85, 145], gender: None },
-    SpeciesData { id: "scizor", name: "Scizor", base_species: "scizor", types: [Type::Bug, Type::Steel], base: [70, 130, 100, 55, 80, 65], gender: None },
-    SpeciesData { id: "scizormega", name: "Scizor-Mega", base_species: "scizor", types: [Type::Bug, Type::Steel], base: [70, 150, 140, 65, 100, 75], gender: None },
-    SpeciesData { id: "scolipede", name: "Scolipede", base_species: "scolipede", types: [Type::Bug, Type::Poison], base: [60, 100, 89, 55, 69, 112], gender: None },
-    SpeciesData { id: "scolipedemega", name: "Scolipede-Mega", base_species: "scolipede", types: [Type::Bug, Type::Poison], base: [60, 140, 149, 75, 99, 62], gender: None },
-    SpeciesData { id: "scovillain", name: "Scovillain", base_species: "scovillain", types: [Type::Grass, Type::Fire], base: [65, 108, 65, 108, 65, 75], gender: None },
-    SpeciesData { id: "scovillainmega", name: "Scovillain-Mega", base_species: "scovillain", types: [Type::Grass, Type::Fire], base: [65, 138, 85, 138, 85, 75], gender: None },
-    SpeciesData { id: "scrafty", name: "Scrafty", base_species: "scrafty", types: [Type::Dark, Type::Fighting], base: [65, 90, 115, 45, 115, 58], gender: None },
-    SpeciesData { id: "scraftymega", name: "Scrafty-Mega", base_species: "scrafty", types: [Type::Dark, Type::Fighting], base: [65, 130, 135, 55, 135, 68], gender: None },
-    SpeciesData { id: "serperior", name: "Serperior", base_species: "serperior", types: [Type::Grass, Type::None], base: [75, 75, 95, 75, 95, 113], gender: None },
-    SpeciesData { id: "sharpedo", name: "Sharpedo", base_species: "sharpedo", types: [Type::Water, Type::Dark], base: [70, 120, 40, 95, 40, 95], gender: None },
-    SpeciesData { id: "sharpedomega", name: "Sharpedo-Mega", base_species: "sharpedo", types: [Type::Water, Type::Dark], base: [70, 140, 70, 110, 65, 105], gender: None },
-    SpeciesData { id: "simipour", name: "Simipour", base_species: "simipour", types: [Type::Water, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None },
-    SpeciesData { id: "simisage", name: "Simisage", base_species: "simisage", types: [Type::Grass, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None },
-    SpeciesData { id: "simisear", name: "Simisear", base_species: "simisear", types: [Type::Fire, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None },
-    SpeciesData { id: "sinistcha", name: "Sinistcha", base_species: "sinistcha", types: [Type::Grass, Type::Ghost], base: [71, 60, 106, 121, 80, 70], gender: Some(Gender::N) },
-    SpeciesData { id: "sinistchamasterpiece", name: "Sinistcha-Masterpiece", base_species: "sinistcha", types: [Type::Grass, Type::Ghost], base: [71, 60, 106, 121, 80, 70], gender: Some(Gender::N) },
-    SpeciesData { id: "sirfetchd", name: "Sirfetch’d", base_species: "sirfetchd", types: [Type::Fighting, Type::None], base: [62, 135, 95, 68, 82, 65], gender: None },
-    SpeciesData { id: "skarmory", name: "Skarmory", base_species: "skarmory", types: [Type::Steel, Type::Flying], base: [65, 80, 140, 40, 70, 70], gender: None },
-    SpeciesData { id: "skarmorymega", name: "Skarmory-Mega", base_species: "skarmory", types: [Type::Steel, Type::Flying], base: [65, 140, 110, 40, 100, 110], gender: None },
-    SpeciesData { id: "skeledirge", name: "Skeledirge", base_species: "skeledirge", types: [Type::Fire, Type::Ghost], base: [104, 75, 100, 110, 75, 66], gender: None },
-    SpeciesData { id: "slowbro", name: "Slowbro", base_species: "slowbro", types: [Type::Water, Type::Psychic], base: [95, 75, 110, 100, 80, 30], gender: None },
-    SpeciesData { id: "slowbrogalar", name: "Slowbro-Galar", base_species: "slowbro", types: [Type::Poison, Type::Psychic], base: [95, 100, 95, 100, 70, 30], gender: None },
-    SpeciesData { id: "slowbromega", name: "Slowbro-Mega", base_species: "slowbro", types: [Type::Water, Type::Psychic], base: [95, 75, 180, 130, 80, 30], gender: None },
-    SpeciesData { id: "slowking", name: "Slowking", base_species: "slowking", types: [Type::Water, Type::Psychic], base: [95, 75, 80, 100, 110, 30], gender: None },
-    SpeciesData { id: "slowkinggalar", name: "Slowking-Galar", base_species: "slowking", types: [Type::Poison, Type::Psychic], base: [95, 65, 80, 110, 110, 30], gender: None },
-    SpeciesData { id: "slurpuff", name: "Slurpuff", base_species: "slurpuff", types: [Type::Fairy, Type::None], base: [82, 80, 86, 85, 75, 72], gender: None },
-    SpeciesData { id: "sneasler", name: "Sneasler", base_species: "sneasler", types: [Type::Fighting, Type::Poison], base: [80, 130, 60, 40, 80, 120], gender: None },
-    SpeciesData { id: "snorlax", name: "Snorlax", base_species: "snorlax", types: [Type::Normal, Type::None], base: [160, 110, 65, 65, 110, 30], gender: None },
-    SpeciesData { id: "spiritomb", name: "Spiritomb", base_species: "spiritomb", types: [Type::Ghost, Type::Dark], base: [50, 92, 108, 92, 108, 35], gender: None },
-    SpeciesData { id: "squawkabilly", name: "Squawkabilly", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None },
-    SpeciesData { id: "squawkabillyblue", name: "Squawkabilly-Blue", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None },
-    SpeciesData { id: "squawkabillywhite", name: "Squawkabilly-White", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None },
-    SpeciesData { id: "squawkabillyyellow", name: "Squawkabilly-Yellow", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None },
-    SpeciesData { id: "staraptor", name: "Staraptor", base_species: "staraptor", types: [Type::Normal, Type::Flying], base: [85, 120, 70, 50, 60, 100], gender: None },
-    SpeciesData { id: "staraptormega", name: "Staraptor-Mega", base_species: "staraptor", types: [Type::Fighting, Type::Flying], base: [85, 140, 100, 60, 90, 110], gender: None },
-    SpeciesData { id: "starmie", name: "Starmie", base_species: "starmie", types: [Type::Water, Type::Psychic], base: [60, 75, 85, 100, 85, 115], gender: Some(Gender::N) },
-    SpeciesData { id: "starmiemega", name: "Starmie-Mega", base_species: "starmie", types: [Type::Water, Type::Psychic], base: [60, 100, 105, 130, 105, 120], gender: Some(Gender::N) },
-    SpeciesData { id: "steelix", name: "Steelix", base_species: "steelix", types: [Type::Steel, Type::Ground], base: [75, 85, 200, 55, 65, 30], gender: None },
-    SpeciesData { id: "steelixmega", name: "Steelix-Mega", base_species: "steelix", types: [Type::Steel, Type::Ground], base: [75, 125, 230, 55, 95, 30], gender: None },
-    SpeciesData { id: "stunfisk", name: "Stunfisk", base_species: "stunfisk", types: [Type::Ground, Type::Electric], base: [109, 66, 84, 81, 99, 32], gender: None },
-    SpeciesData { id: "stunfiskgalar", name: "Stunfisk-Galar", base_species: "stunfisk", types: [Type::Ground, Type::Steel], base: [109, 81, 99, 66, 84, 32], gender: None },
-    SpeciesData { id: "swalot", name: "Swalot", base_species: "swalot", types: [Type::Poison, Type::None], base: [100, 73, 83, 73, 83, 55], gender: None },
-    SpeciesData { id: "swampert", name: "Swampert", base_species: "swampert", types: [Type::Water, Type::Ground], base: [100, 110, 90, 85, 90, 60], gender: None },
-    SpeciesData { id: "swampertmega", name: "Swampert-Mega", base_species: "swampert", types: [Type::Water, Type::Ground], base: [100, 150, 110, 95, 110, 70], gender: None },
-    SpeciesData { id: "sylveon", name: "Sylveon", base_species: "sylveon", types: [Type::Fairy, Type::None], base: [95, 65, 65, 110, 130, 60], gender: None },
-    SpeciesData { id: "talonflame", name: "Talonflame", base_species: "talonflame", types: [Type::Fire, Type::Flying], base: [78, 81, 71, 74, 69, 126], gender: None },
-    SpeciesData { id: "tauros", name: "Tauros", base_species: "tauros", types: [Type::Normal, Type::None], base: [75, 100, 95, 40, 70, 110], gender: Some(Gender::M) },
-    SpeciesData { id: "taurospaldeaaqua", name: "Tauros-Paldea-Aqua", base_species: "tauros", types: [Type::Fighting, Type::Water], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M) },
-    SpeciesData { id: "taurospaldeablaze", name: "Tauros-Paldea-Blaze", base_species: "tauros", types: [Type::Fighting, Type::Fire], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M) },
-    SpeciesData { id: "taurospaldeacombat", name: "Tauros-Paldea-Combat", base_species: "tauros", types: [Type::Fighting, Type::None], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M) },
-    SpeciesData { id: "terapagosterastal", name: "Terapagos-Terastal", base_species: "terapagos", types: [Type::Normal, Type::None], base: [95, 95, 110, 105, 110, 85], gender: None },
-    SpeciesData { id: "thievul", name: "Thievul", base_species: "thievul", types: [Type::Dark, Type::None], base: [70, 58, 58, 87, 92, 90], gender: None },
-    SpeciesData { id: "tinkaton", name: "Tinkaton", base_species: "tinkaton", types: [Type::Fairy, Type::Steel], base: [85, 75, 77, 70, 105, 94], gender: Some(Gender::F) },
-    SpeciesData { id: "torkoal", name: "Torkoal", base_species: "torkoal", types: [Type::Fire, Type::None], base: [70, 85, 140, 85, 70, 20], gender: None },
-    SpeciesData { id: "torterra", name: "Torterra", base_species: "torterra", types: [Type::Grass, Type::Ground], base: [95, 109, 105, 75, 85, 56], gender: None },
-    SpeciesData { id: "toucannon", name: "Toucannon", base_species: "toucannon", types: [Type::Normal, Type::Flying], base: [80, 120, 75, 75, 75, 60], gender: None },
-    SpeciesData { id: "toxapex", name: "Toxapex", base_species: "toxapex", types: [Type::Poison, Type::Water], base: [50, 63, 152, 53, 142, 35], gender: None },
-    SpeciesData { id: "toxicroak", name: "Toxicroak", base_species: "toxicroak", types: [Type::Poison, Type::Fighting], base: [83, 106, 65, 86, 65, 85], gender: None },
-    SpeciesData { id: "toxtricity", name: "Toxtricity", base_species: "toxtricity", types: [Type::Electric, Type::Poison], base: [75, 98, 70, 114, 70, 75], gender: None },
-    SpeciesData { id: "toxtricitylowkey", name: "Toxtricity-Low-Key", base_species: "toxtricity", types: [Type::Electric, Type::Poison], base: [75, 98, 70, 114, 70, 75], gender: None },
-    SpeciesData { id: "trevenant", name: "Trevenant", base_species: "trevenant", types: [Type::Ghost, Type::Grass], base: [85, 110, 76, 65, 82, 56], gender: None },
-    SpeciesData { id: "tsareena", name: "Tsareena", base_species: "tsareena", types: [Type::Grass, Type::None], base: [72, 120, 98, 50, 98, 72], gender: Some(Gender::F) },
-    SpeciesData { id: "typhlosion", name: "Typhlosion", base_species: "typhlosion", types: [Type::Fire, Type::None], base: [78, 84, 78, 109, 85, 100], gender: None },
-    SpeciesData { id: "typhlosionhisui", name: "Typhlosion-Hisui", base_species: "typhlosion", types: [Type::Fire, Type::Ghost], base: [73, 84, 78, 119, 85, 95], gender: None },
-    SpeciesData { id: "tyranitar", name: "Tyranitar", base_species: "tyranitar", types: [Type::Rock, Type::Dark], base: [100, 134, 110, 95, 100, 61], gender: None },
-    SpeciesData { id: "tyranitarmega", name: "Tyranitar-Mega", base_species: "tyranitar", types: [Type::Rock, Type::Dark], base: [100, 164, 150, 95, 120, 71], gender: None },
-    SpeciesData { id: "tyrantrum", name: "Tyrantrum", base_species: "tyrantrum", types: [Type::Rock, Type::Dragon], base: [82, 121, 119, 69, 59, 71], gender: None },
-    SpeciesData { id: "umbreon", name: "Umbreon", base_species: "umbreon", types: [Type::Dark, Type::None], base: [95, 65, 110, 60, 130, 65], gender: None },
-    SpeciesData { id: "vanilluxe", name: "Vanilluxe", base_species: "vanilluxe", types: [Type::Ice, Type::None], base: [71, 95, 85, 110, 95, 79], gender: None },
-    SpeciesData { id: "vaporeon", name: "Vaporeon", base_species: "vaporeon", types: [Type::Water, Type::None], base: [130, 65, 60, 110, 95, 65], gender: None },
-    SpeciesData { id: "venusaur", name: "Venusaur", base_species: "venusaur", types: [Type::Grass, Type::Poison], base: [80, 82, 83, 100, 100, 80], gender: None },
-    SpeciesData { id: "venusaurmega", name: "Venusaur-Mega", base_species: "venusaur", types: [Type::Grass, Type::Poison], base: [80, 100, 123, 122, 120, 80], gender: None },
-    SpeciesData { id: "victreebel", name: "Victreebel", base_species: "victreebel", types: [Type::Grass, Type::Poison], base: [80, 105, 65, 100, 70, 70], gender: None },
-    SpeciesData { id: "victreebelmega", name: "Victreebel-Mega", base_species: "victreebel", types: [Type::Grass, Type::Poison], base: [80, 125, 85, 135, 95, 70], gender: None },
-    SpeciesData { id: "vileplume", name: "Vileplume", base_species: "vileplume", types: [Type::Grass, Type::Poison], base: [75, 80, 85, 110, 90, 50], gender: None },
-    SpeciesData { id: "vivillon", name: "Vivillon", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonarchipelago", name: "Vivillon-Archipelago", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivilloncontinental", name: "Vivillon-Continental", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonelegant", name: "Vivillon-Elegant", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonfancy", name: "Vivillon-Fancy", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillongarden", name: "Vivillon-Garden", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonhighplains", name: "Vivillon-High Plains", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonicysnow", name: "Vivillon-Icy Snow", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonjungle", name: "Vivillon-Jungle", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonmarine", name: "Vivillon-Marine", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonmodern", name: "Vivillon-Modern", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonmonsoon", name: "Vivillon-Monsoon", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonocean", name: "Vivillon-Ocean", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonpokeball", name: "Vivillon-Pokeball", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonpolar", name: "Vivillon-Polar", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonriver", name: "Vivillon-River", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonsandstorm", name: "Vivillon-Sandstorm", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonsavanna", name: "Vivillon-Savanna", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillonsun", name: "Vivillon-Sun", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "vivillontundra", name: "Vivillon-Tundra", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None },
-    SpeciesData { id: "volcarona", name: "Volcarona", base_species: "volcarona", types: [Type::Bug, Type::Fire], base: [85, 60, 65, 135, 105, 100], gender: None },
-    SpeciesData { id: "watchog", name: "Watchog", base_species: "watchog", types: [Type::Normal, Type::None], base: [60, 85, 69, 60, 69, 77], gender: None },
-    SpeciesData { id: "weavile", name: "Weavile", base_species: "weavile", types: [Type::Dark, Type::Ice], base: [70, 120, 65, 45, 85, 125], gender: None },
-    SpeciesData { id: "whimsicott", name: "Whimsicott", base_species: "whimsicott", types: [Type::Grass, Type::Fairy], base: [60, 67, 85, 77, 75, 116], gender: None },
-    SpeciesData { id: "wigglytuff", name: "Wigglytuff", base_species: "wigglytuff", types: [Type::Normal, Type::Fairy], base: [140, 70, 45, 85, 50, 45], gender: None },
-    SpeciesData { id: "wyrdeer", name: "Wyrdeer", base_species: "wyrdeer", types: [Type::Normal, Type::Psychic], base: [103, 105, 72, 105, 75, 65], gender: None },
-    SpeciesData { id: "zoroark", name: "Zoroark", base_species: "zoroark", types: [Type::Dark, Type::None], base: [60, 105, 60, 120, 60, 105], gender: None },
-    SpeciesData { id: "zoroarkhisui", name: "Zoroark-Hisui", base_species: "zoroark", types: [Type::Normal, Type::Ghost], base: [55, 100, 60, 125, 60, 110], gender: None },
+    SpeciesData { id: "abomasnow", name: "Abomasnow", base_species: "abomasnow", types: [Type::Grass, Type::Ice], base: [90, 92, 75, 92, 85, 60], gender: None, ability0: 240, weight_hg: 1355 },
+    SpeciesData { id: "abomasnowmega", name: "Abomasnow-Mega", base_species: "abomasnow", types: [Type::Grass, Type::Ice], base: [90, 132, 105, 132, 105, 30], gender: None, ability0: 240, weight_hg: 1850 },
+    SpeciesData { id: "absol", name: "Absol", base_species: "absol", types: [Type::Dark, Type::None], base: [65, 130, 60, 75, 60, 75], gender: None, ability0: 188, weight_hg: 470 },
+    SpeciesData { id: "absolmega", name: "Absol-Mega", base_species: "absol", types: [Type::Dark, Type::None], base: [65, 150, 60, 115, 60, 115], gender: None, ability0: 138, weight_hg: 490 },
+    SpeciesData { id: "absolmegaz", name: "Absol-Mega-Z", base_species: "absol", types: [Type::Dark, Type::Ghost], base: [65, 154, 60, 75, 60, 151], gender: None, ability0: 228, weight_hg: 490 },
+    SpeciesData { id: "aegislash", name: "Aegislash", base_species: "aegislash", types: [Type::Steel, Type::Ghost], base: [60, 50, 140, 50, 140, 60], gender: None, ability0: 251, weight_hg: 530 },
+    SpeciesData { id: "aegislashblade", name: "Aegislash-Blade", base_species: "aegislash", types: [Type::Steel, Type::Ghost], base: [60, 140, 50, 140, 50, 60], gender: None, ability0: 251, weight_hg: 530 },
+    SpeciesData { id: "aerodactyl", name: "Aerodactyl", base_species: "aerodactyl", types: [Type::Rock, Type::Flying], base: [80, 105, 65, 60, 75, 130], gender: None, ability0: 211, weight_hg: 590 },
+    SpeciesData { id: "aerodactylmega", name: "Aerodactyl-Mega", base_species: "aerodactyl", types: [Type::Rock, Type::Flying], base: [80, 135, 85, 70, 95, 150], gender: None, ability0: 286, weight_hg: 790 },
+    SpeciesData { id: "aggron", name: "Aggron", base_species: "aggron", types: [Type::Steel, Type::Rock], base: [70, 110, 180, 60, 60, 50], gender: None, ability0: 261, weight_hg: 3600 },
+    SpeciesData { id: "aggronmega", name: "Aggron-Mega", base_species: "aggron", types: [Type::Steel, Type::None], base: [70, 140, 230, 60, 80, 50], gender: None, ability0: 72, weight_hg: 3950 },
+    SpeciesData { id: "alakazam", name: "Alakazam", base_species: "alakazam", types: [Type::Psychic, Type::None], base: [55, 50, 45, 135, 95, 120], gender: None, ability0: 272, weight_hg: 480 },
+    SpeciesData { id: "alakazammega", name: "Alakazam-Mega", base_species: "alakazam", types: [Type::Psychic, Type::None], base: [55, 50, 65, 175, 105, 150], gender: None, ability0: 290, weight_hg: 480 },
+    SpeciesData { id: "alcremie", name: "Alcremie", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremiecaramelswirl", name: "Alcremie-Caramel-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremielemoncream", name: "Alcremie-Lemon-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremiematchacream", name: "Alcremie-Matcha-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremiemintcream", name: "Alcremie-Mint-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremierainbowswirl", name: "Alcremie-Rainbow-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremierubycream", name: "Alcremie-Ruby-Cream", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "alcremierubyswirl", name: "Alcremie-Ruby-Swirl", base_species: "alcremie", types: [Type::Fairy, Type::None], base: [65, 60, 75, 110, 121, 64], gender: Some(Gender::F), ability0: 268, weight_hg: 5 },
+    SpeciesData { id: "altaria", name: "Altaria", base_species: "altaria", types: [Type::Dragon, Type::Flying], base: [75, 70, 90, 70, 105, 80], gender: None, ability0: 160, weight_hg: 206 },
+    SpeciesData { id: "altariamega", name: "Altaria-Mega", base_species: "altaria", types: [Type::Dragon, Type::Fairy], base: [75, 110, 110, 110, 105, 80], gender: None, ability0: 178, weight_hg: 206 },
+    SpeciesData { id: "ampharos", name: "Ampharos", base_species: "ampharos", types: [Type::Electric, Type::None], base: [90, 75, 85, 115, 90, 55], gender: None, ability0: 252, weight_hg: 615 },
+    SpeciesData { id: "ampharosmega", name: "Ampharos-Mega", base_species: "ampharos", types: [Type::Electric, Type::Dragon], base: [90, 95, 105, 165, 110, 45], gender: None, ability0: 152, weight_hg: 615 },
+    SpeciesData { id: "annihilape", name: "Annihilape", base_species: "annihilape", types: [Type::Fighting, Type::Ghost], base: [110, 115, 80, 50, 90, 90], gender: None, ability0: 301, weight_hg: 560 },
+    SpeciesData { id: "appletun", name: "Appletun", base_species: "appletun", types: [Type::Grass, Type::Dragon], base: [110, 85, 80, 100, 80, 30], gender: None, ability0: 208, weight_hg: 130 },
+    SpeciesData { id: "araquanid", name: "Araquanid", base_species: "araquanid", types: [Type::Water, Type::Bug], base: [68, 70, 92, 50, 132, 42], gender: None, ability0: 305, weight_hg: 820 },
+    SpeciesData { id: "arbok", name: "Arbok", base_species: "arbok", types: [Type::Poison, Type::None], base: [60, 95, 69, 65, 79, 80], gender: None, ability0: 121, weight_hg: 650 },
+    SpeciesData { id: "arboliva", name: "Arboliva", base_species: "arboliva", types: [Type::Grass, Type::Normal], base: [78, 69, 90, 125, 109, 39], gender: None, ability0: 224, weight_hg: 482 },
+    SpeciesData { id: "arcanine", name: "Arcanine", base_species: "arcanine", types: [Type::Fire, Type::None], base: [90, 110, 80, 100, 80, 95], gender: None, ability0: 121, weight_hg: 1550 },
+    SpeciesData { id: "arcaninehisui", name: "Arcanine-Hisui", base_species: "arcanine", types: [Type::Fire, Type::Rock], base: [95, 115, 80, 95, 80, 90], gender: None, ability0: 121, weight_hg: 1680 },
+    SpeciesData { id: "archaludon", name: "Archaludon", base_species: "archaludon", types: [Type::Steel, Type::Dragon], base: [90, 105, 130, 125, 65, 85], gender: None, ability0: 250, weight_hg: 600 },
+    SpeciesData { id: "ariados", name: "Ariados", base_species: "ariados", types: [Type::Bug, Type::Poison], base: [70, 90, 70, 60, 70, 40], gender: None, ability0: 267, weight_hg: 335 },
+    SpeciesData { id: "armarouge", name: "Armarouge", base_species: "armarouge", types: [Type::Fire, Type::Psychic], base: [85, 60, 100, 125, 80, 75], gender: None, ability0: 76, weight_hg: 850 },
+    SpeciesData { id: "aromatisse", name: "Aromatisse", base_species: "aromatisse", types: [Type::Fairy, Type::None], base: [101, 72, 72, 99, 89, 29], gender: None, ability0: 100, weight_hg: 155 },
+    SpeciesData { id: "audino", name: "Audino", base_species: "audino", types: [Type::Normal, Type::None], base: [103, 60, 86, 60, 86, 50], gender: None, ability0: 100, weight_hg: 310 },
+    SpeciesData { id: "audinomega", name: "Audino-Mega", base_species: "audino", types: [Type::Normal, Type::Fairy], base: [103, 60, 126, 80, 126, 50], gender: None, ability0: 100, weight_hg: 320 },
+    SpeciesData { id: "aurorus", name: "Aurorus", base_species: "aurorus", types: [Type::Rock, Type::Ice], base: [123, 77, 72, 99, 92, 58], gender: None, ability0: 206, weight_hg: 2250 },
+    SpeciesData { id: "avalugg", name: "Avalugg", base_species: "avalugg", types: [Type::Ice, Type::None], base: [95, 117, 184, 44, 46, 28], gender: None, ability0: 171, weight_hg: 5050 },
+    SpeciesData { id: "avalugghisui", name: "Avalugg-Hisui", base_species: "avalugg", types: [Type::Ice, Type::Rock], base: [95, 127, 184, 34, 36, 38], gender: None, ability0: 260, weight_hg: 2624 },
+    SpeciesData { id: "azumarill", name: "Azumarill", base_species: "azumarill", types: [Type::Water, Type::Fairy], base: [100, 50, 80, 60, 80, 50], gender: None, ability0: 283, weight_hg: 285 },
+    SpeciesData { id: "banette", name: "Banette", base_species: "banette", types: [Type::Ghost, Type::None], base: [64, 115, 65, 83, 63, 65], gender: None, ability0: 120, weight_hg: 125 },
+    SpeciesData { id: "banettemega", name: "Banette-Mega", base_species: "banette", types: [Type::Ghost, Type::None], base: [64, 165, 75, 93, 83, 75], gender: None, ability0: 187, weight_hg: 130 },
+    SpeciesData { id: "barbaracle", name: "Barbaracle", base_species: "barbaracle", types: [Type::Rock, Type::Water], base: [72, 105, 115, 54, 86, 68], gender: None, ability0: 286, weight_hg: 960 },
+    SpeciesData { id: "barbaraclemega", name: "Barbaracle-Mega", base_species: "barbaracle", types: [Type::Rock, Type::Fighting], base: [72, 140, 130, 64, 106, 88], gender: None, ability0: 286, weight_hg: 1000 },
+    SpeciesData { id: "basculegion", name: "Basculegion", base_species: "basculegion", types: [Type::Water, Type::Ghost], base: [120, 112, 65, 80, 75, 78], gender: Some(Gender::M), ability0: 269, weight_hg: 1100 },
+    SpeciesData { id: "basculegionf", name: "Basculegion-F", base_species: "basculegion", types: [Type::Water, Type::Ghost], base: [120, 92, 65, 100, 75, 78], gender: Some(Gender::F), ability0: 269, weight_hg: 1100 },
+    SpeciesData { id: "bastiodon", name: "Bastiodon", base_species: "bastiodon", types: [Type::Rock, Type::Steel], base: [60, 52, 168, 47, 138, 30], gender: None, ability0: 261, weight_hg: 1495 },
+    SpeciesData { id: "baxcalibur", name: "Baxcalibur", base_species: "baxcalibur", types: [Type::Dragon, Type::Ice], base: [115, 145, 92, 75, 86, 87], gender: None, ability0: 282, weight_hg: 2100 },
+    SpeciesData { id: "baxcaliburmega", name: "Baxcalibur-Mega", base_species: "baxcalibur", types: [Type::Dragon, Type::Ice], base: [115, 175, 117, 105, 101, 87], gender: None, ability0: 282, weight_hg: 3150 },
+    SpeciesData { id: "beartic", name: "Beartic", base_species: "beartic", types: [Type::Ice, Type::None], base: [95, 130, 80, 70, 80, 50], gender: None, ability0: 239, weight_hg: 2600 },
+    SpeciesData { id: "beedrill", name: "Beedrill", base_species: "beedrill", types: [Type::Bug, Type::Poison], base: [65, 90, 40, 45, 80, 75], gender: None, ability0: 267, weight_hg: 295 },
+    SpeciesData { id: "beedrillmega", name: "Beedrill-Mega", base_species: "beedrill", types: [Type::Bug, Type::Poison], base: [65, 150, 40, 15, 80, 145], gender: None, ability0: 0, weight_hg: 405 },
+    SpeciesData { id: "bellibolt", name: "Bellibolt", base_species: "bellibolt", types: [Type::Electric, Type::None], base: [109, 64, 91, 103, 83, 45], gender: None, ability0: 65, weight_hg: 1130 },
+    SpeciesData { id: "blastoise", name: "Blastoise", base_species: "blastoise", types: [Type::Water, Type::None], base: [79, 83, 100, 85, 105, 78], gender: None, ability0: 285, weight_hg: 855 },
+    SpeciesData { id: "blastoisemega", name: "Blastoise-Mega", base_species: "blastoise", types: [Type::Water, Type::None], base: [79, 103, 120, 135, 115, 78], gender: None, ability0: 144, weight_hg: 1011 },
+    SpeciesData { id: "blaziken", name: "Blaziken", base_species: "blaziken", types: [Type::Fire, Type::Fighting], base: [80, 120, 70, 110, 70, 80], gender: None, ability0: 24, weight_hg: 520 },
+    SpeciesData { id: "blazikenmega", name: "Blaziken-Mega", base_species: "blaziken", types: [Type::Fire, Type::Fighting], base: [80, 160, 80, 130, 80, 100], gender: None, ability0: 245, weight_hg: 520 },
+    SpeciesData { id: "camerupt", name: "Camerupt", base_species: "camerupt", types: [Type::Fire, Type::Ground], base: [70, 100, 70, 105, 75, 40], gender: None, ability0: 141, weight_hg: 2200 },
+    SpeciesData { id: "cameruptmega", name: "Camerupt-Mega", base_species: "camerupt", types: [Type::Fire, Type::Ground], base: [70, 120, 100, 145, 105, 20], gender: None, ability0: 230, weight_hg: 3205 },
+    SpeciesData { id: "castform", name: "Castform", base_species: "castform", types: [Type::Normal, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None, ability0: 80, weight_hg: 8 },
+    SpeciesData { id: "castformrainy", name: "Castform-Rainy", base_species: "castform", types: [Type::Water, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None, ability0: 80, weight_hg: 8 },
+    SpeciesData { id: "castformsnowy", name: "Castform-Snowy", base_species: "castform", types: [Type::Ice, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None, ability0: 80, weight_hg: 8 },
+    SpeciesData { id: "castformsunny", name: "Castform-Sunny", base_species: "castform", types: [Type::Fire, Type::None], base: [70, 70, 70, 70, 70, 70], gender: None, ability0: 80, weight_hg: 8 },
+    SpeciesData { id: "ceruledge", name: "Ceruledge", base_species: "ceruledge", types: [Type::Fire, Type::Ghost], base: [75, 125, 80, 60, 100, 85], gender: None, ability0: 76, weight_hg: 620 },
+    SpeciesData { id: "chandelure", name: "Chandelure", base_species: "chandelure", types: [Type::Ghost, Type::Fire], base: [60, 55, 90, 145, 90, 80], gender: None, ability0: 76, weight_hg: 343 },
+    SpeciesData { id: "chandeluremega", name: "Chandelure-Mega", base_species: "chandelure", types: [Type::Ghost, Type::Fire], base: [60, 75, 110, 175, 110, 90], gender: None, ability0: 117, weight_hg: 696 },
+    SpeciesData { id: "charizard", name: "Charizard", base_species: "charizard", types: [Type::Fire, Type::Flying], base: [78, 84, 78, 109, 85, 100], gender: None, ability0: 24, weight_hg: 905 },
+    SpeciesData { id: "charizardmegax", name: "Charizard-Mega-X", base_species: "charizard", types: [Type::Fire, Type::Dragon], base: [78, 130, 111, 130, 85, 100], gender: None, ability0: 286, weight_hg: 1105 },
+    SpeciesData { id: "charizardmegay", name: "Charizard-Mega-Y", base_species: "charizard", types: [Type::Fire, Type::Flying], base: [78, 104, 78, 159, 115, 100], gender: None, ability0: 58, weight_hg: 1005 },
+    SpeciesData { id: "chesnaught", name: "Chesnaught", base_species: "chesnaught", types: [Type::Grass, Type::Fighting], base: [88, 107, 122, 74, 75, 64], gender: None, ability0: 170, weight_hg: 900 },
+    SpeciesData { id: "chesnaughtmega", name: "Chesnaught-Mega", base_species: "chesnaught", types: [Type::Grass, Type::Fighting], base: [88, 137, 172, 74, 115, 44], gender: None, ability0: 25, weight_hg: 900 },
+    SpeciesData { id: "chimecho", name: "Chimecho", base_species: "chimecho", types: [Type::Psychic, Type::None], base: [75, 50, 80, 95, 90, 65], gender: None, ability0: 129, weight_hg: 10 },
+    SpeciesData { id: "chimechomega", name: "Chimecho-Mega", base_species: "chimecho", types: [Type::Psychic, Type::Steel], base: [75, 50, 110, 135, 120, 65], gender: None, ability0: 129, weight_hg: 80 },
+    SpeciesData { id: "cinderace", name: "Cinderace", base_species: "cinderace", types: [Type::Fire, Type::None], base: [80, 116, 75, 65, 75, 119], gender: None, ability0: 24, weight_hg: 330 },
+    SpeciesData { id: "clawitzer", name: "Clawitzer", base_species: "clawitzer", types: [Type::Water, Type::None], base: [71, 73, 88, 120, 89, 59], gender: None, ability0: 144, weight_hg: 353 },
+    SpeciesData { id: "clefable", name: "Clefable", base_species: "clefable", types: [Type::Fairy, Type::None], base: [95, 70, 73, 95, 90, 60], gender: None, ability0: 43, weight_hg: 400 },
+    SpeciesData { id: "clefablemega", name: "Clefable-Mega", base_species: "clefable", types: [Type::Fairy, Type::Flying], base: [95, 80, 93, 135, 110, 70], gender: None, ability0: 138, weight_hg: 423 },
+    SpeciesData { id: "cofagrigus", name: "Cofagrigus", base_species: "cofagrigus", types: [Type::Ghost, Type::None], base: [58, 50, 145, 95, 105, 30], gender: None, ability0: 158, weight_hg: 765 },
+    SpeciesData { id: "conkeldurr", name: "Conkeldurr", base_species: "conkeldurr", types: [Type::Fighting, Type::None], base: [105, 140, 95, 55, 65, 45], gender: None, ability0: 97, weight_hg: 870 },
+    SpeciesData { id: "corviknight", name: "Corviknight", base_species: "corviknight", types: [Type::Flying, Type::Steel], base: [98, 87, 105, 53, 85, 67], gender: None, ability0: 188, weight_hg: 750 },
+    SpeciesData { id: "crabominable", name: "Crabominable", base_species: "crabominable", types: [Type::Fighting, Type::Ice], base: [97, 132, 77, 62, 67, 43], gender: None, ability0: 109, weight_hg: 1800 },
+    SpeciesData { id: "crabominablemega", name: "Crabominable-Mega", base_species: "crabominable", types: [Type::Fighting, Type::Ice], base: [97, 157, 122, 62, 107, 33], gender: None, ability0: 124, weight_hg: 2528 },
+    SpeciesData { id: "cramorantgorging", name: "Cramorant-Gorging", base_species: "cramorant", types: [Type::Flying, Type::Water], base: [70, 85, 55, 85, 95, 85], gender: None, ability0: 96, weight_hg: 180 },
+    SpeciesData { id: "cramorantgulping", name: "Cramorant-Gulping", base_species: "cramorant", types: [Type::Flying, Type::Water], base: [70, 85, 55, 85, 95, 85], gender: None, ability0: 96, weight_hg: 180 },
+    SpeciesData { id: "decidueye", name: "Decidueye", base_species: "decidueye", types: [Type::Grass, Type::Ghost], base: [78, 107, 75, 100, 100, 70], gender: None, ability0: 170, weight_hg: 366 },
+    SpeciesData { id: "decidueyehisui", name: "Decidueye-Hisui", base_species: "decidueye", types: [Type::Grass, Type::Fighting], base: [88, 112, 80, 95, 95, 60], gender: None, ability0: 170, weight_hg: 370 },
+    SpeciesData { id: "dedenne", name: "Dedenne", base_species: "dedenne", types: [Type::Electric, Type::Fairy], base: [67, 58, 57, 81, 67, 101], gender: None, ability0: 26, weight_hg: 22 },
+    SpeciesData { id: "delphox", name: "Delphox", base_species: "delphox", types: [Type::Fire, Type::Psychic], base: [75, 69, 72, 114, 100, 104], gender: None, ability0: 24, weight_hg: 390 },
+    SpeciesData { id: "delphoxmega", name: "Delphox-Mega", base_species: "delphox", types: [Type::Fire, Type::Psychic], base: [75, 69, 72, 159, 125, 134], gender: None, ability0: 129, weight_hg: 390 },
+    SpeciesData { id: "diggersby", name: "Diggersby", base_species: "diggersby", types: [Type::Normal, Type::Ground], base: [85, 56, 77, 50, 77, 78], gender: None, ability0: 176, weight_hg: 424 },
+    SpeciesData { id: "ditto", name: "Ditto", base_species: "ditto", types: [Type::Normal, Type::None], base: [48, 48, 48, 48, 48, 48], gender: Some(Gender::N), ability0: 133, weight_hg: 40 },
+    SpeciesData { id: "dragalge", name: "Dragalge", base_species: "dragalge", types: [Type::Poison, Type::Dragon], base: [65, 75, 90, 97, 123, 44], gender: None, ability0: 181, weight_hg: 815 },
+    SpeciesData { id: "dragalgemega", name: "Dragalge-Mega", base_species: "dragalge", types: [Type::Poison, Type::Dragon], base: [65, 85, 105, 132, 163, 44], gender: None, ability0: 207, weight_hg: 1003 },
+    SpeciesData { id: "dragapult", name: "Dragapult", base_species: "dragapult", types: [Type::Dragon, Type::Ghost], base: [88, 120, 75, 100, 75, 142], gender: None, ability0: 29, weight_hg: 500 },
+    SpeciesData { id: "dragonite", name: "Dragonite", base_species: "dragonite", types: [Type::Dragon, Type::Flying], base: [91, 134, 95, 100, 100, 80], gender: None, ability0: 119, weight_hg: 2100 },
+    SpeciesData { id: "dragonitemega", name: "Dragonite-Mega", base_species: "dragonite", types: [Type::Dragon, Type::Flying], base: [91, 124, 115, 145, 125, 100], gender: None, ability0: 156, weight_hg: 2900 },
+    SpeciesData { id: "drampa", name: "Drampa", base_species: "drampa", types: [Type::Normal, Type::Dragon], base: [78, 60, 85, 135, 91, 36], gender: None, ability0: 22, weight_hg: 1850 },
+    SpeciesData { id: "drampamega", name: "Drampa-Mega", base_species: "drampa", types: [Type::Normal, Type::Dragon], base: [78, 85, 110, 160, 116, 36], gender: None, ability0: 22, weight_hg: 2405 },
+    SpeciesData { id: "eelektross", name: "Eelektross", base_species: "eelektross", types: [Type::Electric, Type::None], base: [85, 115, 80, 105, 80, 50], gender: None, ability0: 129, weight_hg: 805 },
+    SpeciesData { id: "eelektrossmega", name: "Eelektross-Mega", base_species: "eelektross", types: [Type::Electric, Type::None], base: [85, 145, 80, 135, 90, 80], gender: None, ability0: 62, weight_hg: 1800 },
+    SpeciesData { id: "eiscuenoice", name: "Eiscue-Noice", base_species: "eiscue", types: [Type::Ice, Type::None], base: [75, 80, 70, 65, 50, 130], gender: None, ability0: 111, weight_hg: 890 },
+    SpeciesData { id: "emboar", name: "Emboar", base_species: "emboar", types: [Type::Fire, Type::Fighting], base: [110, 123, 65, 100, 65, 65], gender: None, ability0: 24, weight_hg: 1500 },
+    SpeciesData { id: "emboarmega", name: "Emboar-Mega", base_species: "emboar", types: [Type::Fire, Type::Fighting], base: [110, 148, 75, 110, 110, 75], gender: None, ability0: 152, weight_hg: 1803 },
+    SpeciesData { id: "emolga", name: "Emolga", base_species: "emolga", types: [Type::Electric, Type::Flying], base: [55, 75, 60, 75, 60, 103], gender: None, ability0: 252, weight_hg: 50 },
+    SpeciesData { id: "empoleon", name: "Empoleon", base_species: "empoleon", types: [Type::Water, Type::Steel], base: [84, 86, 88, 111, 101, 60], gender: None, ability0: 285, weight_hg: 845 },
+    SpeciesData { id: "espathra", name: "Espathra", base_species: "espathra", types: [Type::Psychic, Type::None], base: [95, 60, 60, 101, 60, 105], gender: None, ability0: 167, weight_hg: 900 },
+    SpeciesData { id: "espeon", name: "Espeon", base_species: "espeon", types: [Type::Psychic, Type::None], base: [65, 65, 60, 130, 95, 110], gender: None, ability0: 272, weight_hg: 265 },
+    SpeciesData { id: "excadrill", name: "Excadrill", base_species: "excadrill", types: [Type::Ground, Type::Steel], base: [110, 135, 60, 50, 65, 88], gender: None, ability0: 216, weight_hg: 404 },
+    SpeciesData { id: "excadrillmega", name: "Excadrill-Mega", base_species: "excadrill", types: [Type::Ground, Type::Steel], base: [110, 165, 100, 65, 65, 103], gender: None, ability0: 177, weight_hg: 600 },
+    SpeciesData { id: "falinks", name: "Falinks", base_species: "falinks", types: [Type::Fighting, Type::None], base: [65, 100, 100, 70, 60, 75], gender: Some(Gender::N), ability0: 18, weight_hg: 620 },
+    SpeciesData { id: "falinksmega", name: "Falinks-Mega", base_species: "falinks", types: [Type::Fighting, Type::None], base: [65, 135, 135, 70, 65, 100], gender: Some(Gender::N), ability0: 50, weight_hg: 990 },
+    SpeciesData { id: "farfetchd", name: "Farfetch’d", base_species: "farfetchd", types: [Type::Normal, Type::Flying], base: [52, 90, 55, 58, 62, 60], gender: None, ability0: 126, weight_hg: 150 },
+    SpeciesData { id: "farigiraf", name: "Farigiraf", base_species: "farigiraf", types: [Type::Normal, Type::Psychic], base: [120, 90, 70, 110, 70, 60], gender: None, ability0: 40, weight_hg: 1600 },
+    SpeciesData { id: "feraligatr", name: "Feraligatr", base_species: "feraligatr", types: [Type::Water, Type::None], base: [85, 105, 100, 79, 83, 78], gender: None, ability0: 285, weight_hg: 888 },
+    SpeciesData { id: "feraligatrmega", name: "Feraligatr-Mega", base_species: "feraligatr", types: [Type::Water, Type::Dragon], base: [85, 160, 125, 89, 93, 78], gender: None, ability0: 55, weight_hg: 1088 },
+    SpeciesData { id: "flapple", name: "Flapple", base_species: "flapple", types: [Type::Grass, Type::Dragon], base: [70, 110, 80, 95, 60, 70], gender: None, ability0: 208, weight_hg: 10 },
+    SpeciesData { id: "flareon", name: "Flareon", base_species: "flareon", types: [Type::Fire, Type::None], base: [65, 130, 60, 95, 110, 65], gender: None, ability0: 76, weight_hg: 250 },
+    SpeciesData { id: "floetteeternal", name: "Floette-Eternal", base_species: "floette", types: [Type::Fairy, Type::None], base: [74, 65, 67, 125, 128, 92], gender: Some(Gender::F), ability0: 78, weight_hg: 9 },
+    SpeciesData { id: "floettemega", name: "Floette-Mega", base_species: "floette", types: [Type::Fairy, Type::None], base: [74, 85, 87, 155, 148, 102], gender: Some(Gender::F), ability0: 71, weight_hg: 1008 },
+    SpeciesData { id: "florges", name: "Florges", base_species: "florges", types: [Type::Fairy, Type::None], base: [78, 65, 68, 112, 154, 75], gender: Some(Gender::F), ability0: 78, weight_hg: 100 },
+    SpeciesData { id: "forretress", name: "Forretress", base_species: "forretress", types: [Type::Bug, Type::Steel], base: [75, 90, 140, 60, 60, 40], gender: None, ability0: 261, weight_hg: 1258 },
+    SpeciesData { id: "froslass", name: "Froslass", base_species: "froslass", types: [Type::Ice, Type::Ghost], base: [70, 80, 70, 80, 70, 110], gender: Some(Gender::F), ability0: 239, weight_hg: 266 },
+    SpeciesData { id: "froslassmega", name: "Froslass-Mega", base_species: "froslass", types: [Type::Ice, Type::Ghost], base: [70, 80, 70, 140, 100, 120], gender: Some(Gender::F), ability0: 240, weight_hg: 296 },
+    SpeciesData { id: "furfrou", name: "Furfrou", base_species: "furfrou", types: [Type::Normal, Type::None], base: [75, 80, 60, 65, 90, 102], gender: None, ability0: 85, weight_hg: 280 },
+    SpeciesData { id: "gallade", name: "Gallade", base_species: "gallade", types: [Type::Psychic, Type::Fighting], base: [68, 125, 65, 65, 115, 80], gender: Some(Gender::M), ability0: 253, weight_hg: 520 },
+    SpeciesData { id: "gallademega", name: "Gallade-Mega", base_species: "gallade", types: [Type::Psychic, Type::Fighting], base: [68, 165, 95, 65, 115, 110], gender: Some(Gender::M), ability0: 119, weight_hg: 564 },
+    SpeciesData { id: "garbodor", name: "Garbodor", base_species: "garbodor", types: [Type::Poison, Type::None], base: [80, 95, 82, 60, 82, 75], gender: None, ability0: 257, weight_hg: 1073 },
+    SpeciesData { id: "garchomp", name: "Garchomp", base_species: "garchomp", types: [Type::Dragon, Type::Ground], base: [108, 130, 95, 80, 85, 102], gender: None, ability0: 219, weight_hg: 950 },
+    SpeciesData { id: "garchompmega", name: "Garchomp-Mega", base_species: "garchomp", types: [Type::Dragon, Type::Ground], base: [108, 170, 115, 120, 95, 92], gender: None, ability0: 215, weight_hg: 950 },
+    SpeciesData { id: "garchompmegaz", name: "Garchomp-Mega-Z", base_species: "garchomp", types: [Type::Dragon, Type::None], base: [108, 130, 85, 141, 85, 151], gender: None, ability0: 129, weight_hg: 990 },
+    SpeciesData { id: "gardevoir", name: "Gardevoir", base_species: "gardevoir", types: [Type::Psychic, Type::Fairy], base: [68, 65, 65, 125, 115, 80], gender: None, ability0: 272, weight_hg: 484 },
+    SpeciesData { id: "gardevoirmega", name: "Gardevoir-Mega", base_species: "gardevoir", types: [Type::Psychic, Type::Fairy], base: [68, 85, 65, 165, 135, 100], gender: None, ability0: 178, weight_hg: 484 },
+    SpeciesData { id: "garganacl", name: "Garganacl", base_species: "garganacl", types: [Type::Rock, Type::None], base: [100, 100, 130, 45, 90, 35], gender: None, ability0: 197, weight_hg: 2400 },
+    SpeciesData { id: "gengar", name: "Gengar", base_species: "gengar", types: [Type::Ghost, Type::Poison], base: [60, 65, 60, 130, 75, 110], gender: None, ability0: 42, weight_hg: 405 },
+    SpeciesData { id: "gengarmega", name: "Gengar-Mega", base_species: "gengar", types: [Type::Ghost, Type::Poison], base: [60, 65, 80, 170, 95, 130], gender: None, ability0: 227, weight_hg: 405 },
+    SpeciesData { id: "gholdengo", name: "Gholdengo", base_species: "gholdengo", types: [Type::Steel, Type::Ghost], base: [87, 60, 95, 133, 91, 84], gender: Some(Gender::N), ability0: 89, weight_hg: 300 },
+    SpeciesData { id: "glaceon", name: "Glaceon", base_species: "glaceon", types: [Type::Ice, Type::None], base: [65, 60, 110, 130, 95, 65], gender: None, ability0: 239, weight_hg: 259 },
+    SpeciesData { id: "glalie", name: "Glalie", base_species: "glalie", types: [Type::Ice, Type::None], base: [80, 80, 80, 80, 80, 80], gender: None, ability0: 119, weight_hg: 2565 },
+    SpeciesData { id: "glaliemega", name: "Glalie-Mega", base_species: "glalie", types: [Type::Ice, Type::None], base: [80, 120, 80, 120, 80, 100], gender: None, ability0: 206, weight_hg: 3502 },
+    SpeciesData { id: "glimmora", name: "Glimmora", base_species: "glimmora", types: [Type::Rock, Type::Poison], base: [83, 55, 90, 130, 81, 86], gender: None, ability0: 289, weight_hg: 450 },
+    SpeciesData { id: "glimmoramega", name: "Glimmora-Mega", base_species: "glimmora", types: [Type::Rock, Type::Poison], base: [83, 90, 105, 150, 96, 101], gender: None, ability0: 0, weight_hg: 770 },
+    SpeciesData { id: "gliscor", name: "Gliscor", base_species: "gliscor", types: [Type::Ground, Type::Flying], base: [75, 95, 125, 45, 75, 95], gender: None, ability0: 109, weight_hg: 425 },
+    SpeciesData { id: "gogoat", name: "Gogoat", base_species: "gogoat", types: [Type::Grass, Type::None], base: [123, 100, 62, 97, 81, 68], gender: None, ability0: 220, weight_hg: 910 },
+    SpeciesData { id: "golisopod", name: "Golisopod", base_species: "golisopod", types: [Type::Bug, Type::Water], base: [75, 125, 140, 60, 90, 40], gender: None, ability0: 70, weight_hg: 1080 },
+    SpeciesData { id: "golisopodmega", name: "Golisopod-Mega", base_species: "golisopod", types: [Type::Bug, Type::Steel], base: [75, 150, 175, 70, 120, 40], gender: None, ability0: 286, weight_hg: 1480 },
+    SpeciesData { id: "golurk", name: "Golurk", base_species: "golurk", types: [Type::Ground, Type::Ghost], base: [89, 124, 80, 55, 80, 55], gender: Some(Gender::N), ability0: 124, weight_hg: 3300 },
+    SpeciesData { id: "golurkmega", name: "Golurk-Mega", base_species: "golurk", types: [Type::Ground, Type::Ghost], base: [89, 159, 105, 70, 105, 55], gender: Some(Gender::N), ability0: 298, weight_hg: 3300 },
+    SpeciesData { id: "goodra", name: "Goodra", base_species: "goodra", types: [Type::Dragon, Type::None], base: [90, 100, 70, 110, 150, 80], gender: None, ability0: 220, weight_hg: 1505 },
+    SpeciesData { id: "goodrahisui", name: "Goodra-Hisui", base_species: "goodra", types: [Type::Steel, Type::Dragon], base: [80, 100, 100, 110, 150, 60], gender: None, ability0: 220, weight_hg: 3341 },
+    SpeciesData { id: "gourgeist", name: "Gourgeist", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [65, 90, 122, 58, 75, 84], gender: None, ability0: 176, weight_hg: 125 },
+    SpeciesData { id: "gourgeistlarge", name: "Gourgeist-Large", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [75, 95, 122, 58, 75, 69], gender: None, ability0: 176, weight_hg: 140 },
+    SpeciesData { id: "gourgeistsmall", name: "Gourgeist-Small", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [55, 85, 122, 58, 75, 99], gender: None, ability0: 176, weight_hg: 95 },
+    SpeciesData { id: "gourgeistsuper", name: "Gourgeist-Super", base_species: "gourgeist", types: [Type::Ghost, Type::Grass], base: [85, 100, 122, 58, 75, 54], gender: None, ability0: 176, weight_hg: 390 },
+    SpeciesData { id: "grapploct", name: "Grapploct", base_species: "grapploct", types: [Type::Fighting, Type::None], base: [80, 118, 90, 70, 80, 42], gender: None, ability0: 133, weight_hg: 390 },
+    SpeciesData { id: "greninja", name: "Greninja", base_species: "greninja", types: [Type::Water, Type::Dark], base: [72, 95, 67, 103, 71, 122], gender: None, ability0: 285, weight_hg: 400 },
+    SpeciesData { id: "greninjamega", name: "Greninja-Mega", base_species: "greninja", types: [Type::Water, Type::Dark], base: [72, 125, 77, 133, 81, 142], gender: None, ability0: 192, weight_hg: 400 },
+    SpeciesData { id: "grimmsnarl", name: "Grimmsnarl", base_species: "grimmsnarl", types: [Type::Dark, Type::Fairy], base: [95, 120, 65, 95, 75, 60], gender: Some(Gender::M), ability0: 187, weight_hg: 610 },
+    SpeciesData { id: "gyarados", name: "Gyarados", base_species: "gyarados", types: [Type::Water, Type::Flying], base: [95, 125, 79, 60, 100, 81], gender: None, ability0: 121, weight_hg: 2350 },
+    SpeciesData { id: "gyaradosmega", name: "Gyarados-Mega", base_species: "gyarados", types: [Type::Water, Type::Dark], base: [95, 155, 109, 70, 130, 81], gender: None, ability0: 152, weight_hg: 3050 },
+    SpeciesData { id: "hatterene", name: "Hatterene", base_species: "hatterene", types: [Type::Psychic, Type::Fairy], base: [57, 90, 95, 136, 103, 29], gender: Some(Gender::F), ability0: 100, weight_hg: 51 },
+    SpeciesData { id: "hawlucha", name: "Hawlucha", base_species: "hawlucha", types: [Type::Fighting, Type::Flying], base: [78, 92, 75, 74, 63, 118], gender: None, ability0: 133, weight_hg: 215 },
+    SpeciesData { id: "hawluchamega", name: "Hawlucha-Mega", base_species: "hawlucha", types: [Type::Fighting, Type::Flying], base: [78, 137, 100, 74, 93, 118], gender: None, ability0: 164, weight_hg: 250 },
+    SpeciesData { id: "heliolisk", name: "Heliolisk", base_species: "heliolisk", types: [Type::Electric, Type::Normal], base: [62, 55, 52, 109, 94, 109], gender: None, ability0: 59, weight_hg: 210 },
+    SpeciesData { id: "heracross", name: "Heracross", base_species: "heracross", types: [Type::Bug, Type::Fighting], base: [80, 125, 75, 40, 95, 85], gender: None, ability0: 267, weight_hg: 540 },
+    SpeciesData { id: "heracrossmega", name: "Heracross-Mega", base_species: "heracross", types: [Type::Bug, Type::Fighting], base: [80, 185, 115, 40, 105, 75], gender: None, ability0: 235, weight_hg: 625 },
+    SpeciesData { id: "hippowdon", name: "Hippowdon", base_species: "hippowdon", types: [Type::Ground, Type::None], base: [108, 112, 118, 68, 72, 47], gender: None, ability0: 218, weight_hg: 3000 },
+    SpeciesData { id: "houndoom", name: "Houndoom", base_species: "houndoom", types: [Type::Dark, Type::Fire], base: [75, 90, 50, 110, 80, 95], gender: None, ability0: 60, weight_hg: 350 },
+    SpeciesData { id: "houndoommega", name: "Houndoom-Mega", base_species: "houndoom", types: [Type::Dark, Type::Fire], base: [75, 90, 90, 140, 90, 115], gender: None, ability0: 241, weight_hg: 495 },
+    SpeciesData { id: "houndstone", name: "Houndstone", base_species: "houndstone", types: [Type::Ghost, Type::None], base: [72, 101, 100, 50, 97, 68], gender: None, ability0: 216, weight_hg: 150 },
+    SpeciesData { id: "hydrapple", name: "Hydrapple", base_species: "hydrapple", types: [Type::Grass, Type::Dragon], base: [106, 80, 110, 120, 80, 44], gender: None, ability0: 264, weight_hg: 930 },
+    SpeciesData { id: "hydreigon", name: "Hydreigon", base_species: "hydreigon", types: [Type::Dark, Type::Dragon], base: [92, 105, 90, 125, 90, 98], gender: None, ability0: 129, weight_hg: 1600 },
+    SpeciesData { id: "incineroar", name: "Incineroar", base_species: "incineroar", types: [Type::Fire, Type::Dark], base: [95, 115, 90, 80, 90, 60], gender: None, ability0: 24, weight_hg: 830 },
+    SpeciesData { id: "indeedee", name: "Indeedee", base_species: "indeedee", types: [Type::Psychic, Type::Normal], base: [60, 65, 55, 105, 95, 95], gender: Some(Gender::M), ability0: 119, weight_hg: 280 },
+    SpeciesData { id: "indeedeef", name: "Indeedee-F", base_species: "indeedee", types: [Type::Psychic, Type::Normal], base: [70, 55, 65, 95, 105, 85], gender: Some(Gender::F), ability0: 171, weight_hg: 280 },
+    SpeciesData { id: "infernape", name: "Infernape", base_species: "infernape", types: [Type::Fire, Type::Fighting], base: [76, 104, 71, 104, 71, 108], gender: None, ability0: 24, weight_hg: 550 },
+    SpeciesData { id: "inteleon", name: "Inteleon", base_species: "inteleon", types: [Type::Water, Type::None], base: [70, 85, 65, 125, 65, 120], gender: None, ability0: 285, weight_hg: 452 },
+    SpeciesData { id: "jolteon", name: "Jolteon", base_species: "jolteon", types: [Type::Electric, Type::None], base: [65, 65, 60, 110, 95, 130], gender: None, ability0: 302, weight_hg: 245 },
+    SpeciesData { id: "kangaskhan", name: "Kangaskhan", base_species: "kangaskhan", types: [Type::Normal, Type::None], base: [105, 95, 80, 40, 80, 90], gender: Some(Gender::F), ability0: 60, weight_hg: 800 },
+    SpeciesData { id: "kangaskhanmega", name: "Kangaskhan-Mega", base_species: "kangaskhan", types: [Type::Normal, Type::None], base: [105, 125, 100, 60, 100, 100], gender: Some(Gender::F), ability0: 172, weight_hg: 1000 },
+    SpeciesData { id: "kingambit", name: "Kingambit", base_species: "kingambit", types: [Type::Dark, Type::Steel], base: [100, 135, 120, 60, 85, 50], gender: None, ability0: 50, weight_hg: 1200 },
+    SpeciesData { id: "kleavor", name: "Kleavor", base_species: "kleavor", types: [Type::Bug, Type::Rock], base: [70, 135, 95, 45, 70, 85], gender: None, ability0: 267, weight_hg: 890 },
+    SpeciesData { id: "klefki", name: "Klefki", base_species: "klefki", types: [Type::Steel, Type::Fairy], base: [57, 80, 91, 80, 87, 75], gender: None, ability0: 187, weight_hg: 30 },
+    SpeciesData { id: "kommoo", name: "Kommo-o", base_species: "kommoo", types: [Type::Dragon, Type::Fighting], base: [75, 110, 125, 100, 105, 85], gender: None, ability0: 25, weight_hg: 782 },
+    SpeciesData { id: "krookodile", name: "Krookodile", base_species: "krookodile", types: [Type::Ground, Type::Dark], base: [95, 117, 80, 65, 70, 92], gender: None, ability0: 121, weight_hg: 963 },
+    SpeciesData { id: "leafeon", name: "Leafeon", base_species: "leafeon", types: [Type::Grass, Type::None], base: [65, 110, 130, 60, 65, 95], gender: None, ability0: 128, weight_hg: 255 },
+    SpeciesData { id: "liepard", name: "Liepard", base_species: "liepard", types: [Type::Dark, Type::None], base: [64, 88, 50, 88, 50, 106], gender: None, ability0: 133, weight_hg: 375 },
+    SpeciesData { id: "lopunny", name: "Lopunny", base_species: "lopunny", types: [Type::Normal, Type::None], base: [65, 76, 84, 54, 96, 105], gender: None, ability0: 43, weight_hg: 333 },
+    SpeciesData { id: "lopunnymega", name: "Lopunny-Mega", base_species: "lopunny", types: [Type::Normal, Type::Fighting], base: [65, 136, 94, 54, 96, 135], gender: None, ability0: 222, weight_hg: 283 },
+    SpeciesData { id: "lucario", name: "Lucario", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 110, 70, 115, 70, 90], gender: None, ability0: 253, weight_hg: 540 },
+    SpeciesData { id: "lucariomega", name: "Lucario-Mega", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 145, 88, 140, 70, 112], gender: None, ability0: 0, weight_hg: 575 },
+    SpeciesData { id: "lucariomegaz", name: "Lucario-Mega-Z", base_species: "lucario", types: [Type::Fighting, Type::Steel], base: [70, 100, 70, 164, 70, 151], gender: None, ability0: 14, weight_hg: 494 },
+    SpeciesData { id: "luxray", name: "Luxray", base_species: "luxray", types: [Type::Electric, Type::None], base: [80, 120, 79, 95, 79, 70], gender: None, ability0: 209, weight_hg: 420 },
+    SpeciesData { id: "lycanroc", name: "Lycanroc", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [75, 115, 65, 55, 65, 112], gender: None, ability0: 126, weight_hg: 250 },
+    SpeciesData { id: "lycanrocdusk", name: "Lycanroc-Dusk", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [75, 117, 65, 55, 65, 110], gender: None, ability0: 286, weight_hg: 250 },
+    SpeciesData { id: "lycanrocmidnight", name: "Lycanroc-Midnight", base_species: "lycanroc", types: [Type::Rock, Type::None], base: [85, 115, 75, 55, 75, 82], gender: None, ability0: 126, weight_hg: 250 },
+    SpeciesData { id: "mabosstiff", name: "Mabosstiff", base_species: "mabosstiff", types: [Type::Dark, Type::None], base: [80, 120, 90, 60, 70, 85], gender: None, ability0: 121, weight_hg: 610 },
+    SpeciesData { id: "machamp", name: "Machamp", base_species: "machamp", types: [Type::Fighting, Type::None], base: [90, 130, 80, 65, 85, 55], gender: None, ability0: 97, weight_hg: 1300 },
+    SpeciesData { id: "malamar", name: "Malamar", base_species: "malamar", types: [Type::Dark, Type::Psychic], base: [86, 92, 88, 68, 75, 73], gender: None, ability0: 36, weight_hg: 470 },
+    SpeciesData { id: "malamarmega", name: "Malamar-Mega", base_species: "malamar", types: [Type::Dark, Type::Psychic], base: [86, 102, 88, 98, 120, 88], gender: None, ability0: 36, weight_hg: 698 },
+    SpeciesData { id: "mamoswine", name: "Mamoswine", base_species: "mamoswine", types: [Type::Ice, Type::Ground], base: [110, 130, 80, 70, 60, 80], gender: None, ability0: 166, weight_hg: 2910 },
+    SpeciesData { id: "manectric", name: "Manectric", base_species: "manectric", types: [Type::Electric, Type::None], base: [70, 75, 60, 105, 60, 105], gender: None, ability0: 252, weight_hg: 402 },
+    SpeciesData { id: "manectricmega", name: "Manectric-Mega", base_species: "manectric", types: [Type::Electric, Type::None], base: [70, 75, 80, 135, 80, 135], gender: None, ability0: 121, weight_hg: 440 },
+    SpeciesData { id: "maushold", name: "Maushold", base_species: "maushold", types: [Type::Normal, Type::None], base: [74, 75, 70, 65, 75, 111], gender: Some(Gender::N), ability0: 82, weight_hg: 23 },
+    SpeciesData { id: "mausholdfour", name: "Maushold-Four", base_species: "maushold", types: [Type::Normal, Type::None], base: [74, 75, 70, 65, 75, 111], gender: Some(Gender::N), ability0: 82, weight_hg: 28 },
+    SpeciesData { id: "mawile", name: "Mawile", base_species: "mawile", types: [Type::Steel, Type::Fairy], base: [50, 85, 85, 55, 55, 50], gender: None, ability0: 109, weight_hg: 115 },
+    SpeciesData { id: "mawilemega", name: "Mawile-Mega", base_species: "mawile", types: [Type::Steel, Type::Fairy], base: [50, 105, 125, 55, 95, 50], gender: None, ability0: 105, weight_hg: 235 },
+    SpeciesData { id: "medicham", name: "Medicham", base_species: "medicham", types: [Type::Fighting, Type::Psychic], base: [60, 60, 75, 60, 75, 80], gender: None, ability0: 196, weight_hg: 315 },
+    SpeciesData { id: "medichammega", name: "Medicham-Mega", base_species: "medicham", types: [Type::Fighting, Type::Psychic], base: [60, 100, 85, 80, 85, 100], gender: None, ability0: 196, weight_hg: 315 },
+    SpeciesData { id: "meganium", name: "Meganium", base_species: "meganium", types: [Type::Grass, Type::None], base: [80, 82, 100, 83, 100, 80], gender: None, ability0: 170, weight_hg: 1005 },
+    SpeciesData { id: "meganiummega", name: "Meganium-Mega", base_species: "meganium", types: [Type::Grass, Type::Fairy], base: [80, 92, 115, 143, 115, 80], gender: None, ability0: 145, weight_hg: 2010 },
+    SpeciesData { id: "meloettapirouette", name: "Meloetta-Pirouette", base_species: "meloetta", types: [Type::Normal, Type::Fighting], base: [100, 128, 90, 77, 77, 128], gender: Some(Gender::N), ability0: 225, weight_hg: 65 },
+    SpeciesData { id: "meowscarada", name: "Meowscarada", base_species: "meowscarada", types: [Type::Grass, Type::Dark], base: [76, 110, 70, 81, 70, 123], gender: None, ability0: 170, weight_hg: 312 },
+    SpeciesData { id: "meowstic", name: "Meowstic", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 83, 81, 104], gender: Some(Gender::M), ability0: 126, weight_hg: 85 },
+    SpeciesData { id: "meowsticf", name: "Meowstic-F", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 83, 81, 104], gender: Some(Gender::F), ability0: 126, weight_hg: 85 },
+    SpeciesData { id: "meowsticfmega", name: "Meowstic-F-Mega", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 143, 101, 124], gender: Some(Gender::F), ability0: 290, weight_hg: 101 },
+    SpeciesData { id: "meowsticmmega", name: "Meowstic-M-Mega", base_species: "meowstic", types: [Type::Psychic, Type::None], base: [74, 48, 76, 143, 101, 124], gender: Some(Gender::M), ability0: 290, weight_hg: 101 },
+    SpeciesData { id: "metagross", name: "Metagross", base_species: "metagross", types: [Type::Steel, Type::Psychic], base: [80, 135, 130, 95, 90, 70], gender: Some(Gender::N), ability0: 29, weight_hg: 5500 },
+    SpeciesData { id: "metagrossmega", name: "Metagross-Mega", base_species: "metagross", types: [Type::Steel, Type::Psychic], base: [80, 145, 150, 105, 110, 110], gender: Some(Gender::N), ability0: 286, weight_hg: 9429 },
+    SpeciesData { id: "milotic", name: "Milotic", base_species: "milotic", types: [Type::Water, Type::None], base: [95, 60, 79, 100, 125, 81], gender: None, ability0: 143, weight_hg: 1620 },
+    SpeciesData { id: "mimikyu", name: "Mimikyu", base_species: "mimikyu", types: [Type::Ghost, Type::Fairy], base: [55, 90, 80, 50, 105, 96], gender: None, ability0: 53, weight_hg: 7 },
+    SpeciesData { id: "mimikyubusted", name: "Mimikyu-Busted", base_species: "mimikyu", types: [Type::Ghost, Type::Fairy], base: [55, 90, 80, 50, 105, 96], gender: None, ability0: 53, weight_hg: 7 },
+    SpeciesData { id: "miniormeteor", name: "Minior-Meteor", base_species: "minior", types: [Type::Rock, Type::Flying], base: [60, 60, 100, 60, 100, 60], gender: Some(Gender::N), ability0: 233, weight_hg: 400 },
+    SpeciesData { id: "morpeko", name: "Morpeko", base_species: "morpeko", types: [Type::Electric, Type::Dark], base: [58, 95, 58, 70, 58, 97], gender: None, ability0: 106, weight_hg: 30 },
+    SpeciesData { id: "morpekohangry", name: "Morpeko-Hangry", base_species: "morpeko", types: [Type::Electric, Type::Dark], base: [58, 95, 58, 70, 58, 97], gender: None, ability0: 106, weight_hg: 30 },
+    SpeciesData { id: "mrmime", name: "Mr. Mime", base_species: "mrmime", types: [Type::Psychic, Type::Fairy], base: [40, 45, 65, 100, 120, 90], gender: None, ability0: 244, weight_hg: 545 },
+    SpeciesData { id: "mrrime", name: "Mr. Rime", base_species: "mrrime", types: [Type::Ice, Type::Psychic], base: [80, 85, 75, 110, 100, 70], gender: None, ability0: 274, weight_hg: 582 },
+    SpeciesData { id: "mudsdale", name: "Mudsdale", base_species: "mudsdale", types: [Type::Ground, Type::None], base: [100, 125, 100, 55, 85, 35], gender: None, ability0: 171, weight_hg: 9200 },
+    SpeciesData { id: "musharna", name: "Musharna", base_species: "musharna", types: [Type::Psychic, Type::None], base: [116, 55, 85, 107, 95, 29], gender: None, ability0: 81, weight_hg: 605 },
+    SpeciesData { id: "ninetales", name: "Ninetales", base_species: "ninetales", types: [Type::Fire, Type::None], base: [73, 76, 75, 81, 100, 100], gender: None, ability0: 76, weight_hg: 199 },
+    SpeciesData { id: "ninetalesalola", name: "Ninetales-Alola", base_species: "ninetales", types: [Type::Ice, Type::Fairy], base: [73, 67, 75, 81, 100, 109], gender: None, ability0: 239, weight_hg: 199 },
+    SpeciesData { id: "noivern", name: "Noivern", base_species: "noivern", types: [Type::Flying, Type::Dragon], base: [85, 70, 80, 97, 80, 123], gender: None, ability0: 83, weight_hg: 850 },
+    SpeciesData { id: "ogerponcornerstonetera", name: "Ogerpon-Cornerstone-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Rock], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F), ability0: 66, weight_hg: 398 },
+    SpeciesData { id: "ogerponhearthflametera", name: "Ogerpon-Hearthflame-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Fire], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F), ability0: 67, weight_hg: 398 },
+    SpeciesData { id: "ogerpontealtera", name: "Ogerpon-Teal-Tera", base_species: "ogerpon", types: [Type::Grass, Type::None], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F), ability0: 68, weight_hg: 398 },
+    SpeciesData { id: "ogerponwellspringtera", name: "Ogerpon-Wellspring-Tera", base_species: "ogerpon", types: [Type::Grass, Type::Water], base: [80, 120, 84, 60, 96, 110], gender: Some(Gender::F), ability0: 69, weight_hg: 398 },
+    SpeciesData { id: "oranguru", name: "Oranguru", base_species: "oranguru", types: [Type::Normal, Type::Psychic], base: [90, 60, 80, 90, 110, 60], gender: None, ability0: 119, weight_hg: 760 },
+    SpeciesData { id: "orthworm", name: "Orthworm", base_species: "orthworm", types: [Type::Steel, Type::None], base: [70, 85, 145, 60, 55, 65], gender: None, ability0: 61, weight_hg: 3100 },
+    SpeciesData { id: "overqwil", name: "Overqwil", base_species: "overqwil", types: [Type::Dark, Type::Poison], base: [85, 115, 95, 65, 65, 85], gender: None, ability0: 181, weight_hg: 605 },
+    SpeciesData { id: "palafin", name: "Palafin", base_species: "palafin", types: [Type::Water, Type::None], base: [100, 70, 72, 53, 62, 100], gender: None, ability0: 317, weight_hg: 602 },
+    SpeciesData { id: "palafinhero", name: "Palafin-Hero", base_species: "palafin", types: [Type::Water, Type::None], base: [100, 160, 97, 106, 87, 100], gender: None, ability0: 317, weight_hg: 974 },
+    SpeciesData { id: "pangoro", name: "Pangoro", base_species: "pangoro", types: [Type::Fighting, Type::Dark], base: [95, 124, 78, 69, 71, 58], gender: None, ability0: 124, weight_hg: 1360 },
+    SpeciesData { id: "passimian", name: "Passimian", base_species: "passimian", types: [Type::Fighting, Type::None], base: [100, 120, 90, 40, 60, 80], gender: None, ability0: 204, weight_hg: 828 },
+    SpeciesData { id: "pawmot", name: "Pawmot", base_species: "pawmot", types: [Type::Electric, Type::Fighting], base: [70, 115, 70, 70, 60, 105], gender: None, ability0: 302, weight_hg: 410 },
+    SpeciesData { id: "pelipper", name: "Pelipper", base_species: "pelipper", types: [Type::Water, Type::Flying], base: [60, 50, 100, 95, 70, 65], gender: None, ability0: 126, weight_hg: 280 },
+    SpeciesData { id: "perrserker", name: "Perrserker", base_species: "perrserker", types: [Type::Steel, Type::None], base: [70, 110, 100, 50, 60, 50], gender: None, ability0: 18, weight_hg: 280 },
+    SpeciesData { id: "persian", name: "Persian", base_species: "persian", types: [Type::Normal, Type::None], base: [65, 70, 60, 65, 65, 115], gender: None, ability0: 133, weight_hg: 320 },
+    SpeciesData { id: "persianalola", name: "Persian-Alola", base_species: "persian", types: [Type::Dark, Type::None], base: [65, 60, 60, 75, 65, 115], gender: None, ability0: 85, weight_hg: 330 },
+    SpeciesData { id: "pidgeot", name: "Pidgeot", base_species: "pidgeot", types: [Type::Normal, Type::Flying], base: [83, 80, 75, 70, 70, 101], gender: None, ability0: 126, weight_hg: 395 },
+    SpeciesData { id: "pidgeotmega", name: "Pidgeot-Mega", base_species: "pidgeot", types: [Type::Normal, Type::Flying], base: [83, 80, 80, 135, 80, 121], gender: None, ability0: 164, weight_hg: 505 },
+    SpeciesData { id: "pikachu", name: "Pikachu", base_species: "pikachu", types: [Type::Electric, Type::None], base: [35, 55, 40, 50, 50, 90], gender: None, ability0: 252, weight_hg: 60 },
+    SpeciesData { id: "pincurchin", name: "Pincurchin", base_species: "pincurchin", types: [Type::Electric, Type::None], base: [48, 101, 95, 91, 85, 15], gender: None, ability0: 132, weight_hg: 10 },
+    SpeciesData { id: "pinsir", name: "Pinsir", base_species: "pinsir", types: [Type::Bug, Type::None], base: [65, 125, 100, 55, 70, 85], gender: None, ability0: 109, weight_hg: 550 },
+    SpeciesData { id: "pinsirmega", name: "Pinsir-Mega", base_species: "pinsir", types: [Type::Bug, Type::Flying], base: [65, 155, 120, 65, 90, 105], gender: None, ability0: 1, weight_hg: 590 },
+    SpeciesData { id: "politoed", name: "Politoed", base_species: "politoed", types: [Type::Water, Type::None], base: [90, 75, 75, 90, 100, 70], gender: None, ability0: 304, weight_hg: 339 },
+    SpeciesData { id: "polteageist", name: "Polteageist", base_species: "polteageist", types: [Type::Ghost, Type::None], base: [60, 65, 65, 134, 114, 70], gender: Some(Gender::N), ability0: 308, weight_hg: 4 },
+    SpeciesData { id: "polteageistantique", name: "Polteageist-Antique", base_species: "polteageist", types: [Type::Ghost, Type::None], base: [60, 65, 65, 134, 114, 70], gender: Some(Gender::N), ability0: 308, weight_hg: 4 },
+    SpeciesData { id: "primarina", name: "Primarina", base_species: "primarina", types: [Type::Water, Type::Fairy], base: [80, 74, 74, 126, 116, 60], gender: None, ability0: 285, weight_hg: 440 },
+    SpeciesData { id: "pyroar", name: "Pyroar", base_species: "pyroar", types: [Type::Fire, Type::Normal], base: [86, 68, 72, 109, 66, 106], gender: None, ability0: 209, weight_hg: 815 },
+    SpeciesData { id: "pyroarmega", name: "Pyroar-Mega", base_species: "pyroar", types: [Type::Fire, Type::Normal], base: [86, 88, 92, 129, 86, 126], gender: None, ability0: 73, weight_hg: 933 },
+    SpeciesData { id: "quaquaval", name: "Quaquaval", base_species: "quaquaval", types: [Type::Water, Type::Fighting], base: [85, 120, 80, 85, 75, 85], gender: None, ability0: 285, weight_hg: 619 },
+    SpeciesData { id: "qwilfish", name: "Qwilfish", base_species: "qwilfish", types: [Type::Water, Type::Poison], base: [65, 95, 85, 55, 55, 85], gender: None, ability0: 181, weight_hg: 39 },
+    SpeciesData { id: "raichu", name: "Raichu", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 90, 55, 90, 80, 110], gender: None, ability0: 252, weight_hg: 300 },
+    SpeciesData { id: "raichualola", name: "Raichu-Alola", base_species: "raichu", types: [Type::Electric, Type::Psychic], base: [60, 85, 50, 95, 85, 110], gender: None, ability0: 266, weight_hg: 210 },
+    SpeciesData { id: "raichumegax", name: "Raichu-Mega-X", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 135, 95, 90, 95, 110], gender: None, ability0: 64, weight_hg: 380 },
+    SpeciesData { id: "raichumegay", name: "Raichu-Mega-Y", base_species: "raichu", types: [Type::Electric, Type::None], base: [60, 100, 55, 160, 80, 130], gender: None, ability0: 164, weight_hg: 260 },
+    SpeciesData { id: "rampardos", name: "Rampardos", base_species: "rampardos", types: [Type::Rock, Type::None], base: [97, 165, 60, 65, 50, 58], gender: None, ability0: 152, weight_hg: 1025 },
+    SpeciesData { id: "reuniclus", name: "Reuniclus", base_species: "reuniclus", types: [Type::Psychic, Type::None], base: [110, 65, 75, 125, 85, 30], gender: None, ability0: 169, weight_hg: 201 },
+    SpeciesData { id: "rhyperior", name: "Rhyperior", base_species: "rhyperior", types: [Type::Ground, Type::Rock], base: [115, 140, 130, 55, 55, 40], gender: None, ability0: 132, weight_hg: 2828 },
+    SpeciesData { id: "rillaboom", name: "Rillaboom", base_species: "rillaboom", types: [Type::Grass, Type::None], base: [100, 125, 90, 60, 70, 85], gender: None, ability0: 170, weight_hg: 900 },
+    SpeciesData { id: "roserade", name: "Roserade", base_species: "roserade", types: [Type::Grass, Type::Poison], base: [60, 70, 65, 125, 105, 90], gender: None, ability0: 160, weight_hg: 145 },
+    SpeciesData { id: "rotom", name: "Rotom", base_species: "rotom", types: [Type::Electric, Type::Ghost], base: [50, 50, 77, 95, 77, 91], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "rotomfan", name: "Rotom-Fan", base_species: "rotom", types: [Type::Electric, Type::Flying], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "rotomfrost", name: "Rotom-Frost", base_species: "rotom", types: [Type::Electric, Type::Ice], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "rotomheat", name: "Rotom-Heat", base_species: "rotom", types: [Type::Electric, Type::Fire], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "rotommow", name: "Rotom-Mow", base_species: "rotom", types: [Type::Electric, Type::Grass], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "rotomwash", name: "Rotom-Wash", base_species: "rotom", types: [Type::Electric, Type::Water], base: [50, 65, 107, 105, 107, 86], gender: Some(Gender::N), ability0: 129, weight_hg: 3 },
+    SpeciesData { id: "runerigus", name: "Runerigus", base_species: "runerigus", types: [Type::Ground, Type::Ghost], base: [58, 95, 145, 50, 105, 30], gender: None, ability0: 303, weight_hg: 666 },
+    SpeciesData { id: "sableye", name: "Sableye", base_species: "sableye", types: [Type::Dark, Type::Ghost], base: [50, 75, 75, 65, 65, 50], gender: None, ability0: 126, weight_hg: 110 },
+    SpeciesData { id: "sableyemega", name: "Sableye-Mega", base_species: "sableye", types: [Type::Dark, Type::Ghost], base: [50, 85, 125, 85, 115, 20], gender: None, ability0: 138, weight_hg: 1610 },
+    SpeciesData { id: "salamence", name: "Salamence", base_species: "salamence", types: [Type::Dragon, Type::Flying], base: [95, 135, 80, 110, 80, 100], gender: None, ability0: 121, weight_hg: 1026 },
+    SpeciesData { id: "salamencemega", name: "Salamence-Mega", base_species: "salamence", types: [Type::Dragon, Type::Flying], base: [95, 145, 130, 120, 90, 120], gender: None, ability0: 1, weight_hg: 1126 },
+    SpeciesData { id: "salazzle", name: "Salazzle", base_species: "salazzle", types: [Type::Poison, Type::Fire], base: [68, 64, 60, 111, 60, 117], gender: Some(Gender::F), ability0: 37, weight_hg: 222 },
+    SpeciesData { id: "samurott", name: "Samurott", base_species: "samurott", types: [Type::Water, Type::None], base: [95, 100, 85, 108, 70, 70], gender: None, ability0: 285, weight_hg: 946 },
+    SpeciesData { id: "samurotthisui", name: "Samurott-Hisui", base_species: "samurott", types: [Type::Water, Type::Dark], base: [90, 108, 80, 100, 65, 85], gender: None, ability0: 285, weight_hg: 582 },
+    SpeciesData { id: "sandaconda", name: "Sandaconda", base_species: "sandaconda", types: [Type::Ground, Type::None], base: [72, 107, 125, 65, 70, 71], gender: None, ability0: 217, weight_hg: 655 },
+    SpeciesData { id: "sceptile", name: "Sceptile", base_species: "sceptile", types: [Type::Grass, Type::None], base: [70, 85, 65, 105, 85, 120], gender: None, ability0: 170, weight_hg: 522 },
+    SpeciesData { id: "sceptilemega", name: "Sceptile-Mega", base_species: "sceptile", types: [Type::Grass, Type::Dragon], base: [70, 110, 75, 145, 85, 145], gender: None, ability0: 132, weight_hg: 552 },
+    SpeciesData { id: "scizor", name: "Scizor", base_species: "scizor", types: [Type::Bug, Type::Steel], base: [70, 130, 100, 55, 80, 65], gender: None, ability0: 267, weight_hg: 1180 },
+    SpeciesData { id: "scizormega", name: "Scizor-Mega", base_species: "scizor", types: [Type::Bug, Type::Steel], base: [70, 150, 140, 65, 100, 75], gender: None, ability0: 276, weight_hg: 1250 },
+    SpeciesData { id: "scolipede", name: "Scolipede", base_species: "scolipede", types: [Type::Bug, Type::Poison], base: [60, 100, 89, 55, 69, 112], gender: None, ability0: 181, weight_hg: 2005 },
+    SpeciesData { id: "scolipedemega", name: "Scolipede-Mega", base_species: "scolipede", types: [Type::Bug, Type::Poison], base: [60, 140, 149, 75, 99, 62], gender: None, ability0: 231, weight_hg: 2305 },
+    SpeciesData { id: "scovillain", name: "Scovillain", base_species: "scovillain", types: [Type::Grass, Type::Fire], base: [65, 108, 65, 108, 65, 75], gender: None, ability0: 28, weight_hg: 150 },
+    SpeciesData { id: "scovillainmega", name: "Scovillain-Mega", base_species: "scovillain", types: [Type::Grass, Type::Fire], base: [65, 138, 85, 138, 85, 75], gender: None, ability0: 246, weight_hg: 220 },
+    SpeciesData { id: "scrafty", name: "Scrafty", base_species: "scrafty", types: [Type::Dark, Type::Fighting], base: [65, 90, 115, 45, 115, 58], gender: None, ability0: 229, weight_hg: 300 },
+    SpeciesData { id: "scraftymega", name: "Scrafty-Mega", base_species: "scrafty", types: [Type::Dark, Type::Fighting], base: [65, 130, 135, 55, 135, 68], gender: None, ability0: 121, weight_hg: 310 },
+    SpeciesData { id: "serperior", name: "Serperior", base_species: "serperior", types: [Type::Grass, Type::None], base: [75, 75, 95, 75, 95, 113], gender: None, ability0: 170, weight_hg: 630 },
+    SpeciesData { id: "sharpedo", name: "Sharpedo", base_species: "sharpedo", types: [Type::Water, Type::Dark], base: [70, 120, 40, 95, 40, 95], gender: None, ability0: 213, weight_hg: 888 },
+    SpeciesData { id: "sharpedomega", name: "Sharpedo-Mega", base_species: "sharpedo", types: [Type::Water, Type::Dark], base: [70, 140, 70, 110, 65, 105], gender: None, ability0: 260, weight_hg: 1303 },
+    SpeciesData { id: "simipour", name: "Simipour", base_species: "simipour", types: [Type::Water, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None, ability0: 88, weight_hg: 290 },
+    SpeciesData { id: "simisage", name: "Simisage", base_species: "simisage", types: [Type::Grass, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None, ability0: 88, weight_hg: 305 },
+    SpeciesData { id: "simisear", name: "Simisear", base_species: "simisear", types: [Type::Fire, Type::None], base: [75, 98, 63, 98, 63, 101], gender: None, ability0: 88, weight_hg: 280 },
+    SpeciesData { id: "sinistcha", name: "Sinistcha", base_species: "sinistcha", types: [Type::Grass, Type::Ghost], base: [71, 60, 106, 121, 80, 70], gender: Some(Gender::N), ability0: 104, weight_hg: 22 },
+    SpeciesData { id: "sinistchamasterpiece", name: "Sinistcha-Masterpiece", base_species: "sinistcha", types: [Type::Grass, Type::Ghost], base: [71, 60, 106, 121, 80, 70], gender: Some(Gender::N), ability0: 104, weight_hg: 22 },
+    SpeciesData { id: "sirfetchd", name: "Sirfetch’d", base_species: "sirfetchd", types: [Type::Fighting, Type::None], base: [62, 135, 95, 68, 82, 65], gender: None, ability0: 253, weight_hg: 1170 },
+    SpeciesData { id: "skarmory", name: "Skarmory", base_species: "skarmory", types: [Type::Steel, Type::Flying], base: [65, 80, 140, 40, 70, 70], gender: None, ability0: 126, weight_hg: 505 },
+    SpeciesData { id: "skarmorymega", name: "Skarmory-Mega", base_species: "skarmory", types: [Type::Steel, Type::Flying], base: [65, 140, 110, 40, 100, 110], gender: None, ability0: 249, weight_hg: 404 },
+    SpeciesData { id: "skeledirge", name: "Skeledirge", base_species: "skeledirge", types: [Type::Fire, Type::Ghost], base: [104, 75, 100, 110, 75, 66], gender: None, ability0: 24, weight_hg: 3265 },
+    SpeciesData { id: "slowbro", name: "Slowbro", base_species: "slowbro", types: [Type::Water, Type::Psychic], base: [95, 75, 110, 100, 80, 30], gender: None, ability0: 166, weight_hg: 785 },
+    SpeciesData { id: "slowbrogalar", name: "Slowbro-Galar", base_species: "slowbro", types: [Type::Poison, Type::Psychic], base: [95, 100, 95, 100, 70, 30], gender: None, ability0: 200, weight_hg: 705 },
+    SpeciesData { id: "slowbromega", name: "Slowbro-Mega", base_species: "slowbro", types: [Type::Water, Type::Psychic], base: [95, 75, 180, 130, 80, 30], gender: None, ability0: 231, weight_hg: 1200 },
+    SpeciesData { id: "slowking", name: "Slowking", base_species: "slowking", types: [Type::Water, Type::Psychic], base: [95, 75, 80, 100, 110, 30], gender: None, ability0: 166, weight_hg: 795 },
+    SpeciesData { id: "slowkinggalar", name: "Slowking-Galar", base_species: "slowking", types: [Type::Poison, Type::Psychic], base: [95, 65, 80, 110, 110, 30], gender: None, ability0: 41, weight_hg: 795 },
+    SpeciesData { id: "slurpuff", name: "Slurpuff", base_species: "slurpuff", types: [Type::Fairy, Type::None], base: [82, 80, 86, 85, 75, 72], gender: None, ability0: 268, weight_hg: 50 },
+    SpeciesData { id: "sneasler", name: "Sneasler", base_species: "sneasler", types: [Type::Fighting, Type::Poison], base: [80, 130, 60, 40, 80, 120], gender: None, ability0: 188, weight_hg: 430 },
+    SpeciesData { id: "snorlax", name: "Snorlax", base_species: "snorlax", types: [Type::Normal, Type::None], base: [160, 110, 65, 65, 110, 30], gender: None, ability0: 115, weight_hg: 4600 },
+    SpeciesData { id: "spiritomb", name: "Spiritomb", base_species: "spiritomb", types: [Type::Ghost, Type::Dark], base: [50, 92, 108, 92, 108, 35], gender: None, ability0: 188, weight_hg: 1080 },
+    SpeciesData { id: "squawkabilly", name: "Squawkabilly", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None, ability0: 121, weight_hg: 24 },
+    SpeciesData { id: "squawkabillyblue", name: "Squawkabilly-Blue", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None, ability0: 121, weight_hg: 24 },
+    SpeciesData { id: "squawkabillywhite", name: "Squawkabilly-White", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None, ability0: 121, weight_hg: 24 },
+    SpeciesData { id: "squawkabillyyellow", name: "Squawkabilly-Yellow", base_species: "squawkabilly", types: [Type::Normal, Type::Flying], base: [82, 96, 51, 45, 51, 92], gender: None, ability0: 121, weight_hg: 24 },
+    SpeciesData { id: "staraptor", name: "Staraptor", base_species: "staraptor", types: [Type::Normal, Type::Flying], base: [85, 120, 70, 50, 60, 100], gender: None, ability0: 121, weight_hg: 249 },
+    SpeciesData { id: "staraptormega", name: "Staraptor-Mega", base_species: "staraptor", types: [Type::Fighting, Type::Flying], base: [85, 140, 100, 60, 90, 110], gender: None, ability0: 36, weight_hg: 500 },
+    SpeciesData { id: "starmie", name: "Starmie", base_species: "starmie", types: [Type::Water, Type::Psychic], base: [60, 75, 85, 100, 85, 115], gender: Some(Gender::N), ability0: 113, weight_hg: 800 },
+    SpeciesData { id: "starmiemega", name: "Starmie-Mega", base_species: "starmie", types: [Type::Water, Type::Psychic], base: [60, 100, 105, 130, 105, 120], gender: Some(Gender::N), ability0: 105, weight_hg: 800 },
+    SpeciesData { id: "steelix", name: "Steelix", base_species: "steelix", types: [Type::Steel, Type::Ground], base: [75, 85, 200, 55, 65, 30], gender: None, ability0: 211, weight_hg: 4000 },
+    SpeciesData { id: "steelixmega", name: "Steelix-Mega", base_species: "steelix", types: [Type::Steel, Type::Ground], base: [75, 125, 230, 55, 95, 30], gender: None, ability0: 215, weight_hg: 7400 },
+    SpeciesData { id: "stunfisk", name: "Stunfisk", base_species: "stunfisk", types: [Type::Ground, Type::Electric], base: [109, 66, 84, 81, 99, 32], gender: None, ability0: 252, weight_hg: 110 },
+    SpeciesData { id: "stunfiskgalar", name: "Stunfisk-Galar", base_species: "stunfisk", types: [Type::Ground, Type::Steel], base: [109, 81, 99, 66, 84, 32], gender: None, ability0: 147, weight_hg: 205 },
+    SpeciesData { id: "swalot", name: "Swalot", base_species: "swalot", types: [Type::Poison, Type::None], base: [100, 73, 83, 73, 83, 55], gender: None, ability0: 135, weight_hg: 800 },
+    SpeciesData { id: "swampert", name: "Swampert", base_species: "swampert", types: [Type::Water, Type::Ground], base: [100, 110, 90, 85, 90, 60], gender: None, ability0: 285, weight_hg: 819 },
+    SpeciesData { id: "swampertmega", name: "Swampert-Mega", base_species: "swampert", types: [Type::Water, Type::Ground], base: [100, 150, 110, 95, 110, 70], gender: None, ability0: 269, weight_hg: 1020 },
+    SpeciesData { id: "sylveon", name: "Sylveon", base_species: "sylveon", types: [Type::Fairy, Type::None], base: [95, 65, 65, 110, 130, 60], gender: None, ability0: 43, weight_hg: 235 },
+    SpeciesData { id: "talonflame", name: "Talonflame", base_species: "talonflame", types: [Type::Fire, Type::Flying], base: [78, 81, 71, 74, 69, 126], gender: None, ability0: 74, weight_hg: 245 },
+    SpeciesData { id: "tauros", name: "Tauros", base_species: "tauros", types: [Type::Normal, Type::None], base: [75, 100, 95, 40, 70, 110], gender: Some(Gender::M), ability0: 121, weight_hg: 884 },
+    SpeciesData { id: "taurospaldeaaqua", name: "Tauros-Paldea-Aqua", base_species: "tauros", types: [Type::Fighting, Type::Water], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M), ability0: 121, weight_hg: 1100 },
+    SpeciesData { id: "taurospaldeablaze", name: "Tauros-Paldea-Blaze", base_species: "tauros", types: [Type::Fighting, Type::Fire], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M), ability0: 121, weight_hg: 850 },
+    SpeciesData { id: "taurospaldeacombat", name: "Tauros-Paldea-Combat", base_species: "tauros", types: [Type::Fighting, Type::None], base: [75, 110, 105, 30, 70, 100], gender: Some(Gender::M), ability0: 121, weight_hg: 1150 },
+    SpeciesData { id: "terapagosterastal", name: "Terapagos-Terastal", base_species: "terapagos", types: [Type::Normal, Type::None], base: [95, 95, 110, 105, 110, 85], gender: None, ability0: 279, weight_hg: 160 },
+    SpeciesData { id: "thievul", name: "Thievul", base_species: "thievul", types: [Type::Dark, Type::None], base: [70, 58, 58, 87, 92, 90], gender: None, ability0: 214, weight_hg: 199 },
+    SpeciesData { id: "tinkaton", name: "Tinkaton", base_species: "tinkaton", types: [Type::Fairy, Type::Steel], base: [85, 75, 77, 70, 105, 94], gender: Some(Gender::F), ability0: 152, weight_hg: 1128 },
+    SpeciesData { id: "torkoal", name: "Torkoal", base_species: "torkoal", types: [Type::Fire, Type::None], base: [70, 85, 140, 85, 70, 20], gender: None, ability0: 310, weight_hg: 804 },
+    SpeciesData { id: "torterra", name: "Torterra", base_species: "torterra", types: [Type::Grass, Type::Ground], base: [95, 109, 105, 75, 85, 56], gender: None, ability0: 170, weight_hg: 3100 },
+    SpeciesData { id: "toucannon", name: "Toucannon", base_species: "toucannon", types: [Type::Normal, Type::Flying], base: [80, 120, 75, 75, 75, 60], gender: None, ability0: 126, weight_hg: 260 },
+    SpeciesData { id: "toxapex", name: "Toxapex", base_species: "toxapex", types: [Type::Poison, Type::Water], base: [50, 63, 152, 53, 142, 35], gender: None, ability0: 146, weight_hg: 145 },
+    SpeciesData { id: "toxicroak", name: "Toxicroak", base_species: "toxicroak", types: [Type::Poison, Type::Fighting], base: [83, 106, 65, 86, 65, 85], gender: None, ability0: 7, weight_hg: 444 },
+    SpeciesData { id: "toxtricity", name: "Toxtricity", base_species: "toxtricity", types: [Type::Electric, Type::Poison], base: [75, 98, 70, 114, 70, 75], gender: None, ability0: 195, weight_hg: 400 },
+    SpeciesData { id: "toxtricitylowkey", name: "Toxtricity-Low-Key", base_species: "toxtricity", types: [Type::Electric, Type::Poison], base: [75, 98, 70, 114, 70, 75], gender: None, ability0: 195, weight_hg: 400 },
+    SpeciesData { id: "trevenant", name: "Trevenant", base_species: "trevenant", types: [Type::Ghost, Type::Grass], base: [85, 110, 76, 65, 82, 56], gender: None, ability0: 160, weight_hg: 710 },
+    SpeciesData { id: "tsareena", name: "Tsareena", base_species: "tsareena", types: [Type::Grass, Type::None], base: [72, 120, 98, 50, 98, 72], gender: Some(Gender::F), ability0: 128, weight_hg: 214 },
+    SpeciesData { id: "typhlosion", name: "Typhlosion", base_species: "typhlosion", types: [Type::Fire, Type::None], base: [78, 84, 78, 109, 85, 100], gender: None, ability0: 24, weight_hg: 795 },
+    SpeciesData { id: "typhlosionhisui", name: "Typhlosion-Hisui", base_species: "typhlosion", types: [Type::Fire, Type::Ghost], base: [73, 84, 78, 119, 85, 95], gender: None, ability0: 24, weight_hg: 698 },
+    SpeciesData { id: "tyranitar", name: "Tyranitar", base_species: "tyranitar", types: [Type::Rock, Type::Dark], base: [100, 134, 110, 95, 100, 61], gender: None, ability0: 218, weight_hg: 2020 },
+    SpeciesData { id: "tyranitarmega", name: "Tyranitar-Mega", base_species: "tyranitar", types: [Type::Rock, Type::Dark], base: [100, 164, 150, 95, 120, 71], gender: None, ability0: 218, weight_hg: 2550 },
+    SpeciesData { id: "tyrantrum", name: "Tyrantrum", base_species: "tyrantrum", types: [Type::Rock, Type::Dragon], base: [82, 121, 119, 69, 59, 71], gender: None, ability0: 260, weight_hg: 2700 },
+    SpeciesData { id: "umbreon", name: "Umbreon", base_species: "umbreon", types: [Type::Dark, Type::None], base: [95, 65, 110, 60, 130, 65], gender: None, ability0: 272, weight_hg: 270 },
+    SpeciesData { id: "vanilluxe", name: "Vanilluxe", base_species: "vanilluxe", types: [Type::Ice, Type::None], base: [71, 95, 85, 110, 95, 79], gender: None, ability0: 110, weight_hg: 575 },
+    SpeciesData { id: "vaporeon", name: "Vaporeon", base_species: "vaporeon", types: [Type::Water, Type::None], base: [130, 65, 60, 110, 95, 65], gender: None, ability0: 304, weight_hg: 290 },
+    SpeciesData { id: "venusaur", name: "Venusaur", base_species: "venusaur", types: [Type::Grass, Type::Poison], base: [80, 82, 83, 100, 100, 80], gender: None, ability0: 170, weight_hg: 1000 },
+    SpeciesData { id: "venusaurmega", name: "Venusaur-Mega", base_species: "venusaur", types: [Type::Grass, Type::Poison], base: [80, 100, 123, 122, 120, 80], gender: None, ability0: 283, weight_hg: 1555 },
+    SpeciesData { id: "victreebel", name: "Victreebel", base_species: "victreebel", types: [Type::Grass, Type::Poison], base: [80, 105, 65, 100, 70, 70], gender: None, ability0: 28, weight_hg: 155 },
+    SpeciesData { id: "victreebelmega", name: "Victreebel-Mega", base_species: "victreebel", types: [Type::Grass, Type::Poison], base: [80, 125, 85, 135, 95, 70], gender: None, ability0: 118, weight_hg: 1255 },
+    SpeciesData { id: "vileplume", name: "Vileplume", base_species: "vileplume", types: [Type::Grass, Type::Poison], base: [75, 80, 85, 110, 90, 50], gender: None, ability0: 28, weight_hg: 186 },
+    SpeciesData { id: "vivillon", name: "Vivillon", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonarchipelago", name: "Vivillon-Archipelago", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivilloncontinental", name: "Vivillon-Continental", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonelegant", name: "Vivillon-Elegant", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonfancy", name: "Vivillon-Fancy", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillongarden", name: "Vivillon-Garden", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonhighplains", name: "Vivillon-High Plains", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonicysnow", name: "Vivillon-Icy Snow", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonjungle", name: "Vivillon-Jungle", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonmarine", name: "Vivillon-Marine", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonmodern", name: "Vivillon-Modern", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonmonsoon", name: "Vivillon-Monsoon", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonocean", name: "Vivillon-Ocean", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonpokeball", name: "Vivillon-Pokeball", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonpolar", name: "Vivillon-Polar", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonriver", name: "Vivillon-River", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonsandstorm", name: "Vivillon-Sandstorm", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonsavanna", name: "Vivillon-Savanna", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillonsun", name: "Vivillon-Sun", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "vivillontundra", name: "Vivillon-Tundra", base_species: "vivillon", types: [Type::Bug, Type::Flying], base: [80, 52, 50, 90, 50, 89], gender: None, ability0: 232, weight_hg: 170 },
+    SpeciesData { id: "volcarona", name: "Volcarona", base_species: "volcarona", types: [Type::Bug, Type::Fire], base: [85, 60, 65, 135, 105, 100], gender: None, ability0: 74, weight_hg: 460 },
+    SpeciesData { id: "watchog", name: "Watchog", base_species: "watchog", types: [Type::Normal, Type::None], base: [60, 85, 69, 60, 69, 77], gender: None, ability0: 113, weight_hg: 270 },
+    SpeciesData { id: "weavile", name: "Weavile", base_species: "weavile", types: [Type::Dark, Type::Ice], base: [70, 120, 65, 45, 85, 125], gender: None, ability0: 188, weight_hg: 340 },
+    SpeciesData { id: "whimsicott", name: "Whimsicott", base_species: "whimsicott", types: [Type::Grass, Type::Fairy], base: [60, 67, 85, 77, 75, 116], gender: None, ability0: 187, weight_hg: 66 },
+    SpeciesData { id: "wigglytuff", name: "Wigglytuff", base_species: "wigglytuff", types: [Type::Normal, Type::Fairy], base: [140, 70, 45, 85, 50, 45], gender: None, ability0: 43, weight_hg: 120 },
+    SpeciesData { id: "wyrdeer", name: "Wyrdeer", base_species: "wyrdeer", types: [Type::Normal, Type::Psychic], base: [103, 105, 72, 105, 75, 65], gender: None, ability0: 121, weight_hg: 951 },
+    SpeciesData { id: "zoroark", name: "Zoroark", base_species: "zoroark", types: [Type::Dark, Type::None], base: [60, 105, 60, 120, 60, 105], gender: None, ability0: 114, weight_hg: 811 },
+    SpeciesData { id: "zoroarkhisui", name: "Zoroark-Hisui", base_species: "zoroark", types: [Type::Normal, Type::Ghost], base: [55, 100, 60, 125, 60, 110], gender: None, ability0: 114, weight_hg: 730 },
 ];
 
 /// Orders in which a stat-change table is applied; `MoveData::boost_order` indexes this.
@@ -1781,19 +1781,58 @@ static CB_AB_WEAKARMOR: [CbInfo; 1] = [
 static CB_AB_WHITESMOKE: [CbInfo; 1] = [
     CbInfo { ev: Ev::TryBoost, pre: Pre::On, order: 0, priority: 0, sub_order: 7, kind: CbKind::Fn },
 ];
+static CB_IT_ABOMASITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_ABSOLITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_ABSOLITEZ: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_AERODACTYLITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_AGGRONITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_AIRBALLOON: [CbInfo; 4] = [
     CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::DamagingHit, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::AfterSubDamage, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::SwitchIn, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::StartAlias },
 ];
+static CB_IT_ALAKAZITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_ALTARIANITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_AMPHAROSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_ASPEARBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_AUDINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_BABIRIBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_BANETTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_BARBARACITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_BAXCALIBRITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_BEEDRILLITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_BIGROOT: [CbInfo; 1] = [
     CbInfo { ev: Ev::TryHeal, pre: Pre::On, order: 0, priority: 10, sub_order: 8, kind: CbKind::Fn },
@@ -1804,11 +1843,29 @@ static CB_IT_BLACKBELT: [CbInfo; 1] = [
 static CB_IT_BLACKGLASSES: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_BLASTOISINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_BLAZIKENITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_BRIGHTPOWDER: [CbInfo; 1] = [
     CbInfo { ev: Ev::ModifyAccuracy, pre: Pre::On, order: 0, priority: -20, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_CAMERUPTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_CHANDELURITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_CHARCOAL: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_CHARIZARDITEX: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_CHARIZARDITEY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_CHARTIBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1818,6 +1875,9 @@ static CB_IT_CHERIBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_CHESNAUGHTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_CHESTOBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1825,6 +1885,9 @@ static CB_IT_CHESTOBERRY: [CbInfo; 2] = [
 static CB_IT_CHILANBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_CHIMECHITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_CHOICESCARF: [CbInfo; 4] = [
     CbInfo { ev: Ev::Start, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1836,6 +1899,9 @@ static CB_IT_CHOPLEBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_CLEFABLITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_COBABERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1844,8 +1910,32 @@ static CB_IT_COLBURBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_CRABOMINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_DELPHOXITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_DRAGALGITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_DRAGONFANG: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_DRAGONINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_DRAMPANITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_EELEKTROSSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_EMBOARITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_EXCADRITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_EXPERTBELT: [CbInfo; 1] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1853,11 +1943,56 @@ static CB_IT_EXPERTBELT: [CbInfo; 1] = [
 static CB_IT_FAIRYFEATHER: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_FALINKSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_FERALIGITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_FLOETTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_FOCUSBAND: [CbInfo; 1] = [
     CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: -400, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_FOCUSSASH: [CbInfo; 1] = [
     CbInfo { ev: Ev::Damage, pre: Pre::On, order: 0, priority: -400, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_FROSLASSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GALLADITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GARCHOMPITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GARCHOMPITEZ: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GARDEVOIRITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GENGARITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GLALITITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GLIMMORANITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GOLISOPITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GOLURKITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GRENINJITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_GYARADOSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_HABANBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1866,9 +2001,21 @@ static CB_IT_HABANBERRY: [CbInfo; 2] = [
 static CB_IT_HARDSTONE: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_HAWLUCHANITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_HERACRONITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_HOUNDOOMINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_IRONBALL: [CbInfo; 2] = [
     CbInfo { ev: Ev::Effectiveness, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::ModifySpe, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_KANGASKHANITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_KASIBBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1899,6 +2046,15 @@ static CB_IT_LIGHTBALL: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyAtk, pre: Pre::On, order: 0, priority: 10, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::ModifySpA, pre: Pre::On, order: 0, priority: 10, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_LOPUNNITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_LUCARIONITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_LUCARIONITEZ: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_LUMBERRY: [CbInfo; 3] = [
     CbInfo { ev: Ev::AfterSetStatus, pre: Pre::On, order: 0, priority: -10, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1907,8 +2063,29 @@ static CB_IT_LUMBERRY: [CbInfo; 3] = [
 static CB_IT_MAGNET: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_MALAMARITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_MANECTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_MAWILITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_MEDICHAMITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_MEGANIUMITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_MENTALHERB: [CbInfo; 1] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_MEOWSTICITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_METAGROSSITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_METALCOAT: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
@@ -1957,11 +2134,26 @@ static CB_IT_PERSIMBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_PIDGEOTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_PINSIRITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_POISONBARB: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_PYROARITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_QUICKCLAW: [CbInfo; 1] = [
     CbInfo { ev: Ev::FractionalPriority, pre: Pre::On, order: 0, priority: -20, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_RAICHUNITEX: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_RAICHUNITEY: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_RAWSTBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::Update, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -1978,11 +2170,35 @@ static CB_IT_ROSELIBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_SABLENITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SALAMENCITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SCEPTILITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SCIZORITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SCOLIPITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_SCOPELENS: [CbInfo; 1] = [
     CbInfo { ev: Ev::ModifyCritRatio, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_SCOVILLAINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SCRAFTINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_SHARPBEAK: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SHARPEDONITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_SHEDSHELL: [CbInfo; 2] = [
     CbInfo { ev: Ev::TrapPokemon, pre: Pre::On, order: 0, priority: -100, sub_order: 8, kind: CbKind::Fn },
@@ -2006,11 +2222,29 @@ static CB_IT_SITRUSBERRY: [CbInfo; 3] = [
     CbInfo { ev: Ev::TryEatItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
     CbInfo { ev: Ev::Eat, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
+static CB_IT_SKARMORITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SLOWBRONITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
 static CB_IT_SOFTSAND: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_SPELLTAG: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_STARAPTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_STARMINITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_STEELIXITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_SWAMPERTITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_TANGABERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -2018,6 +2252,15 @@ static CB_IT_TANGABERRY: [CbInfo; 2] = [
 ];
 static CB_IT_TWISTEDSPOON: [CbInfo; 1] = [
     CbInfo { ev: Ev::BasePower, pre: Pre::On, order: 0, priority: 150, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_TYRANITARITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_VENUSAURITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
+];
+static CB_IT_VICTREEBELITE: [CbInfo; 1] = [
+    CbInfo { ev: Ev::TakeItem, pre: Pre::On, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
 ];
 static CB_IT_WACANBERRY: [CbInfo; 2] = [
     CbInfo { ev: Ev::ModifyDamage, pre: Pre::Source, order: 0, priority: 0, sub_order: 8, kind: CbKind::Fn },
@@ -2882,172 +3125,254 @@ pub mod it {
     pub const ZOOMLENS: u16 = 166;
 }
 
+static MEGA_ABOMASITE: [(u16, u16); 1] = [(0, 1)];
+static MEGA_ABSOLITE: [(u16, u16); 1] = [(2, 3)];
+static MEGA_ABSOLITEZ: [(u16, u16); 1] = [(2, 4)];
+static MEGA_AERODACTYLITE: [(u16, u16); 1] = [(7, 8)];
+static MEGA_AGGRONITE: [(u16, u16); 1] = [(9, 10)];
+static MEGA_ALAKAZITE: [(u16, u16); 1] = [(11, 12)];
+static MEGA_ALTARIANITE: [(u16, u16); 1] = [(21, 22)];
+static MEGA_AMPHAROSITE: [(u16, u16); 1] = [(23, 24)];
+static MEGA_AUDINITE: [(u16, u16); 1] = [(36, 37)];
+static MEGA_BANETTITE: [(u16, u16); 1] = [(42, 43)];
+static MEGA_BARBARACITE: [(u16, u16); 1] = [(44, 45)];
+static MEGA_BAXCALIBRITE: [(u16, u16); 1] = [(49, 50)];
+static MEGA_BEEDRILLITE: [(u16, u16); 1] = [(52, 53)];
+static MEGA_BLASTOISINITE: [(u16, u16); 1] = [(55, 56)];
+static MEGA_BLAZIKENITE: [(u16, u16); 1] = [(57, 58)];
+static MEGA_CAMERUPTITE: [(u16, u16); 1] = [(59, 60)];
+static MEGA_CHANDELURITE: [(u16, u16); 1] = [(66, 67)];
+static MEGA_CHARIZARDITEX: [(u16, u16); 1] = [(68, 69)];
+static MEGA_CHARIZARDITEY: [(u16, u16); 1] = [(68, 70)];
+static MEGA_CHESNAUGHTITE: [(u16, u16); 1] = [(71, 72)];
+static MEGA_CHIMECHITE: [(u16, u16); 1] = [(73, 74)];
+static MEGA_CLEFABLITE: [(u16, u16); 1] = [(77, 78)];
+static MEGA_CRABOMINITE: [(u16, u16); 1] = [(82, 83)];
+static MEGA_DELPHOXITE: [(u16, u16); 1] = [(89, 90)];
+static MEGA_DRAGALGITE: [(u16, u16); 1] = [(93, 94)];
+static MEGA_DRAGONINITE: [(u16, u16); 1] = [(96, 97)];
+static MEGA_DRAMPANITE: [(u16, u16); 1] = [(98, 99)];
+static MEGA_EELEKTROSSITE: [(u16, u16); 1] = [(100, 101)];
+static MEGA_EMBOARITE: [(u16, u16); 1] = [(103, 104)];
+static MEGA_EXCADRITE: [(u16, u16); 1] = [(109, 110)];
+static MEGA_FALINKSITE: [(u16, u16); 1] = [(111, 112)];
+static MEGA_FERALIGITE: [(u16, u16); 1] = [(115, 116)];
+static MEGA_FLOETTITE: [(u16, u16); 1] = [(119, 120)];
+static MEGA_FROSLASSITE: [(u16, u16); 1] = [(123, 124)];
+static MEGA_GALLADITE: [(u16, u16); 1] = [(126, 127)];
+static MEGA_GARCHOMPITE: [(u16, u16); 1] = [(129, 130)];
+static MEGA_GARCHOMPITEZ: [(u16, u16); 1] = [(129, 131)];
+static MEGA_GARDEVOIRITE: [(u16, u16); 1] = [(132, 133)];
+static MEGA_GENGARITE: [(u16, u16); 1] = [(135, 136)];
+static MEGA_GLALITITE: [(u16, u16); 1] = [(139, 140)];
+static MEGA_GLIMMORANITE: [(u16, u16); 1] = [(141, 142)];
+static MEGA_GOLISOPITE: [(u16, u16); 1] = [(145, 146)];
+static MEGA_GOLURKITE: [(u16, u16); 1] = [(147, 148)];
+static MEGA_GRENINJITE: [(u16, u16); 1] = [(156, 157)];
+static MEGA_GYARADOSITE: [(u16, u16); 1] = [(159, 160)];
+static MEGA_HAWLUCHANITE: [(u16, u16); 1] = [(162, 163)];
+static MEGA_HERACRONITE: [(u16, u16); 1] = [(165, 166)];
+static MEGA_HOUNDOOMINITE: [(u16, u16); 1] = [(168, 169)];
+static MEGA_KANGASKHANITE: [(u16, u16); 1] = [(179, 180)];
+static MEGA_LOPUNNITE: [(u16, u16); 1] = [(188, 189)];
+static MEGA_LUCARIONITE: [(u16, u16); 1] = [(190, 191)];
+static MEGA_LUCARIONITEZ: [(u16, u16); 1] = [(190, 192)];
+static MEGA_MALAMARITE: [(u16, u16); 1] = [(199, 200)];
+static MEGA_MANECTITE: [(u16, u16); 1] = [(202, 203)];
+static MEGA_MAWILITE: [(u16, u16); 1] = [(206, 207)];
+static MEGA_MEDICHAMITE: [(u16, u16); 1] = [(208, 209)];
+static MEGA_MEGANIUMITE: [(u16, u16); 1] = [(210, 211)];
+static MEGA_MEOWSTICITE: [(u16, u16); 2] = [(214, 217), (215, 216)];
+static MEGA_METAGROSSITE: [(u16, u16); 1] = [(218, 219)];
+static MEGA_PIDGEOTITE: [(u16, u16); 1] = [(249, 250)];
+static MEGA_PINSIRITE: [(u16, u16); 1] = [(253, 254)];
+static MEGA_PYROARITE: [(u16, u16); 1] = [(259, 260)];
+static MEGA_RAICHUNITEX: [(u16, u16); 1] = [(263, 265)];
+static MEGA_RAICHUNITEY: [(u16, u16); 1] = [(263, 266)];
+static MEGA_SABLENITE: [(u16, u16); 1] = [(279, 280)];
+static MEGA_SALAMENCITE: [(u16, u16); 1] = [(281, 282)];
+static MEGA_SCEPTILITE: [(u16, u16); 1] = [(287, 288)];
+static MEGA_SCIZORITE: [(u16, u16); 1] = [(289, 290)];
+static MEGA_SCOLIPITE: [(u16, u16); 1] = [(291, 292)];
+static MEGA_SCOVILLAINITE: [(u16, u16); 1] = [(293, 294)];
+static MEGA_SCRAFTINITE: [(u16, u16); 1] = [(295, 296)];
+static MEGA_SHARPEDONITE: [(u16, u16); 1] = [(298, 299)];
+static MEGA_SKARMORITE: [(u16, u16); 1] = [(306, 307)];
+static MEGA_SLOWBRONITE: [(u16, u16); 1] = [(309, 311)];
+static MEGA_STARAPTITE: [(u16, u16); 1] = [(322, 323)];
+static MEGA_STARMINITE: [(u16, u16); 1] = [(324, 325)];
+static MEGA_STEELIXITE: [(u16, u16); 1] = [(326, 327)];
+static MEGA_SWAMPERTITE: [(u16, u16); 1] = [(331, 332)];
+static MEGA_TYRANITARITE: [(u16, u16); 1] = [(353, 354)];
+static MEGA_VENUSAURITE: [(u16, u16); 1] = [(359, 360)];
+static MEGA_VICTREEBELITE: [(u16, u16); 1] = [(361, 362)];
+
 pub static ITEMS: [ItemData; 167] = [
-    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "abomasite", name: "Abomasite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "absolite", name: "Absolite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "absolitez", name: "Absolite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "aerodactylite", name: "Aerodactylite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "aggronite", name: "Aggronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "airballoon", name: "Air Balloon", flags: 0, supported: true, cbs: &CB_IT_AIRBALLOON, events: 0x8000000100000000011, events_pre: 0x0 },
-    ItemData { id: "alakazite", name: "Alakazite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "altarianite", name: "Altarianite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "ampharosite", name: "Ampharosite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "aspearberry", name: "Aspear Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ASPEARBERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "audinite", name: "Audinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "babiriberry", name: "Babiri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_BABIRIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "banettite", name: "Banettite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "barbaracite", name: "Barbaracite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "baxcalibrite", name: "Baxcalibrite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "beedrillite", name: "Beedrillite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "bigroot", name: "Big Root", flags: 0, supported: true, cbs: &CB_IT_BIGROOT, events: 0x800000000000000, events_pre: 0x0 },
-    ItemData { id: "bindingband", name: "Binding Band", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "blackbelt", name: "Black Belt", flags: 0, supported: true, cbs: &CB_IT_BLACKBELT, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "blackglasses", name: "Black Glasses", flags: 0, supported: true, cbs: &CB_IT_BLACKGLASSES, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "blastoisinite", name: "Blastoisinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "blazikenite", name: "Blazikenite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "brightpowder", name: "Bright Powder", flags: 0, supported: true, cbs: &CB_IT_BRIGHTPOWDER, events: 0x4000000, events_pre: 0x0 },
-    ItemData { id: "cameruptite", name: "Cameruptite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "chandelurite", name: "Chandelurite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "charcoal", name: "Charcoal", flags: 0, supported: true, cbs: &CB_IT_CHARCOAL, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "charizarditex", name: "Charizardite X", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "charizarditey", name: "Charizardite Y", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "chartiberry", name: "Charti Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHARTIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "cheriberry", name: "Cheri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHERIBERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "chesnaughtite", name: "Chesnaughtite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "chestoberry", name: "Chesto Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHESTOBERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "chilanberry", name: "Chilan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHILANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "chimechite", name: "Chimechite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "choicescarf", name: "Choice Scarf", flags: IF_CHOICE, supported: true, cbs: &CB_IT_CHOICESCARF, events: 0x1000040011, events_pre: 0x0 },
-    ItemData { id: "chopleberry", name: "Chople Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHOPLEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "clefablite", name: "Clefablite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "cobaberry", name: "Coba Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COBABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "colburberry", name: "Colbur Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COLBURBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "crabominite", name: "Crabominite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "damprock", name: "Damp Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "delphoxite", name: "Delphoxite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "dragalgite", name: "Dragalgite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "dragonfang", name: "Dragon Fang", flags: 0, supported: true, cbs: &CB_IT_DRAGONFANG, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "dragoninite", name: "Dragoninite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "drampanite", name: "Drampanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "eelektrossite", name: "Eelektrossite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "ejectbutton", name: "Eject Button", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "electricseed", name: "Electric Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "emboarite", name: "Emboarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "excadrite", name: "Excadrite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "expertbelt", name: "Expert Belt", flags: 0, supported: true, cbs: &CB_IT_EXPERTBELT, events: 0x10000000000, events_pre: 0x0 },
-    ItemData { id: "fairyfeather", name: "Fairy Feather", flags: 0, supported: true, cbs: &CB_IT_FAIRYFEATHER, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "falinksite", name: "Falinksite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "feraligite", name: "Feraligite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "floettite", name: "Floettite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "focusband", name: "Focus Band", flags: 0, supported: true, cbs: &CB_IT_FOCUSBAND, events: 0x20000000000, events_pre: 0x0 },
-    ItemData { id: "focussash", name: "Focus Sash", flags: 0, supported: true, cbs: &CB_IT_FOCUSSASH, events: 0x20000000000, events_pre: 0x0 },
-    ItemData { id: "froslassite", name: "Froslassite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "galladite", name: "Galladite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "garchompite", name: "Garchompite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "garchompitez", name: "Garchompite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "gardevoirite", name: "Gardevoirite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "gengarite", name: "Gengarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "glalitite", name: "Glalitite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "glimmoranite", name: "Glimmoranite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "golisopite", name: "Golisopite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "golurkite", name: "Golurkite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "grassyseed", name: "Grassy Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "greninjite", name: "Greninjite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "gyaradosite", name: "Gyaradosite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "habanberry", name: "Haban Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_HABANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "hardstone", name: "Hard Stone", flags: 0, supported: true, cbs: &CB_IT_HARDSTONE, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "hawluchanite", name: "Hawluchanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "heatrock", name: "Heat Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "heracronite", name: "Heracronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "houndoominite", name: "Houndoominite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "icyrock", name: "Icy Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "ironball", name: "Iron Ball", flags: 0, supported: true, cbs: &CB_IT_IRONBALL, events: 0x9000000000, events_pre: 0x0 },
-    ItemData { id: "kangaskhanite", name: "Kangaskhanite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "kasibberry", name: "Kasib Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KASIBBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "kebiaberry", name: "Kebia Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KEBIABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "kingsrock", name: "King's Rock", flags: 0, supported: true, cbs: &CB_IT_KINGSROCK, events: 0x40000, events_pre: 0x0 },
-    ItemData { id: "leek", name: "Leek", flags: 0, supported: true, cbs: &CB_IT_LEEK, events: 0x20000000, events_pre: 0x0 },
-    ItemData { id: "leftovers", name: "Leftovers", flags: 0, supported: true, cbs: &CB_IT_LEFTOVERS, events: 0x200, events_pre: 0x0 },
-    ItemData { id: "leppaberry", name: "Leppa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LEPPABERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "lifeorb", name: "Life Orb", flags: 0, supported: true, cbs: &CB_IT_LIFEORB, events: 0x410000000000, events_pre: 0x0 },
-    ItemData { id: "lightball", name: "Light Ball", flags: 0, supported: true, cbs: &CB_IT_LIGHTBALL, events: 0x500000000, events_pre: 0x0 },
-    ItemData { id: "lightclay", name: "Light Clay", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "lopunnite", name: "Lopunnite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "lucarionite", name: "Lucarionite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "lucarionitez", name: "Lucarionite Z", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "lumberry", name: "Lum Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LUMBERRY, events: 0x8010000000000100, events_pre: 0x0 },
-    ItemData { id: "magnet", name: "Magnet", flags: 0, supported: true, cbs: &CB_IT_MAGNET, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "malamarite", name: "Malamarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "manectite", name: "Manectite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "mawilite", name: "Mawilite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "medichamite", name: "Medichamite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "meganiumite", name: "Meganiumite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "mentalherb", name: "Mental Herb", flags: 0, supported: true, cbs: &CB_IT_MENTALHERB, events: 0x100, events_pre: 0x0 },
-    ItemData { id: "meowsticite", name: "Meowsticite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "metagrossite", name: "Metagrossite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "metalcoat", name: "Metal Coat", flags: 0, supported: true, cbs: &CB_IT_METALCOAT, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "metronome", name: "Metronome", flags: 0, supported: true, cbs: &CB_IT_METRONOME, events: 0x11, events_pre: 0x0 },
-    ItemData { id: "miracleseed", name: "Miracle Seed", flags: 0, supported: true, cbs: &CB_IT_MIRACLESEED, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "mistyseed", name: "Misty Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "muscleband", name: "Muscle Band", flags: 0, supported: true, cbs: &CB_IT_MUSCLEBAND, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "mysticwater", name: "Mystic Water", flags: 0, supported: true, cbs: &CB_IT_MYSTICWATER, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "nevermeltice", name: "Never-Melt Ice", flags: 0, supported: true, cbs: &CB_IT_NEVERMELTICE, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "normalgem", name: "Normal Gem", flags: IF_GEM, supported: true, cbs: &CB_IT_NORMALGEM, events: 0x0, events_pre: 0x10000000 },
-    ItemData { id: "occaberry", name: "Occa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_OCCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "oranberry", name: "Oran Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ORANBERRY, events: 0xc000000000000100, events_pre: 0x0 },
-    ItemData { id: "passhoberry", name: "Passho Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PASSHOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "payapaberry", name: "Payapa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PAYAPABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "pechaberry", name: "Pecha Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PECHABERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "persimberry", name: "Persim Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PERSIMBERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "pidgeotite", name: "Pidgeotite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "pinsirite", name: "Pinsirite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "poisonbarb", name: "Poison Barb", flags: 0, supported: true, cbs: &CB_IT_POISONBARB, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "psychicseed", name: "Psychic Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "pyroarite", name: "Pyroarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "quickclaw", name: "Quick Claw", flags: 0, supported: true, cbs: &CB_IT_QUICKCLAW, events: 0x4000, events_pre: 0x0 },
-    ItemData { id: "raichunitex", name: "Raichunite X", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "raichunitey", name: "Raichunite Y", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "rawstberry", name: "Rawst Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RAWSTBERRY, events: 0x8000000000000100, events_pre: 0x0 },
-    ItemData { id: "redcard", name: "Red Card", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "rindoberry", name: "Rindo Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RINDOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "rockyhelmet", name: "Rocky Helmet", flags: 0, supported: true, cbs: &CB_IT_ROCKYHELMET, events: 0x100000000000, events_pre: 0x0 },
-    ItemData { id: "roseliberry", name: "Roseli Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ROSELIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "sablenite", name: "Sablenite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "salamencite", name: "Salamencite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "sceptilite", name: "Sceptilite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "scizorite", name: "Scizorite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "scolipite", name: "Scolipite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "scopelens", name: "Scope Lens", flags: 0, supported: true, cbs: &CB_IT_SCOPELENS, events: 0x20000000, events_pre: 0x0 },
-    ItemData { id: "scovillainite", name: "Scovillainite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "scraftinite", name: "Scraftinite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "sharpbeak", name: "Sharp Beak", flags: 0, supported: true, cbs: &CB_IT_SHARPBEAK, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "sharpedonite", name: "Sharpedonite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "shedshell", name: "Shed Shell", flags: 0, supported: true, cbs: &CB_IT_SHEDSHELL, events: 0x1800, events_pre: 0x0 },
-    ItemData { id: "shellbell", name: "Shell Bell", flags: 0, supported: true, cbs: &CB_IT_SHELLBELL, events: 0x400000000000, events_pre: 0x0 },
-    ItemData { id: "shucaberry", name: "Shuca Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SHUCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "silkscarf", name: "Silk Scarf", flags: 0, supported: true, cbs: &CB_IT_SILKSCARF, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "silverpowder", name: "Silver Powder", flags: 0, supported: true, cbs: &CB_IT_SILVERPOWDER, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "sitrusberry", name: "Sitrus Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SITRUSBERRY, events: 0xc000000000000100, events_pre: 0x0 },
-    ItemData { id: "skarmorite", name: "Skarmorite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "slowbronite", name: "Slowbronite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "smoothrock", name: "Smooth Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "softsand", name: "Soft Sand", flags: 0, supported: true, cbs: &CB_IT_SOFTSAND, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "spelltag", name: "Spell Tag", flags: 0, supported: true, cbs: &CB_IT_SPELLTAG, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "staraptite", name: "Staraptite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "starminite", name: "Starminite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "steelixite", name: "Steelixite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "swampertite", name: "Swampertite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "tangaberry", name: "Tanga Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_TANGABERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "terrainextender", name: "Terrain Extender", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "twistedspoon", name: "Twisted Spoon", flags: 0, supported: true, cbs: &CB_IT_TWISTEDSPOON, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "tyranitarite", name: "Tyranitarite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "venusaurite", name: "Venusaurite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "victreebelite", name: "Victreebelite", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0 },
-    ItemData { id: "wacanberry", name: "Wacan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_WACANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "whiteherb", name: "White Herb", flags: 0, supported: true, cbs: &CB_IT_WHITEHERB, events: 0x20000000000000201, events_pre: 0x2000000800000000010 },
-    ItemData { id: "widelens", name: "Wide Lens", flags: 0, supported: true, cbs: &CB_IT_WIDELENS, events: 0x0, events_pre: 0x4000000 },
-    ItemData { id: "wiseglasses", name: "Wise Glasses", flags: 0, supported: true, cbs: &CB_IT_WISEGLASSES, events: 0x80000000, events_pre: 0x0 },
-    ItemData { id: "yacheberry", name: "Yache Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_YACHEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000 },
-    ItemData { id: "zoomlens", name: "Zoom Lens", flags: 0, supported: true, cbs: &CB_IT_ZOOMLENS, events: 0x0, events_pre: 0x4000000 },
+    ItemData { id: "", name: "", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "abomasite", name: "Abomasite", flags: 0, supported: true, cbs: &CB_IT_ABOMASITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_ABOMASITE },
+    ItemData { id: "absolite", name: "Absolite", flags: 0, supported: true, cbs: &CB_IT_ABSOLITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_ABSOLITE },
+    ItemData { id: "absolitez", name: "Absolite Z", flags: 0, supported: true, cbs: &CB_IT_ABSOLITEZ, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_ABSOLITEZ },
+    ItemData { id: "aerodactylite", name: "Aerodactylite", flags: 0, supported: true, cbs: &CB_IT_AERODACTYLITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_AERODACTYLITE },
+    ItemData { id: "aggronite", name: "Aggronite", flags: 0, supported: true, cbs: &CB_IT_AGGRONITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_AGGRONITE },
+    ItemData { id: "airballoon", name: "Air Balloon", flags: 0, supported: true, cbs: &CB_IT_AIRBALLOON, events: 0x8000000100000000011, events_pre: 0x0, mega: &[] },
+    ItemData { id: "alakazite", name: "Alakazite", flags: 0, supported: true, cbs: &CB_IT_ALAKAZITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_ALAKAZITE },
+    ItemData { id: "altarianite", name: "Altarianite", flags: 0, supported: true, cbs: &CB_IT_ALTARIANITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_ALTARIANITE },
+    ItemData { id: "ampharosite", name: "Ampharosite", flags: 0, supported: true, cbs: &CB_IT_AMPHAROSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_AMPHAROSITE },
+    ItemData { id: "aspearberry", name: "Aspear Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ASPEARBERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "audinite", name: "Audinite", flags: 0, supported: true, cbs: &CB_IT_AUDINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_AUDINITE },
+    ItemData { id: "babiriberry", name: "Babiri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_BABIRIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "banettite", name: "Banettite", flags: 0, supported: true, cbs: &CB_IT_BANETTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BANETTITE },
+    ItemData { id: "barbaracite", name: "Barbaracite", flags: 0, supported: true, cbs: &CB_IT_BARBARACITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BARBARACITE },
+    ItemData { id: "baxcalibrite", name: "Baxcalibrite", flags: 0, supported: true, cbs: &CB_IT_BAXCALIBRITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BAXCALIBRITE },
+    ItemData { id: "beedrillite", name: "Beedrillite", flags: 0, supported: true, cbs: &CB_IT_BEEDRILLITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BEEDRILLITE },
+    ItemData { id: "bigroot", name: "Big Root", flags: 0, supported: true, cbs: &CB_IT_BIGROOT, events: 0x800000000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "bindingband", name: "Binding Band", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "blackbelt", name: "Black Belt", flags: 0, supported: true, cbs: &CB_IT_BLACKBELT, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "blackglasses", name: "Black Glasses", flags: 0, supported: true, cbs: &CB_IT_BLACKGLASSES, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "blastoisinite", name: "Blastoisinite", flags: 0, supported: true, cbs: &CB_IT_BLASTOISINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BLASTOISINITE },
+    ItemData { id: "blazikenite", name: "Blazikenite", flags: 0, supported: true, cbs: &CB_IT_BLAZIKENITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_BLAZIKENITE },
+    ItemData { id: "brightpowder", name: "Bright Powder", flags: 0, supported: true, cbs: &CB_IT_BRIGHTPOWDER, events: 0x4000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "cameruptite", name: "Cameruptite", flags: 0, supported: true, cbs: &CB_IT_CAMERUPTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CAMERUPTITE },
+    ItemData { id: "chandelurite", name: "Chandelurite", flags: 0, supported: true, cbs: &CB_IT_CHANDELURITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CHANDELURITE },
+    ItemData { id: "charcoal", name: "Charcoal", flags: 0, supported: true, cbs: &CB_IT_CHARCOAL, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "charizarditex", name: "Charizardite X", flags: 0, supported: true, cbs: &CB_IT_CHARIZARDITEX, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CHARIZARDITEX },
+    ItemData { id: "charizarditey", name: "Charizardite Y", flags: 0, supported: true, cbs: &CB_IT_CHARIZARDITEY, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CHARIZARDITEY },
+    ItemData { id: "chartiberry", name: "Charti Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHARTIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "cheriberry", name: "Cheri Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHERIBERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "chesnaughtite", name: "Chesnaughtite", flags: 0, supported: true, cbs: &CB_IT_CHESNAUGHTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CHESNAUGHTITE },
+    ItemData { id: "chestoberry", name: "Chesto Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHESTOBERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "chilanberry", name: "Chilan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHILANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "chimechite", name: "Chimechite", flags: 0, supported: true, cbs: &CB_IT_CHIMECHITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CHIMECHITE },
+    ItemData { id: "choicescarf", name: "Choice Scarf", flags: IF_CHOICE, supported: true, cbs: &CB_IT_CHOICESCARF, events: 0x1000040011, events_pre: 0x0, mega: &[] },
+    ItemData { id: "chopleberry", name: "Chople Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_CHOPLEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "clefablite", name: "Clefablite", flags: 0, supported: true, cbs: &CB_IT_CLEFABLITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CLEFABLITE },
+    ItemData { id: "cobaberry", name: "Coba Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COBABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "colburberry", name: "Colbur Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_COLBURBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "crabominite", name: "Crabominite", flags: 0, supported: true, cbs: &CB_IT_CRABOMINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_CRABOMINITE },
+    ItemData { id: "damprock", name: "Damp Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "delphoxite", name: "Delphoxite", flags: 0, supported: true, cbs: &CB_IT_DELPHOXITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_DELPHOXITE },
+    ItemData { id: "dragalgite", name: "Dragalgite", flags: 0, supported: true, cbs: &CB_IT_DRAGALGITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_DRAGALGITE },
+    ItemData { id: "dragonfang", name: "Dragon Fang", flags: 0, supported: true, cbs: &CB_IT_DRAGONFANG, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "dragoninite", name: "Dragoninite", flags: 0, supported: true, cbs: &CB_IT_DRAGONINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_DRAGONINITE },
+    ItemData { id: "drampanite", name: "Drampanite", flags: 0, supported: true, cbs: &CB_IT_DRAMPANITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_DRAMPANITE },
+    ItemData { id: "eelektrossite", name: "Eelektrossite", flags: 0, supported: true, cbs: &CB_IT_EELEKTROSSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_EELEKTROSSITE },
+    ItemData { id: "ejectbutton", name: "Eject Button", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "electricseed", name: "Electric Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "emboarite", name: "Emboarite", flags: 0, supported: true, cbs: &CB_IT_EMBOARITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_EMBOARITE },
+    ItemData { id: "excadrite", name: "Excadrite", flags: 0, supported: true, cbs: &CB_IT_EXCADRITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_EXCADRITE },
+    ItemData { id: "expertbelt", name: "Expert Belt", flags: 0, supported: true, cbs: &CB_IT_EXPERTBELT, events: 0x10000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "fairyfeather", name: "Fairy Feather", flags: 0, supported: true, cbs: &CB_IT_FAIRYFEATHER, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "falinksite", name: "Falinksite", flags: 0, supported: true, cbs: &CB_IT_FALINKSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_FALINKSITE },
+    ItemData { id: "feraligite", name: "Feraligite", flags: 0, supported: true, cbs: &CB_IT_FERALIGITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_FERALIGITE },
+    ItemData { id: "floettite", name: "Floettite", flags: 0, supported: true, cbs: &CB_IT_FLOETTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_FLOETTITE },
+    ItemData { id: "focusband", name: "Focus Band", flags: 0, supported: true, cbs: &CB_IT_FOCUSBAND, events: 0x20000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "focussash", name: "Focus Sash", flags: 0, supported: true, cbs: &CB_IT_FOCUSSASH, events: 0x20000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "froslassite", name: "Froslassite", flags: 0, supported: true, cbs: &CB_IT_FROSLASSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_FROSLASSITE },
+    ItemData { id: "galladite", name: "Galladite", flags: 0, supported: true, cbs: &CB_IT_GALLADITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GALLADITE },
+    ItemData { id: "garchompite", name: "Garchompite", flags: 0, supported: true, cbs: &CB_IT_GARCHOMPITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GARCHOMPITE },
+    ItemData { id: "garchompitez", name: "Garchompite Z", flags: 0, supported: true, cbs: &CB_IT_GARCHOMPITEZ, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GARCHOMPITEZ },
+    ItemData { id: "gardevoirite", name: "Gardevoirite", flags: 0, supported: true, cbs: &CB_IT_GARDEVOIRITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GARDEVOIRITE },
+    ItemData { id: "gengarite", name: "Gengarite", flags: 0, supported: true, cbs: &CB_IT_GENGARITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GENGARITE },
+    ItemData { id: "glalitite", name: "Glalitite", flags: 0, supported: true, cbs: &CB_IT_GLALITITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GLALITITE },
+    ItemData { id: "glimmoranite", name: "Glimmoranite", flags: 0, supported: true, cbs: &CB_IT_GLIMMORANITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GLIMMORANITE },
+    ItemData { id: "golisopite", name: "Golisopite", flags: 0, supported: true, cbs: &CB_IT_GOLISOPITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GOLISOPITE },
+    ItemData { id: "golurkite", name: "Golurkite", flags: 0, supported: true, cbs: &CB_IT_GOLURKITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GOLURKITE },
+    ItemData { id: "grassyseed", name: "Grassy Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "greninjite", name: "Greninjite", flags: 0, supported: true, cbs: &CB_IT_GRENINJITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GRENINJITE },
+    ItemData { id: "gyaradosite", name: "Gyaradosite", flags: 0, supported: true, cbs: &CB_IT_GYARADOSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_GYARADOSITE },
+    ItemData { id: "habanberry", name: "Haban Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_HABANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "hardstone", name: "Hard Stone", flags: 0, supported: true, cbs: &CB_IT_HARDSTONE, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "hawluchanite", name: "Hawluchanite", flags: 0, supported: true, cbs: &CB_IT_HAWLUCHANITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_HAWLUCHANITE },
+    ItemData { id: "heatrock", name: "Heat Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "heracronite", name: "Heracronite", flags: 0, supported: true, cbs: &CB_IT_HERACRONITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_HERACRONITE },
+    ItemData { id: "houndoominite", name: "Houndoominite", flags: 0, supported: true, cbs: &CB_IT_HOUNDOOMINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_HOUNDOOMINITE },
+    ItemData { id: "icyrock", name: "Icy Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "ironball", name: "Iron Ball", flags: 0, supported: true, cbs: &CB_IT_IRONBALL, events: 0x9000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "kangaskhanite", name: "Kangaskhanite", flags: 0, supported: true, cbs: &CB_IT_KANGASKHANITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_KANGASKHANITE },
+    ItemData { id: "kasibberry", name: "Kasib Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KASIBBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "kebiaberry", name: "Kebia Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_KEBIABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "kingsrock", name: "King's Rock", flags: 0, supported: true, cbs: &CB_IT_KINGSROCK, events: 0x40000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "leek", name: "Leek", flags: 0, supported: true, cbs: &CB_IT_LEEK, events: 0x20000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "leftovers", name: "Leftovers", flags: 0, supported: true, cbs: &CB_IT_LEFTOVERS, events: 0x200, events_pre: 0x0, mega: &[] },
+    ItemData { id: "leppaberry", name: "Leppa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LEPPABERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "lifeorb", name: "Life Orb", flags: 0, supported: true, cbs: &CB_IT_LIFEORB, events: 0x410000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "lightball", name: "Light Ball", flags: 0, supported: true, cbs: &CB_IT_LIGHTBALL, events: 0x500000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "lightclay", name: "Light Clay", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "lopunnite", name: "Lopunnite", flags: 0, supported: true, cbs: &CB_IT_LOPUNNITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_LOPUNNITE },
+    ItemData { id: "lucarionite", name: "Lucarionite", flags: 0, supported: true, cbs: &CB_IT_LUCARIONITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_LUCARIONITE },
+    ItemData { id: "lucarionitez", name: "Lucarionite Z", flags: 0, supported: true, cbs: &CB_IT_LUCARIONITEZ, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_LUCARIONITEZ },
+    ItemData { id: "lumberry", name: "Lum Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_LUMBERRY, events: 0x8010000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "magnet", name: "Magnet", flags: 0, supported: true, cbs: &CB_IT_MAGNET, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "malamarite", name: "Malamarite", flags: 0, supported: true, cbs: &CB_IT_MALAMARITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MALAMARITE },
+    ItemData { id: "manectite", name: "Manectite", flags: 0, supported: true, cbs: &CB_IT_MANECTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MANECTITE },
+    ItemData { id: "mawilite", name: "Mawilite", flags: 0, supported: true, cbs: &CB_IT_MAWILITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MAWILITE },
+    ItemData { id: "medichamite", name: "Medichamite", flags: 0, supported: true, cbs: &CB_IT_MEDICHAMITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MEDICHAMITE },
+    ItemData { id: "meganiumite", name: "Meganiumite", flags: 0, supported: true, cbs: &CB_IT_MEGANIUMITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MEGANIUMITE },
+    ItemData { id: "mentalherb", name: "Mental Herb", flags: 0, supported: true, cbs: &CB_IT_MENTALHERB, events: 0x100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "meowsticite", name: "Meowsticite", flags: 0, supported: true, cbs: &CB_IT_MEOWSTICITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_MEOWSTICITE },
+    ItemData { id: "metagrossite", name: "Metagrossite", flags: 0, supported: true, cbs: &CB_IT_METAGROSSITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_METAGROSSITE },
+    ItemData { id: "metalcoat", name: "Metal Coat", flags: 0, supported: true, cbs: &CB_IT_METALCOAT, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "metronome", name: "Metronome", flags: 0, supported: true, cbs: &CB_IT_METRONOME, events: 0x11, events_pre: 0x0, mega: &[] },
+    ItemData { id: "miracleseed", name: "Miracle Seed", flags: 0, supported: true, cbs: &CB_IT_MIRACLESEED, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "mistyseed", name: "Misty Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "muscleband", name: "Muscle Band", flags: 0, supported: true, cbs: &CB_IT_MUSCLEBAND, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "mysticwater", name: "Mystic Water", flags: 0, supported: true, cbs: &CB_IT_MYSTICWATER, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "nevermeltice", name: "Never-Melt Ice", flags: 0, supported: true, cbs: &CB_IT_NEVERMELTICE, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "normalgem", name: "Normal Gem", flags: IF_GEM, supported: true, cbs: &CB_IT_NORMALGEM, events: 0x0, events_pre: 0x10000000, mega: &[] },
+    ItemData { id: "occaberry", name: "Occa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_OCCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "oranberry", name: "Oran Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ORANBERRY, events: 0xc000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "passhoberry", name: "Passho Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PASSHOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "payapaberry", name: "Payapa Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PAYAPABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "pechaberry", name: "Pecha Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PECHABERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "persimberry", name: "Persim Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_PERSIMBERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "pidgeotite", name: "Pidgeotite", flags: 0, supported: true, cbs: &CB_IT_PIDGEOTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_PIDGEOTITE },
+    ItemData { id: "pinsirite", name: "Pinsirite", flags: 0, supported: true, cbs: &CB_IT_PINSIRITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_PINSIRITE },
+    ItemData { id: "poisonbarb", name: "Poison Barb", flags: 0, supported: true, cbs: &CB_IT_POISONBARB, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "psychicseed", name: "Psychic Seed", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "pyroarite", name: "Pyroarite", flags: 0, supported: true, cbs: &CB_IT_PYROARITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_PYROARITE },
+    ItemData { id: "quickclaw", name: "Quick Claw", flags: 0, supported: true, cbs: &CB_IT_QUICKCLAW, events: 0x4000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "raichunitex", name: "Raichunite X", flags: 0, supported: true, cbs: &CB_IT_RAICHUNITEX, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_RAICHUNITEX },
+    ItemData { id: "raichunitey", name: "Raichunite Y", flags: 0, supported: true, cbs: &CB_IT_RAICHUNITEY, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_RAICHUNITEY },
+    ItemData { id: "rawstberry", name: "Rawst Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RAWSTBERRY, events: 0x8000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "redcard", name: "Red Card", flags: 0, supported: false, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "rindoberry", name: "Rindo Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_RINDOBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "rockyhelmet", name: "Rocky Helmet", flags: 0, supported: true, cbs: &CB_IT_ROCKYHELMET, events: 0x100000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "roseliberry", name: "Roseli Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_ROSELIBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "sablenite", name: "Sablenite", flags: 0, supported: true, cbs: &CB_IT_SABLENITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SABLENITE },
+    ItemData { id: "salamencite", name: "Salamencite", flags: 0, supported: true, cbs: &CB_IT_SALAMENCITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SALAMENCITE },
+    ItemData { id: "sceptilite", name: "Sceptilite", flags: 0, supported: true, cbs: &CB_IT_SCEPTILITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SCEPTILITE },
+    ItemData { id: "scizorite", name: "Scizorite", flags: 0, supported: true, cbs: &CB_IT_SCIZORITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SCIZORITE },
+    ItemData { id: "scolipite", name: "Scolipite", flags: 0, supported: true, cbs: &CB_IT_SCOLIPITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SCOLIPITE },
+    ItemData { id: "scopelens", name: "Scope Lens", flags: 0, supported: true, cbs: &CB_IT_SCOPELENS, events: 0x20000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "scovillainite", name: "Scovillainite", flags: 0, supported: true, cbs: &CB_IT_SCOVILLAINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SCOVILLAINITE },
+    ItemData { id: "scraftinite", name: "Scraftinite", flags: 0, supported: true, cbs: &CB_IT_SCRAFTINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SCRAFTINITE },
+    ItemData { id: "sharpbeak", name: "Sharp Beak", flags: 0, supported: true, cbs: &CB_IT_SHARPBEAK, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "sharpedonite", name: "Sharpedonite", flags: 0, supported: true, cbs: &CB_IT_SHARPEDONITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SHARPEDONITE },
+    ItemData { id: "shedshell", name: "Shed Shell", flags: 0, supported: true, cbs: &CB_IT_SHEDSHELL, events: 0x1800, events_pre: 0x0, mega: &[] },
+    ItemData { id: "shellbell", name: "Shell Bell", flags: 0, supported: true, cbs: &CB_IT_SHELLBELL, events: 0x400000000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "shucaberry", name: "Shuca Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SHUCABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "silkscarf", name: "Silk Scarf", flags: 0, supported: true, cbs: &CB_IT_SILKSCARF, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "silverpowder", name: "Silver Powder", flags: 0, supported: true, cbs: &CB_IT_SILVERPOWDER, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "sitrusberry", name: "Sitrus Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_SITRUSBERRY, events: 0xc000000000000100, events_pre: 0x0, mega: &[] },
+    ItemData { id: "skarmorite", name: "Skarmorite", flags: 0, supported: true, cbs: &CB_IT_SKARMORITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SKARMORITE },
+    ItemData { id: "slowbronite", name: "Slowbronite", flags: 0, supported: true, cbs: &CB_IT_SLOWBRONITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SLOWBRONITE },
+    ItemData { id: "smoothrock", name: "Smooth Rock", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "softsand", name: "Soft Sand", flags: 0, supported: true, cbs: &CB_IT_SOFTSAND, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "spelltag", name: "Spell Tag", flags: 0, supported: true, cbs: &CB_IT_SPELLTAG, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "staraptite", name: "Staraptite", flags: 0, supported: true, cbs: &CB_IT_STARAPTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_STARAPTITE },
+    ItemData { id: "starminite", name: "Starminite", flags: 0, supported: true, cbs: &CB_IT_STARMINITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_STARMINITE },
+    ItemData { id: "steelixite", name: "Steelixite", flags: 0, supported: true, cbs: &CB_IT_STEELIXITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_STEELIXITE },
+    ItemData { id: "swampertite", name: "Swampertite", flags: 0, supported: true, cbs: &CB_IT_SWAMPERTITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_SWAMPERTITE },
+    ItemData { id: "tangaberry", name: "Tanga Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_TANGABERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "terrainextender", name: "Terrain Extender", flags: 0, supported: true, cbs: &[], events: 0, events_pre: 0, mega: &[] },
+    ItemData { id: "twistedspoon", name: "Twisted Spoon", flags: 0, supported: true, cbs: &CB_IT_TWISTEDSPOON, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "tyranitarite", name: "Tyranitarite", flags: 0, supported: true, cbs: &CB_IT_TYRANITARITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_TYRANITARITE },
+    ItemData { id: "venusaurite", name: "Venusaurite", flags: 0, supported: true, cbs: &CB_IT_VENUSAURITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_VENUSAURITE },
+    ItemData { id: "victreebelite", name: "Victreebelite", flags: 0, supported: true, cbs: &CB_IT_VICTREEBELITE, events: 0x80000000000000000, events_pre: 0x0, mega: &MEGA_VICTREEBELITE },
+    ItemData { id: "wacanberry", name: "Wacan Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_WACANBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "whiteherb", name: "White Herb", flags: 0, supported: true, cbs: &CB_IT_WHITEHERB, events: 0x20000000000000201, events_pre: 0x2000000800000000010, mega: &[] },
+    ItemData { id: "widelens", name: "Wide Lens", flags: 0, supported: true, cbs: &CB_IT_WIDELENS, events: 0x0, events_pre: 0x4000000, mega: &[] },
+    ItemData { id: "wiseglasses", name: "Wise Glasses", flags: 0, supported: true, cbs: &CB_IT_WISEGLASSES, events: 0x80000000, events_pre: 0x0, mega: &[] },
+    ItemData { id: "yacheberry", name: "Yache Berry", flags: IF_BERRY, supported: true, cbs: &CB_IT_YACHEBERRY, events: 0x8000000000000000, events_pre: 0x10000000000, mega: &[] },
+    ItemData { id: "zoomlens", name: "Zoom Lens", flags: 0, supported: true, cbs: &CB_IT_ZOOMLENS, events: 0x0, events_pre: 0x4000000, mega: &[] },
 ];

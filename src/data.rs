@@ -228,6 +228,8 @@ pub struct MoveData {
 pub struct SpeciesData {
     pub id: &'static str,
     pub name: &'static str,
+    /// Id of the species this is a forme of (its own id for a base forme).
+    pub base_species: &'static str,
     pub types: [Type; 2],
     /// Base stats in the order hp, atk, def, spa, spd, spe.
     pub base: [u8; 6],
@@ -428,6 +430,8 @@ pub struct CondData {
     pub id: &'static str,
     /// Turns the condition lasts once added; 0 if it has no fixed duration.
     pub duration: u8,
+    /// Can be added to a Pokémon with no HP left.
+    pub affects_fainted: bool,
     pub cbs: &'static [CbInfo],
     pub events: u128,
 }

@@ -2,7 +2,11 @@
 // the choices made, what was legal, and the full state afterwards. The Rust
 // engine replays the file from the same seed and must match at every step.
 //
-//   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID] [--max-turns 250] [--policy switch]
+//   node gen_cases.js --n 200 --seed 1 --out cases.jsonl [--stats stats.json] [--trace] [--only ID]
+//                     [--max-turns 250] [--policy switch] [--plain]
+//
+// --plain gives every Pokémon no ability, no item and no gender (the set-up the
+// engine's first version was checked with).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -24,16 +28,22 @@ const TRACE = !!args.trace;
 const MAX_TURNS = parseInt(args['max-turns'] || '250');
 const ONLY = args.only !== undefined ? parseInt(args.only) : null;
 const POLICY = args.policy || 'mixed';
+const PLAIN = !!args.plain;
 
 const pool = JSON.parse(fs.readFileSync(path.join(__dirname, 'pool.json'), 'utf8'));
 const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
 const STATS = args.stats || null;
-const tally = { moves: {}, events: {} };
+const tally = { moves: {}, events: {}, abilities: {}, items: {}, brought: { abilities: {}, items: {} } };
 const bump = (table, key) => { table[key] = (table[key] || 0) + 1; };
 function tallyLog(log) {
 	for (const line of log) {
 		const parts = line.split('|');
 		const kind = parts[1];
+		// Anything in the log that names an ability or item counts as it doing something visible.
+		for (const m of line.matchAll(/ability: ([^|\]]+)/g)) bump(tally.abilities, PS.toID(m[1]));
+		for (const m of line.matchAll(/item: ([^|\]]+)/g)) bump(tally.items, PS.toID(m[1]));
+		if (kind === '-ability') bump(tally.abilities, PS.toID(parts[3]));
+		if (kind === '-enditem' || kind === '-item') bump(tally.items, PS.toID(parts[3]));
 		if (kind === 'move') bump(tally.moves, PS.toID(parts[3]));
 		else if (kind === '-status' || kind === 'cant') bump(tally.events, `${kind} ${parts[3]}`);
 		else if (kind === '-activate' && parts[3]) bump(tally.events, `-activate ${parts[3]}`);
@@ -72,12 +82,29 @@ function randomSpread(rand) {
 	return sp;
 }
 
+/**
+ * Ability, item and gender for a set. Showdown's simulator does not check that a
+ * species can legally have an ability, so half the time any modelled ability is
+ * used: that exercises abilities on bodies and movesets their real owners lack.
+ */
+function extras(rand, s) {
+	if (PLAIN) return { ability: 'noability', item: '', gender: 'N' };
+	let ability = 'noability';
+	const r = rand();
+	if (pool.abilities.length && r >= 0.06) {
+		ability = (r < 0.5 && s.abilities.length) ? pick(rand, s.abilities) : pick(rand, pool.abilities);
+	}
+	const item = (pool.items.length && rand() < 0.8) ? pick(rand, pool.items) : '';
+	const gender = s.gender || (rand() < 0.5 ? 'M' : 'F');
+	return { ability, item, gender };
+}
+
 function randomSet(rand) {
 	const s = pick(rand, pool.species);
 	const moves = shuffled(rand, s.moves).slice(0, 4);
 	// Protect is on nearly every real doubles set; make sure it is exercised.
 	if (rand() < 0.35 && !moves.includes('protect') && s.moves.includes('protect')) moves[3] = 'protect';
-	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand) };
+	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand), ...extras(rand, s) };
 }
 
 /** A set guaranteed to know `moveId`, so that every modelled move gets exercised. */
@@ -86,7 +113,7 @@ function featuredSet(rand, moveId) {
 	if (!learners.length) return randomSet(rand);
 	const s = pick(rand, learners);
 	const moves = [moveId, ...shuffled(rand, s.moves.filter(m => m !== moveId)).slice(0, 3)];
-	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand) };
+	return { species: s.id, moves, nature: pick(rand, pool.natures), sp: randomSpread(rand), ...extras(rand, s) };
 }
 
 function buildTeams(rand) {
@@ -108,7 +135,8 @@ function buildTeams(rand) {
 			.filter(s => s.moves.length >= 4);
 		const set = () => {
 			const s = pick(rand, passive);
-			return { species: s.id, moves: shuffled(rand, s.moves).slice(0, 4), nature: pick(rand, pool.natures), sp: randomSpread(rand) };
+			const full = pool.species.find(x => x.id === s.id);
+			return { species: s.id, moves: shuffled(rand, s.moves).slice(0, 4), nature: pick(rand, pool.natures), sp: randomSpread(rand), ...extras(rand, full) };
 		};
 		return [Array.from({ length: 6 }, set), Array.from({ length: 6 }, set)];
 	}
@@ -132,10 +160,11 @@ function toPsSet(set, i) {
 	const evs = {};
 	L.STAT_IDS.forEach((k, j) => { evs[k] = set.sp[j]; });
 	return {
-		name: `${species.baseSpecies}${i}`, species: species.name, item: '', ability: 'No Ability',
+		name: `${species.baseSpecies}${i}`, species: species.name,
+		item: set.item ? dex.items.get(set.item).name : '', ability: dex.abilities.get(set.ability).name,
 		moves: set.moves.map(m => dex.moves.get(m).name), nature: set.nature,
 		// Gender must be fixed: an unset gender is rolled from the battle's RNG.
-		gender: 'N', evs, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, level: 50,
+		gender: set.gender, evs, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, level: 50,
 	};
 }
 
@@ -147,6 +176,7 @@ function snapshot(battle) {
 		winner,
 		request: battle.requestState || '',
 		rng: battle.prng.getSeed().split(',').map(Number),
+		effect_order: battle.effectOrder,
 		sides: battle.sides.map(side => ({
 			left: side.pokemonLeft,
 			mons: side.pokemon.map(p => ({
@@ -164,13 +194,43 @@ function snapshot(battle) {
 				fainted: p.fainted,
 				switch_flag: !!p.switchFlag,
 				speed: p.speed,
-				vol: Object.keys(p.volatiles).map(id => `${id}:${p.volatiles[id].duration || 0}:${p.volatiles[id].counter || 0}`),
+				vol: Object.keys(p.volatiles).map(id => `${id}:${p.volatiles[id].duration || 0}:${volDetail(id, p.volatiles[id])}`),
+				ability: p.ability,
+				item: p.item,
+				last_item: p.lastItem,
+				used_item: !!p.usedItemThisTurn,
+				ate_berry: !!p.ateBerry,
+				types: p.types,
+				trapped: p.trapped ? (p.trapped === 'hidden' ? 2 : 1) : 0,
+				disabled: p.moveSlots.map(m => !!m.disabled),
+				ability_order: p.abilityState.effectOrder || 0,
+				item_order: p.itemState.effectOrder || 0,
+				active_turns: p.activeTurns,
+				move_result: [p.moveThisTurnResult, p.moveLastTurnResult].map(resultCode).join(''),
 			})),
 		})),
 	};
 }
 
-/** Per active slot, every choice Showdown would accept, as canonical choice strings. */
+/** The state a volatile carries, as the Rust engine prints it. */
+function volDetail(id, state) {
+	switch (id) {
+	case 'stall': return state.counter || 0;
+	case 'choicelock': return state.move || 0;
+	case 'confusion': return state.time || 0;
+	case 'metronome': return `${state.lastMove || '-'}/${state.numConsecutive || 0}`;
+	default: return 0;
+	}
+}
+function resultCode(v) {
+	return v === undefined ? 'u' : v === null ? 'n' : v === true ? 't' : v === false ? 'f' : '?';
+}
+
+/**
+ * Per active slot, every choice Showdown would accept, as canonical choice strings.
+ * This reads the Pokémon's real state rather than the request sent to the player,
+ * because the request deliberately hides some things (a trap not yet revealed).
+ */
 function legalOptions(battle, side) {
 	const req = side.activeRequest;
 	if (!req || req.wait) return [['pass'], ['pass']];
@@ -189,7 +249,10 @@ function legalOptions(battle, side) {
 		const p = side.active[pos];
 		if (p.fainted) return ['pass'];
 		const opts = [];
-		a.moves.forEach((m, j) => {
+		const moves = p.getMoves();
+		// No usable move left: any move choice becomes Struggle.
+		if (!moves.length) opts.push('move 1');
+		moves.forEach((m, j) => {
 			if (m.disabled) return;
 			if (CHOOSABLE.has(m.target)) {
 				for (const loc of [1, 2, -1, -2]) if (battle.validTargetLoc(loc, p, m.target)) opts.push(`move ${j + 1} ${loc}`);
@@ -197,7 +260,7 @@ function legalOptions(battle, side) {
 				opts.push(`move ${j + 1}`);
 			}
 		});
-		if (!a.trapped) for (const i of bench) opts.push(`switch ${i + 1}`);
+		if (!p.trapped) for (const i of bench) opts.push(`switch ${i + 1}`);
 		return opts;
 	});
 }
@@ -245,6 +308,17 @@ function runCase(id) {
 	const featured = ALL_MOVES[id % ALL_MOVES.length];
 	const fside = Math.floor(id / ALL_MOVES.length) % 2;
 	[full1, full2][fside][picks[fside][0]] = featuredSet(rand, featured);
+	// Likewise one modelled ability and one modelled item, on leads, so each gets its share of battles.
+	if (!PLAIN) {
+		if (pool.abilities.length) {
+			const set = [full1, full2][1 - fside][picks[1 - fside][0]];
+			[full1, full2][1 - fside][picks[1 - fside][0]] = { ...set, ability: pool.abilities[id % pool.abilities.length] };
+		}
+		if (pool.items.length) {
+			const set = [full1, full2][fside][picks[fside][1]];
+			[full1, full2][fside][picks[fside][1]] = { ...set, item: pool.items[id % pool.items.length] };
+		}
+	}
 
 	const battle = new PS.Battle({ formatid: L.FORMAT, seed: seed.join(',') });
 	let draws = [];
@@ -266,6 +340,7 @@ function runCase(id) {
 		if (!battle.choose(side.id, `team ${picks[s].map(i => i + 1).join(',')}`)) throw new Error(side.choice.error);
 	});
 	const teams = [full1, full2].map((full, s) => picks[s].map(i => full[i]));
+	for (const t of teams) for (const set of t) { bump(tally.brought.abilities, set.ability); if (set.item) bump(tally.brought.items, set.item); }
 
 	let logPos = battle.log.length;
 	const out = { id, seed, teams, initial: snapshot(battle), steps: [], truncated: false };
@@ -306,7 +381,13 @@ fs.closeSync(fd);
 if (STATS) {
 	const unused = ALL_MOVES.filter(m => !tally.moves[m]);
 	const least = ALL_MOVES.map(m => [m, tally.moves[m] || 0]).sort((a, b) => a[1] - b[1]).slice(0, 10);
-	fs.writeFileSync(STATS, JSON.stringify({ battles: ids.length, decisions: steps, modelled_moves: ALL_MOVES.length, unused_moves: unused, least_used: least, events: tally.events, moves: tally.moves }, null, 1));
+	fs.writeFileSync(STATS, JSON.stringify({
+		battles: ids.length, decisions: steps, modelled_moves: ALL_MOVES.length, unused_moves: unused, least_used: least,
+		events: tally.events, moves: tally.moves,
+		// For each modelled ability and item: [times brought, log lines naming it].
+		abilities: Object.fromEntries(pool.abilities.map(a => [a, [tally.brought.abilities[a] || 0, tally.abilities[a] || 0]])),
+		items: Object.fromEntries(pool.items.map(a => [a, [tally.brought.items[a] || 0, tally.items[a] || 0]])),
+	}, null, 1));
 	console.log(`moves used at least once: ${ALL_MOVES.length - unused.length}/${ALL_MOVES.length}; least used: ${least.slice(0, 5).map(x => x.join(' x')).join(', ')}`);
 }
 console.log(`wrote ${ids.length} battles, ${steps} decisions, ${truncated} cut off at turn ${MAX_TURNS}, mean length ${(turns / ids.length).toFixed(1)} turns -> ${OUT}`);

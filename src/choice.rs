@@ -44,6 +44,8 @@ impl Battle {
             switch_flag: false,
             trapped: Trapped::No,
             active_turns: 0,
+            move_this_turn: Res::Undef,
+            move_last_turn: Res::Undef,
             speed: 0,
             volatiles: Volatiles::default(),
         };

@@ -473,7 +473,7 @@ impl Battle {
         source_effect: Eff,
         relay: Res,
     ) -> Res {
-        self.single_event_ex(ev, ev, eff, holder, Event::new(ev, target, source, source_effect), relay, false)
+        self.single_event_ex(ev, ev, Pre::On, eff, holder, Event::new(ev, target, source, source_effect), relay, false)
     }
 
     /// `singleEvent` in full: `ev` is the event the suppression rules see,
@@ -484,6 +484,7 @@ impl Battle {
         &mut self,
         ev: Ev,
         body: Ev,
+        pre: Pre,
         eff: Eff,
         holder: Option<MonRef>,
         e: Event,
@@ -527,7 +528,7 @@ impl Battle {
         self.event.relay = relay_var;
         self.event_depth += 1;
         debug_assert!(self.event_depth < 12, "event stack too deep in single {ev:?}");
-        let ret = self.dispatch(eff, body, Pre::On, holder.or(e.target));
+        let ret = self.dispatch(eff, body, pre, holder.or(e.target));
         self.event_depth -= 1;
         (self.effect, self.effect_holder, self.event) = parent;
         if ret == Res::Undef { relay_var } else { ret }
@@ -613,7 +614,7 @@ impl Battle {
             }
             if h.has_cb {
                 let e = Event::new(ev, Some(h.holder), None, Eff::None);
-                self.single_event_ex(ev, h.ev, h.eff, Some(h.holder), e, Res::Undef, true);
+                self.single_event_ex(ev, h.ev, h.pre, h.eff, Some(h.holder), e, Res::Undef, true);
             }
             self.faint_messages(false, false, true);
             if self.ended {

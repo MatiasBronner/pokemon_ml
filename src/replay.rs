@@ -3,7 +3,7 @@
 //! binary and by the fixture test in `tests/`.
 
 use crate::data::{ABILITIES, Gender, ITEMS, MOVES, SPECIES, Type, VolKind};
-use crate::state::Trapped;
+use crate::state::{Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
@@ -83,6 +83,10 @@ pub struct MonSnap {
     pub item_order: Option<u32>,
     #[serde(default)]
     pub active_turns: Option<u16>,
+    /// `moveThisTurnResult` and `moveLastTurnResult`, one letter each:
+    /// u(ndefined), n(ull), t(rue), f(alse).
+    #[serde(default)]
+    pub move_result: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -173,6 +177,17 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         ability_order: Some(m.ability_st.order),
         item_order: Some(m.item_st.order),
         active_turns: Some(m.active_turns),
+        move_result: Some([m.move_this_turn, m.move_last_turn].iter().map(|r| result_code(*r)).collect()),
+    }
+}
+
+fn result_code(r: Res) -> char {
+    match r {
+        Res::Undef => 'u',
+        Res::Null => 'n',
+        Res::Bool(true) => 't',
+        Res::Bool(false) => 'f',
+        _ => '?',
     }
 }
 
@@ -181,8 +196,12 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
 fn vol_snap(v: &crate::state::Volatile) -> String {
     let detail = match v.kind {
         VolKind::Stall => v.data.to_string(),
-        #[allow(unreachable_patterns)]
-        _ if v.data > 0 && VolKind::id(v.kind) == "choicelock" => MOVES[v.data as usize - 1].id.to_string(),
+        VolKind::Confusion => v.data.to_string(),
+        VolKind::Choicelock if v.data > 0 => MOVES[v.data as usize - 1].id.to_string(),
+        VolKind::Metronome => {
+            let last = if v.data > 0 { MOVES[v.data as usize - 1].id } else { "-" };
+            format!("{last}/{}", v.st.a)
+        }
         _ => "0".to_string(),
     };
     format!("{}:{}:{}", v.kind.id(), v.duration, detail)
@@ -254,6 +273,7 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
             check_opt!("disabled moves", disabled);
             check_opt!("active turns", active_turns);
             if w.active {
+                check_opt!("move results", move_result);
                 check_opt!("trapped", trapped);
                 check_opt!("ability effect order", ability_order);
                 check_opt!("item effect order", item_order);

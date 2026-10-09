@@ -49,7 +49,9 @@ pub struct Volatile {
     /// Turns left; 0 means the volatile has no duration.
     pub duration: u8,
     /// `stall`: 1-in-`data` chance the next protecting move works.
-    /// `choicelock`: the move index the holder is locked into, plus one.
+    /// `choicelock`: the move table index the holder is locked into, plus one.
+    /// `confusion`: turns of confusion left.
+    /// `metronome`: the last move used (table index plus one); `st.a` counts consecutive uses.
     pub data: u16,
     pub st: EffState,
 }
@@ -157,6 +159,10 @@ pub struct Pokemon {
     pub trapped: Trapped,
     /// Full turns spent on the field since switching in.
     pub active_turns: u16,
+    /// Showdown's `moveThisTurnResult` / `moveLastTurnResult`: `Undef` (did not
+    /// move), `Null`, or a boolean for whether the move did anything.
+    pub(crate) move_this_turn: Res,
+    pub(crate) move_last_turn: Res,
     /// Speed as last cached by Showdown's `updateSpeed`; several orderings read
     /// this stale value rather than the live stat.
     pub speed: i32,
@@ -377,11 +383,15 @@ pub(crate) enum Eff {
     Recoil,
     Drain,
     StruggleRecoil,
+    /// The stand-in move Showdown uses for confusion self-damage: it counts
+    /// as a move for effects that ask, but has no data of its own.
+    Confused,
 }
 
 impl Eff {
+    /// Showdown's `effect.effectType === 'Move'`.
     pub fn is_move(self) -> bool {
-        matches!(self, Eff::Move(_))
+        matches!(self, Eff::Move(_) | Eff::Confused)
     }
     pub fn is_ability(self) -> bool {
         matches!(self, Eff::Ability(_))

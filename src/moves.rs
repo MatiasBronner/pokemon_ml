@@ -154,10 +154,12 @@ impl Battle {
         if !will_try.truthy() {
             self.run_event(Ev::MoveAborted, Some(pokemon), target, Eff::Move(mi), Res::Undef);
             self.clear_active_move(true);
+            self.mon_mut(pokemon).move_this_turn = will_try;
             return;
         }
         if self.deduct_pp(pokemon, a.move_id, 1) == 0 && d.special != Special::Struggle {
             self.clear_active_move(true);
+            self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
         }
         self.use_move(mi, pokemon, target, Eff::None);
@@ -167,8 +169,18 @@ impl Battle {
         self.check_win(None);
     }
 
-    /// `BattleActions#useMove` / `useMoveInner`: the effects of the move itself.
+    /// `BattleActions#useMove`: the effects of the move itself.
     pub(crate) fn use_move(&mut self, mi: u8, pokemon: MonRef, target: Option<MonRef>, source_effect: Eff) -> bool {
+        self.mon_mut(pokemon).move_this_turn = Res::Undef;
+        let result = self.use_move_inner(mi, pokemon, target, source_effect);
+        if self.mon(pokemon).move_this_turn == Res::Undef {
+            self.mon_mut(pokemon).move_this_turn = result;
+        }
+        result.truthy()
+    }
+
+    /// `BattleActions#useMoveInner`.
+    fn use_move_inner(&mut self, mi: u8, pokemon: MonRef, target: Option<MonRef>, source_effect: Eff) -> Res {
         let m = mi as usize;
         let mut target = target;
         let mut source_effect = source_effect;
@@ -209,10 +221,10 @@ impl Battle {
             target = self.get_random_target(pokemon, self.am[m].target);
         }
         if self.mon(pokemon).fainted {
-            return false;
+            return FALSE;
         }
         let Some(chosen) = target else {
-            return false;
+            return FALSE;
         };
         let (targets, n) = self.get_move_targets(pokemon, mi, chosen);
         if n > 0 {
@@ -238,23 +250,23 @@ impl Battle {
             try_move = self.run_event(Ev::TryMove, Some(pokemon), target, me, Res::Undef);
         }
         if !try_move.truthy() {
-            return false;
+            return try_move;
         }
 
         if n == 0 {
-            return false;
+            return FALSE;
         }
         let result = self.try_spread_move_hit(&targets[..n], pokemon, mi);
         if self.mon(pokemon).hp == 0 {
             self.faint(pokemon, Some(pokemon), me);
         }
         if !result {
-            return false;
+            return FALSE;
         }
         if !self.suppressing_secondaries() {
             self.run_event(Ev::AfterMoveSecondarySelf, Some(pokemon), target, me, Res::Undef);
         }
-        true
+        TRUE
     }
 
     /// `Pokemon#getMoveTargets`.
@@ -359,7 +371,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return false;
+            return self.spread_done(user, n, failure);
         }
 
         // Step 1: the TryHit event (Protect, absorbing abilities, ...).
@@ -371,7 +383,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return false;
+            return self.spread_done(user, n, failure);
         }
 
         // Step 2: type immunity.
@@ -380,7 +392,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return false;
+            return self.spread_done(user, n, failure);
         }
 
         // Step 3: move-specific immunities.
@@ -403,7 +415,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return false;
+            return self.spread_done(user, n, failure);
         }
 
         // Step 4: accuracy.
@@ -412,7 +424,7 @@ impl Battle {
         }
         Battle::keep_hits(&mut targets, &mut n, &res, &mut failure);
         if n == 0 {
-            return false;
+            return self.spread_done(user, n, failure);
         }
 
         // Steps 5 and 6 (breaking protection, stealing boosts): no modelled move does either.
@@ -420,6 +432,15 @@ impl Battle {
         // Step 7: the hits themselves.
         let dmg = self.move_hit_loop(&targets[..n], user, mi);
         Battle::keep_hits(&mut targets, &mut n, &dmg, &mut failure);
+        self.spread_done(user, n, failure)
+    }
+
+    /// The tail of `trySpreadMoveHit`: a move that hit nothing without any
+    /// outright failure does not count as having failed.
+    fn spread_done(&mut self, user: MonRef, n: usize, failure: bool) -> bool {
+        if n == 0 && !failure {
+            self.mon_mut(user).move_this_turn = Res::Null;
+        }
         n > 0
     }
 

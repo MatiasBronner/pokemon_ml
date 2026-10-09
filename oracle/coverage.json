@@ -1,6 +1,6 @@
 {
  "learnable_moves": 510,
- "supported_learnable_moves": 231,
+ "supported_learnable_moves": 238,
  "supported": [
   "accelerock",
   "acidarmor",
@@ -43,6 +43,7 @@
   "closecombat",
   "coaching",
   "coil",
+  "confuseray",
   "cosmicpower",
   "cottonguard",
   "cottonspore",
@@ -71,6 +72,7 @@
   "drillrun",
   "drumbeating",
   "dualwingbeat",
+  "dynamicpunch",
   "earthpower",
   "earthquake",
   "eerieimpulse",
@@ -89,6 +91,7 @@
   "flamethrower",
   "flareblitz",
   "flashcannon",
+  "flatter",
   "flowertrick",
   "focusblast",
   "foulplay",
@@ -206,10 +209,13 @@
   "stunspore",
   "superpower",
   "surf",
+  "swagger",
+  "sweetkiss",
   "sweetscent",
   "swordsdance",
   "tailslap",
   "tearfullook",
+  "teeterdance",
   "thunderbolt",
   "thunderfang",
   "thunderpunch",
@@ -225,6 +231,7 @@
   "vacuumwave",
   "volttackle",
   "waterfall",
+  "waterpulse",
   "wavecrash",
   "wildcharge",
   "willowisp",
@@ -279,8 +286,7 @@
   ],
   "axekick": [
    "key:hasCrashDamage",
-   "fn:onMoveFail",
-   "sec.volatile=confusion"
+   "fn:onMoveFail"
   ],
   "banefulbunker": [
    "key:stallingMove",
@@ -379,9 +385,6 @@
    "fn:onModifyTarget",
    "target:scripted"
   ],
-  "confuseray": [
-   "volatile:confusion"
-  ],
   "copycat": [
    "fn:onHit",
    "key:callsMove"
@@ -448,9 +451,6 @@
   ],
   "dragontail": [
    "key:forceSwitch"
-  ],
-  "dynamicpunch": [
-   "sec.volatile=confusion"
   ],
   "eeriespell": [
    "sec.onHit"
@@ -538,9 +538,6 @@
   ],
   "flail": [
    "fn:basePowerCallback"
-  ],
-  "flatter": [
-   "volatile:confusion"
   ],
   "fling": [
    "fn:onPrepareHit",
@@ -681,8 +678,7 @@
    "key:ohko"
   ],
   "hurricane": [
-   "fn:onModifyMove",
-   "sec.volatile=confusion"
+   "fn:onModifyMove"
   ],
   "hydrocannon": [
    "flag:recharge",
@@ -1173,15 +1169,9 @@
   "superfang": [
    "fn:damageCallback"
   ],
-  "swagger": [
-   "volatile:confusion"
-  ],
   "swallow": [
    "fn:onTry",
    "fn:onHit"
-  ],
-  "sweetkiss": [
-   "volatile:confusion"
   ],
   "switcheroo": [
    "fn:onTryImmunity",
@@ -1206,9 +1196,6 @@
   "teatime": [
    "fn:onHitField",
    "target:all"
-  ],
-  "teeterdance": [
-   "volatile:confusion"
   ],
   "temperflare": [
    "fn:basePowerCallback"
@@ -1287,9 +1274,6 @@
   "voltswitch": [
    "selfSwitch"
   ],
-  "waterpulse": [
-   "sec.volatile=confusion"
-  ],
   "watershuriken": [
    "fn:basePowerCallback"
   ],
@@ -1362,14 +1346,12 @@
   "key:selfdestruct": 6,
   "target:randomNormal": 5,
   "weather": 5,
-  "volatile:confusion": 5,
   "key:pseudoWeather": 5,
   "key:stallingMove": 4,
   "key:terrain": 4,
   "key:forceSwitch": 4,
   "fn:onModifyType": 4,
   "target:scripted": 4,
-  "sec.volatile=confusion": 4,
   "fn:onHitField": 4,
   "self.onHit": 4,
   "target:foeSide": 4,

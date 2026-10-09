@@ -689,6 +689,8 @@ impl Battle {
         if include_switch_flags {
             m.switch_flag = false;
         }
+        m.move_this_turn = Res::Undef;
+        m.move_last_turn = Res::Undef;
         // `setSpecies` restores the species' types and resets the cached speed to the raw stat.
         m.types = SPECIES[m.species as usize].types;
         m.speed = m.stats[5] as i32;
@@ -1131,7 +1133,7 @@ impl Battle {
 
     /// `Pokemon#addVolatile`.
     pub(crate) fn add_volatile(&mut self, r: MonRef, kind: VolKind, source: Option<MonRef>, source_effect: Eff) -> Res {
-        if self.mon(r).hp == 0 {
+        if self.mon(r).hp == 0 && !VOL_CONDS[kind as usize].affects_fainted {
             return FALSE;
         }
         let source = source.or(self.event.source).or(Some(r));
@@ -1544,6 +1546,8 @@ impl Battle {
                 {
                     let turn = self.turn;
                     let m = self.mon_mut(r);
+                    m.move_last_turn = m.move_this_turn;
+                    m.move_this_turn = Res::Undef;
                     if turn != 1 {
                         m.used_item_this_turn = false;
                     }

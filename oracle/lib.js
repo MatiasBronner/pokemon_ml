@@ -28,8 +28,6 @@ const EXTRA_OK = new Set(['boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTar
 const TARGETS_OK = new Set([
 	'normal', 'any', 'adjacentFoe', 'allAdjacentFoes', 'allAdjacent', 'self', 'adjacentAlly', 'adjacentAllyOrSelf', 'allies',
 ]);
-// Volatiles a secondary effect may inflict.
-const SECONDARY_VOLATILES = ['flinch'];
 const BAD_FLAGS = ['charge', 'recharge', 'futuremove', 'cantusetwice', 'mustpressure', 'pledgecombo'];
 // Moves with script callbacks that the Rust engine implements by hand.
 const SPECIAL = { protect: 'Protect', detect: 'Protect', struggle: 'Struggle' };
@@ -41,7 +39,7 @@ function hitEffectReasons(e, where, why) {
 		if (k === 'status') {
 			if (!STATUSES.includes(e.status)) why.push(`${where}.status=${e.status}`);
 		} else if (k === 'volatileStatus') {
-			if (!SECONDARY_VOLATILES.includes(e.volatileStatus)) why.push(`${where}.volatile=${e.volatileStatus}`);
+			if (!MOVE_VOLATILES.includes(e.volatileStatus)) why.push(`${where}.volatile=${e.volatileStatus}`);
 		} else if (k === 'self') {
 			for (const sk in e.self) if (sk !== 'boosts') why.push(`${where}.self.${sk}`);
 		} else {
@@ -60,7 +58,7 @@ function unsupportedReasons(m) {
 	}
 	if (!TARGETS_OK.has(m.target)) why.push('target:' + m.target);
 	if (m.status && !STATUSES.includes(m.status)) why.push('status:' + m.status);
-	if (m.volatileStatus) why.push('volatile:' + m.volatileStatus);
+	if (m.volatileStatus && !MOVE_VOLATILES.includes(m.volatileStatus)) why.push('volatile:' + m.volatileStatus);
 	if (m.weather) why.push('weather');
 	if (m.selfSwitch) why.push('selfSwitch');
 	if (m.damage) why.push('damage:' + m.damage);
@@ -118,15 +116,30 @@ function mulberry32(a) {
 // ---- abilities, items and conditions ------------------------------------------
 
 // Volatile conditions the Rust engine implements, in `VolKind` order.
-const VOLATILES = ['protect', 'stall', 'flinch'];
+const VOLATILES = ['protect', 'stall', 'flinch', 'confusion', 'choicelock', 'gem', 'metronome'];
+// Volatiles a move may inflict through `volatileStatus` (its own or a secondary's).
+const MOVE_VOLATILES = ['flinch', 'confusion'];
 
 // Abilities and items whose every callback has a hand-written body in the Rust
 // engine (src/abilities.rs, src/items.rs). Everything else is rejected by
 // `Battle::new`. DEFERRED_* records why something is not here yet.
 const SUPPORTED_ABILITIES = new Set(['noability']);
-const SUPPORTED_ITEMS = new Set(['']);
 const DEFERRED_ABILITIES = {};
-const DEFERRED_ITEMS = {};
+// Items: everything except Mega Stones and the ones listed here with the mechanic they wait for.
+const DEFERRED_ITEMS = {
+	ejectbutton: 'switching out mid-turn',
+	redcard: 'forced switching',
+	electricseed: 'terrain',
+	grassyseed: 'terrain',
+	mistyseed: 'terrain',
+	psychicseed: 'terrain',
+};
+const SUPPORTED_ITEMS = new Set(['']);
+for (const item of dex.items.all()) {
+	if (!item.exists || item.isNonstandard) continue;
+	if (item.megaStone) { DEFERRED_ITEMS[item.id] = 'Mega Evolution'; continue; }
+	if (!DEFERRED_ITEMS[item.id]) SUPPORTED_ITEMS.add(item.id);
+}
 
 /** Event names, in the order of the Rust `Ev` enum (src/data.rs is the single source). */
 const EVENTS = (() => {
@@ -208,7 +221,7 @@ function tableItems() {
 }
 
 module.exports = {
-	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, SPECIAL, VOLATILES, EVENTS,
+	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, SPECIAL, VOLATILES, MOVE_VOLATILES, EVENTS,
 	SUPPORTED_ABILITIES, SUPPORTED_ITEMS, DEFERRED_ABILITIES, DEFERRED_ITEMS,
 	unsupportedReasons, legalSpecies, learnableMoves, tableMoves, tableSpecies, mulberry32,
 	callbacks, tableAbilities, legalAbilities, tableItems,

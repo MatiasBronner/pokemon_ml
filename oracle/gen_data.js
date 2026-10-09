@@ -76,7 +76,8 @@ for (const s of species) {
 	if (t.length === 1) t.push('Type::None');
 	const b = s.baseStats;
 	const gender = s.gender ? `Some(Gender::${s.gender})` : 'None';
-	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, types: [${t.join(', ')}], base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender} },\n`;
+	out += `    SpeciesData { id: ${rs(s.id)}, name: ${rs(s.name)}, base_species: ${rs(L.PS.toID(s.baseSpecies))}, types: [${t.join(', ')}], ` +
+		`base: [${L.STAT_IDS.map(k => b[k]).join(', ')}], gender: ${gender} },\n`;
 }
 out += '];\n\n';
 
@@ -151,13 +152,13 @@ for (const id of L.VOLATILES) {
 	if (!c.exists) throw new Error('unknown condition ' + id);
 	if (c.durationCallback) throw new Error(`${id}: durationCallback is not modelled`);
 	const [cbs, mask] = cbTable(`CB_VOL_${id.toUpperCase()}`, c, 'condition');
-	volRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, cbs: ${cbs}, events: ${mask} },\n`;
+	volRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: ${!!c.affectsFainted}, cbs: ${cbs}, events: ${mask} },\n`;
 }
-let statusRows = `    CondData { id: "", duration: 0, cbs: &[], events: 0 },\n`;
+let statusRows = `    CondData { id: "", duration: 0, affects_fainted: false, cbs: &[], events: 0 },\n`;
 for (const id of L.STATUSES) {
 	const c = dex.conditions.get(id);
 	const [cbs, mask] = cbTable(`CB_STATUS_${id.toUpperCase()}`, c, 'status');
-	statusRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, cbs: ${cbs}, events: ${mask} },\n`;
+	statusRows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: false, cbs: ${cbs}, events: ${mask} },\n`;
 }
 
 // Abilities
@@ -210,14 +211,20 @@ fs.writeFileSync(path.join(__dirname, '..', 'src', 'tables.rs'), out);
 
 // ---- pool for the fuzzer --------------------------------------------------------
 const supportedSet = new Set(report.supported);
-const pool = { species: [], natures: dex.natures.all().map(n => n.name) };
+const pool = {
+	species: [],
+	natures: dex.natures.all().map(n => n.name),
+	abilities: [...L.SUPPORTED_ABILITIES].filter(a => a !== 'noability').sort(),
+	items: [...L.SUPPORTED_ITEMS].filter(Boolean).sort(),
+};
 const learnable = new Set();
 for (const s of L.legalSpecies()) {
 	if (s.isMega || s.battleOnly) continue; // reached in battle, never brought
 	const all = L.learnableMoves(s);
 	for (const id of all) learnable.add(id);
 	const ok = all.filter(id => supportedSet.has(id));
-	if (ok.length >= 4) pool.species.push({ id: s.id, moves: ok });
+	const own = [...new Set(Object.values(s.abilities).map(a => L.PS.toID(a)))].filter(a => L.SUPPORTED_ABILITIES.has(a));
+	if (ok.length >= 4) pool.species.push({ id: s.id, moves: ok, abilities: own, gender: s.gender || '' });
 }
 fs.writeFileSync(path.join(__dirname, 'pool.json'), JSON.stringify(pool));
 

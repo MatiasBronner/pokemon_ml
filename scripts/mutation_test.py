@@ -477,7 +477,15 @@ def callback_arms(text):
                 j += 1
             header = '\n'.join(lines[i:j + 1])
             if lines[j].endswith('=> {'):
-                out.append((header, True))
+                # (A block that only says `Res::Undef` is already switched off.)
+                k = j + 1
+                body = []
+                while k < len(lines) and lines[k] != '            }':
+                    if not lines[k].strip().startswith('//'):
+                        body.append(lines[k].strip())
+                    k += 1
+                if body != ['Res::Undef']:
+                    out.append((header, True))
             elif '=> ' in lines[j] and not lines[j].endswith('=> Res::Undef,'):
                 out.append((header, False))
             i = j + 1
@@ -513,6 +521,28 @@ EQUIVALENT = {
     # Marks the user as having had its BeforeSwitchOut event, which the core does for anyone
     # about to switch, and which nothing in Champions listens to in any case (no Pursuit).
     '            (mv::BATONPASS | mv::SHEDTAIL, Ev::SelfHit)',
+    # Zeroes the counter of a volatile that has just been created.
+    '            (VolKind::Metronome, Ev::Start)',
+    # Returns true where nothing is returned otherwise (the move only fails in singles).
+    '            (mv::FOLLOWME | mv::RAGEPOWDER, Ev::Try)',
+    # Refuses a fourth Stockpile, which the volatile's own onRestart refuses as well.
+    '            (mv::STOCKPILE, Ev::Try)',
+    # Heal Block only comes from Psychic Noise in Champions. Its onStart marks the user's move
+    # as successful, which the move's own result does right after; its onRestart returns at
+    # once for Psychic Noise.
+    '            (VolKind::Healblock, Ev::Start)',
+    '            (VolKind::Healblock, Ev::Restart)',
+    # These two only end the effects of held items, and no item in Champions has an onEnd.
+    '            (Pseudo::Magicroom, Ev::FieldStart)',
+    '            (ab::KLUTZ, Ev::Start, Pre::On)',
+    # Reacts to an ally's Grass move aimed at its own side; Champions has no such move.
+    '            (ab::SAPSIPPER, Ev::TryHitSide, Pre::Ally)',
+    # Doubles the stat changes of berries; Champions has no berry that changes stats.
+    '            (ab::RIPEN, Ev::ChangeBoost, Pre::On)',
+    # Clears state that is set afresh whenever the ability starts and is never read while the
+    # ability is off; Opportunist's pending boosts are always applied before it can end.
+    '            (ab::OPPORTUNIST, Ev::End, Pre::On)',
+    '            (ab::UNNERVE, Ev::End, Pre::On)',
 }
 
 def handler_off_entries(since=None):

@@ -68,6 +68,20 @@ transform-into-formes|300|9909|--species ditto,mimikyu,morpeko,aegislash,palafin
 darts-into-protect|800|9910|--species dragapult,snorlax,slowbro,hippowdon --abilities berserk,emergencyexit --moves dragondarts,protect
 sleep-talk-meteor-beam|300|9912|--moves-per 4 --species archaludon,garganacl,glimmora,aggron,tyrantrum --moves rest,sleeptalk,electroshot,meteorbeam
 electrified-struggle|600|9914|--moves-per 4 --species heliolisk,garchomp,hippowdon,excadrill --moves electrify,taunt,swordsdance,calmmind,nastyplot,bulkup,irondefense,amnesia
+helping-hand-twice|500|9920|--species oranguru --moves helpinghand,instruct,rockslide --moves-per 3
+magnet-rise-grounded|300|9921|--moves magnetrise,smackdown,ingrain --moves-per 3
+smack-down-twice|500|9922|--moves smackdown,fly,bounce --moves-per 3
+metal-burst-substitute|600|9935|--species sableye,aggron,bastiodon,rhyperior,perrserker,orthworm,kingambit,houndoom,pangoro,mabosstiff --moves metalburst,comeuppance,substitute,nuzzle,fakeout,icywind,bulletseed --moves-per 4
+future-sight-own-slot|400|9925|--species alakazam,mrmime,chimecho,musharna,reuniclus,farigiraf --moves futuresight,allyswitch
+oblivious-taunt|300|9926|--moves taunt,skillswap,attract --abilities oblivious,moldbreaker,noability
+armor-tail-field-moves|300|9927|--abilities prankster,armortail,queenlymajesty,noability --moves raindance,sunnyday,haze,grassyterrain,perishsong,trickroom
+gastro-acid-ability-end|400|9928|--moves gastroacid,skillswap,worryseed,flamethrower,heatwave,willowisp --abilities flashfire,illusion,unburden,noability --items sitrusberry
+merciless|300|9929|--abilities merciless,noability --moves toxic,poisonjab,sludgebomb,toxicspikes
+oblivious|300|9930|--abilities oblivious,cutecharm,moldbreaker,noability --moves taunt,attract,skillswap,fakeout,closecombat
+damp-aftermath|300|9931|--abilities damp,aftermath --moves closecombat,doubleedge,uturn,explosion
+leaf-guard-yawn|300|9932|--abilities leafguard,drought,noability --moves yawn,sunnyday,raindance
+freeze|800|9933|--abilities magmaarmor,synchronize,moldbreaker,noability --items lumberry,aspearberry --moves icebeam,blizzard,freezedry,icepunch,triattack,skillswap
+own-tempo|300|9934|--abilities owntempo,moldbreaker,noability --moves confuseray,swagger,dynamicpunch,skillswap,hurricane
 EOF
 }
 

@@ -35,6 +35,8 @@ V = 'src/movecbs.rs'
 CH = 'src/choice.rs'
 MUT = [
  # --- everything after the volatile conditions: scripted moves, switching, formes
+ ('healing wish still heals a switch-in after ally switch', E, '                if slot.is_some_and(|c| c.targeted) {\n                    continue;\n                }\n', ''),
+ ('ally switch leaves no mark on healing wish', E, '            if let Some(c) = self.sides[side].slot_conds.get_mut(pos).and_then(|cs| cs.get_mut(kind)) {\n                c.targeted = true;\n            }\n', ''),
  ('reckless ignores crash moves', A, 'self.am[m as usize].d().recoil.0 > 0 || self.am[m as usize].d().has_crash_damage)', 'self.am[m as usize].d().recoil.0 > 0)'),
  ('sheer force passes over electro shot', A, 'self.am[m as usize].has_sheer_force || self.am[m as usize].d().sheer_force_boost', 'self.am[m as usize].has_sheer_force'),
  ('cud chew keeps a stolen berry', A, 'if ITEMS[e.item as usize].flags & IF_BERRY != 0 && !stolen {', 'if ITEMS[e.item as usize].flags & IF_BERRY != 0 {'),
@@ -80,7 +82,7 @@ MUT = [
  ('future sight cannot aim at a fainted ally', M, 'if self.mon(t).fainted && self.am[mi as usize].flags & F_FUTUREMOVE == 0 {', 'if self.mon(t).fainted {'),
  ('future sight aimed at itself fails', B, '            return future.then_some(user);', '            return None;'),
  ('fling works under klutz', V, '                    || self.has_ability(source, ab::KLUTZ)\n                {\n                    return FALSE;', '                {\n                    return FALSE;'),
- ('fling keeps the item', C, '                self.set_item(holder, it::NONE, None, Eff::None);\n                let m = self.mon_mut(holder);\n                m.last_item = item;', '                let m = self.mon_mut(holder);\n                m.last_item = item;'),
+ ('fling keeps the item', C, '                self.set_item(holder, it::NONE, None, Eff::None);\n                // `-enditem|pokemon|Item|[from] move: Fling`', '                // `-enditem|pokemon|Item|[from] move: Fling`'),
  ('fling power fixed', V, 'self.am[mi as usize].base_power = fling.power as u16;', 'self.am[mi as usize].base_power = 30;'),
  ('flung berry is not eaten', V, '                    if self.has_cb(Eff::Item(item), Ev::Eat) {\n                        self.mon_mut(foe).ate_berry = true;\n                    }\n                } else if item == it::MENTALHERB {', '                } else if item == it::MENTALHERB {'),
  ('ally switch leaves volatiles behind', B, '        self.vols[side].swap(old_pos, new_pos);\n', ''),
@@ -118,11 +120,11 @@ MUT = [
  ('disguise blocks only once... never busts', A, '                    self.mon_mut(holder).ability_st.a = 1;\n                    return Res::Num(0);', '                    return Res::Num(0);'),
  ('busted disguise costs nothing', A, '                        self.damage(d, Some(holder), Some(holder), Eff::Species);', ''),
  ('busted disguise is not permanent', A, '                        self.forme_change(holder, species, true, false);\n                        let d = div1', '                        self.forme_change(holder, species, false, false);\n                        let d = div1'),
- ('zero to hero keeps the old ability state', A, '                        self.forme_change(holder, species, true, true);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon) only announces it.', '                        self.forme_change(holder, species, true, false);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon) only announces it.'),
+ ('zero to hero keeps the old ability state', A, '                        self.forme_change(holder, species, true, true);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon): `-activate', '                        self.forme_change(holder, species, true, false);\n                    }\n                }\n                Res::Undef\n            }\n            // onSwitchIn(pokemon): `-activate'),
  ('mega evolution ends an illusion', B, '                self.mon_mut(r).ability = ab::NOABILITY;\n', ''),
  ('illusion picks the first party member', A, 'for p in (own + 1..s.n as usize).rev() {', 'for p in own + 1..s.n as usize {'),
- ('illusion survives a hit', A, '                if !self.mon(holder).being_called_back {\n                    self.mon_mut(holder).illusion = 0;\n                }', ''),
- ('illusion ends on switching out', A, '                if !self.mon(holder).being_called_back {\n                    self.mon_mut(holder).illusion = 0;', '                if true {\n                    self.mon_mut(holder).illusion = 0;'),
+ ('illusion survives a hit', A, '                if !self.mon(holder).being_called_back && self.mon(holder).illusion != 0 {\n                    let was = self.shown_as(holder);\n                    self.mon_mut(holder).illusion = 0;\n                    // `replace`, then `-end|pokemon|Illusion`.\n                    self.shown_unmask(holder, was);\n                    self.show_ability(holder, ab::ILLUSION);\n                }', ''),
+ ('illusion ends on switching out', A, '                if !self.mon(holder).being_called_back && self.mon(holder).illusion != 0 {', '                if self.mon(holder).illusion != 0 {'),
  ('imposter copies the foe in front', A, 'let across = ACTIVE - 1 - self.mon(holder).position as usize;', 'let across = self.mon(holder).position as usize;'),
  ('transform through a substitute', B, '            || self.vols(target).has(VolKind::Substitute)\n            || t.transformed', '            || t.transformed'),
  ('transform into an illusion', B, '            || self.mon(r).illusion != 0\n            || t.illusion != 0\n', '            || self.mon(r).illusion != 0\n'),
@@ -153,7 +155,7 @@ MUT = [
  ("king's shield blocks status moves", C, 'if self.bypasses_protect(mi, source, target, kind != VolKind::Kingsshield) {', 'if self.bypasses_protect(mi, source, target, true) {'),
  ('spiky shield 1/8 -> 1/16', C, '                            let d = div1(self.mon(source).max_hp() as u32, 8);\n                            self.damage(d, Some(source), Some(target), Eff::None);', '                            let d = div1(self.mon(source).max_hp() as u32, 16);\n                            self.damage(d, Some(source), Some(target), Eff::None);'),
  ('taunt never extended', C, '                if self.mon(holder).active_turns > 0 && !self.will_move(holder) {\n                    if let Some(v) = self.vol_mut(holder, VolKind::Taunt) {\n                        v.duration += 1;\n                    }\n                }', ''),
- ('taunt blocks attacks', C, '                    if am.category == Category::Status && am.d().id != "mefirst" {\n                        return FALSE;', '                    if am.d().id != "mefirst" {\n                        return FALSE;'),
+ ('taunt blocks attacks', C, 'if am.category == Category::Status && am.d().id != "mefirst" {', 'if am.d().id != "mefirst" {'),
  ('taunt does not disable status moves', C, 'self.disable_moves_where(holder, |d| d.category == Category::Status && d.id != "mefirst");', ''),
  ('encore works without pp', C, 'if MOVES[last as usize].flags & F_FAILENCORE != 0 || pp.is_none_or(|pp| pp == 0) {', 'if MOVES[last as usize].flags & F_FAILENCORE != 0 || pp.is_none() {'),
  ('encore ignores failencore', C, 'if MOVES[last as usize].flags & F_FAILENCORE != 0 || pp.is_none_or(|pp| pp == 0) {', 'if pp.is_none_or(|pp| pp == 0) {'),
@@ -166,7 +168,7 @@ MUT = [
  ('torment disables nothing', C, '                    self.disable_slots_where(holder, |s| s.id == last);\n', ''),
  ('last move not recorded', M, '        self.mon_mut(pokemon).last_move = a.move_id;\n', ''),
  ('last move survives switching', B, '        m.last_move = NO_MOVE;\n        m.locked_move = NO_MOVE;\n', '        m.locked_move = NO_MOVE;\n'),
- ('imprison does not stop the move', C, '                if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {\n                    return FALSE;\n                }', ''),
+ ('imprison does not stop the move', C, '                if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {\n                    // `cant|attacker|move: Imprison|Move`\n                    self.show_attempted(e.target);\n                    return FALSE;\n                }', ''),
  ('imprison disables openly', C, '                self.disable_slots_hidden_where(pokemon, |s| {', '                self.disable_slots_where(pokemon, |s| {'),
  ('struggle spelled plainly when moves are hidden', CH, 'let listed = self.is_last_active(r) && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);', 'let listed = false && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);'),
  ('struggle spelling ignores which slot is last', CH, 'let listed = self.is_last_active(r) && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);', 'let listed = m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);'),
@@ -176,7 +178,7 @@ MUT = [
  ('heal block lets healing through', C, '                        return Res::Null;\n                    }\n                }\n                FALSE\n            }\n            // onRestart(target, source, effect)', '                        return Res::Null;\n                    }\n                }\n                Res::Undef\n            }\n            // onRestart(target, source, effect)'),
  ('heal block from psychic noise lasts 5', C, '                if self.eff_is_named(source_effect, "psychicnoise") {\n                    2', '                if self.eff_is_named(source_effect, "psychicnoise") {\n                    5'),
  ('cursed body 30% -> 50%', A, 'self.chance(3, 10, "cursed body")', 'self.chance(5, 10, "cursed body")'),
- ('cute charm without contact', A, 'if self.makes_contact(m) && self.chance(3, 10, "cute charm") {', 'if self.chance(3, 10, "cute charm") {'),
+ ('cute charm without contact', A, 'if self.makes_contact(m)\n                    && self.chance(3, 10, "cute charm")', 'if self.chance(3, 10, "cute charm")'),
  ('oblivious keeps taunt', A, '                self.remove_volatile(holder, VolKind::Attract);\n                self.remove_volatile(holder, VolKind::Taunt);', '                self.remove_volatile(holder, VolKind::Attract);'),
  ('substitute has a third of the hp', C, '                let hp = self.mon(holder).max_hp() / 4;\n                if let Some(v) = self.vol_mut(holder, VolKind::Substitute) {', '                let hp = self.mon(holder).max_hp() / 3;\n                if let Some(v) = self.vol_mut(holder, VolKind::Substitute) {'),
  ('substitute costs nothing', V, '                    self.direct_damage(cost, target, e.source, Eff::Move(mi));\n', ''),
@@ -228,7 +230,7 @@ MUT = [
  ('perish song ignores soundproof', V, '                        || self.run_event(Ev::TryHit, Some(pokemon), e.source, me, Res::Undef) == Res::Null;\n                    if unreachable {', '                        || false;\n                    if unreachable {'),
  ('yawn does nothing', C, '                self.try_set_status(holder, Status::Slp, source, Eff::None);\n', ''),
  ('yawn on a statused target', V, 'if self.mon(target).status != Status::None\n                    || !self.run_status_immunity(target, Imm::Status(Status::Slp))\n                {', 'if !self.run_status_immunity(target, Imm::Status(Status::Slp)) {'),
- ('insomnia lets yawn in', A, '            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {\n                if e.vol == Some(VolKind::Yawn) {\n                    return Res::Null;\n                }', '            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {'),
+ ('insomnia lets yawn in', A, '            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {\n                if e.vol == Some(VolKind::Yawn) {\n                    // `-immune|target|[from] ability: Insomnia`\n                    self.show_ability(holder, ability);\n                    return Res::Null;\n                }', '            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {'),
  ('glaive rush x2 -> x1.5', C, '(VolKind::Glaiverush, Ev::ModifyDamage, Pre::Source) => self.chain_modify(2, 1),', '(VolKind::Glaiverush, Ev::ModifyDamage, Pre::Source) => self.chain_modify(3, 2),'),
  ('glaive rush never wears off', C, '            (VolKind::Glaiverush, Ev::BeforeMove) => {\n                self.remove_volatile(holder, kind);', '            (VolKind::Glaiverush, Ev::BeforeMove) => {'),
  ('stockpile boosts are kept', C, '                if def != 0 || spd != 0 {\n                    let mut b = [0i8; 7];\n                    b[DEF] = def as i8;', '                if false {\n                    let mut b = [0i8; 7];\n                    b[DEF] = def as i8;'),
@@ -242,7 +244,7 @@ MUT = [
  ('binding outlasts its user', C, '                    if !m.is_active || m.hp == 0 || m.active_turns == 0 {\n                        self.drop_vol(holder, kind);\n                        return Res::Undef;\n                    }\n                }\n                let d = div1(self.mon(holder).max_hp() as u32, divisor as u32);', '                    if false {\n                        self.drop_vol(holder, kind);\n                        return Res::Undef;\n                    }\n                }\n                let d = div1(self.mon(holder).max_hp() as u32, divisor as u32);'),
  ('substitute does not free from binding', C, '                if let Some(k) = VolKind::named("partiallytrapped") {\n                    self.drop_vol(holder, k);\n                }\n                Res::Undef\n            }\n            // onTryPrimaryHit(target, source, move): the substitute takes the hit.', '                Res::Undef\n            }\n            // onTryPrimaryHit(target, source, move): the substitute takes the hit.'),
  ('jaw lock traps one side', V, '                    self.add_trapped(source, target, Eff::Move(mi));\n                    self.add_trapped(target, source, Eff::Move(mi));', '                    self.add_trapped(target, source, Eff::Move(mi));'),
- ('electromorphosis does nothing', A, '            (ab::ELECTROMORPHOSIS, Ev::DamagingHit, Pre::On) => {\n                self.add_volatile(holder, VolKind::Charge, None, Eff::None);', '            (ab::ELECTROMORPHOSIS, Ev::DamagingHit, Pre::On) => {'),
+ ('electromorphosis does nothing', A, '                if self.add_volatile(holder, VolKind::Charge, None, Eff::None).truthy() {\n                    // `-start|pokemon|Charge|Move|[from] ability: Electromorphosis`\n                    self.show_ability(holder, ability);\n                }\n', ''),
  ("a move's own after-move callback is skipped", M, '        if self.move_has_cb(mv, Ev::AfterMove) {\n            let me = Eff::Move(mv);\n            self.single_event(Ev::AfterMove, me, None, Some(pokemon), target, me, Res::Undef);\n        }', ''),
  # --- weather, terrain and other field conditions
  ('rain water boost 1.5 -> 1.25', C, "Some(Type::Water) => self.chain_modify(3, 2),\n                    Some(Type::Fire) => self.chain_modify(1, 2),", "Some(Type::Water) => self.chain_modify(5, 4),\n                    Some(Type::Fire) => self.chain_modify(1, 2),"),
@@ -302,8 +304,8 @@ MUT = [
  ('sand veil 3277 -> 3686', A, "(ab::SANDVEIL, Ev::ModifyAccuracy, Pre::On) => {\n                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Sandstorm) {\n                    return self.chain_modify(3277, 4096);", "(ab::SANDVEIL, Ev::ModifyAccuracy, Pre::On) => {\n                if matches!(relay, Res::Num(_)) && self.is_weather(Weather::Sandstorm) {\n                    return self.chain_modify(3686, 4096);"),
  ('harvest rolls in the sun', A, "if self.is_weather(Weather::Sunnyday) || self.chance(1, 2, \"harvest\") {", "if self.chance(1, 2, \"harvest\") {"),
  ('grass pelt 1.5 -> 1.3', A, "(ab::GRASSPELT, Ev::ModifyDef, Pre::On) => {\n                if self.is_terrain(Terrain::Grassyterrain) {\n                    return self.chain_modify(3, 2);", "(ab::GRASSPELT, Ev::ModifyDef, Pre::On) => {\n                if self.is_terrain(Terrain::Grassyterrain) {\n                    return self.chain_modify(5325, 4096);"),
- ('mimicry keeps its type', A, '                if current[..n] != wanted[..] {\n                    self.set_type(holder, types);\n                }\n', ''),
- ('screen cleaner spares the foe', A, "for side in [holder.side as usize, 1 - holder.side as usize] {\n                        self.remove_side_condition(side, cond);", "for side in [holder.side as usize] {\n                        self.remove_side_condition(side, cond);"),
+ ('mimicry keeps its type', A, 'if current[..n] != wanted[..] && self.set_type(holder, types) {', 'if false {'),
+ ('screen cleaner spares the foe', A, 'for side in [holder.side as usize, 1 - holder.side as usize] {\n                        if self.remove_side_condition(side, cond) {', 'for side in [holder.side as usize] {\n                        if self.remove_side_condition(side, cond) {'),
  ('toxic debris on special hits', A, "if mcat == Some(Category::Physical) && layers.is_none_or(|l| l < 2) {", "if layers.is_none_or(|l| l < 2) {"),
  ('synchronize passes toxic spikes poison', A, "                    || e.effect == Eff::SideCond(SideCond::Toxicspikes)\n", ""),
  ('armor tail stops field moves', A, "if am.target == Target::FoeSide\n                    || (all && !matches!(am.d().id, \"perishsong\" | \"flowershield\" | \"rototiller\"))\n                {", "if am.target == Target::FoeSide {"),
@@ -367,11 +369,11 @@ MUT = [
  ('pixilate type', A, "ab::PIXILATE => Type::Fairy,", "ab::PIXILATE => Type::Ice,"),
  ('fluffy contact /2 -> /4', A, "                    num /= 2;", "                    num /= 4;"),
  ('heatproof burn /2 -> /3', A, "return Res::Num(relay.num() / 2);", "return Res::Num(relay.num() / 3);"),
- ('stickyhold off', A, 'if (e.source.is_some() && e.source != Some(holder)) || knock_off {\n                    return FALSE;', 'if (e.source.is_some() && e.source != Some(holder)) || knock_off {\n                    return Res::Undef;'),
+ ('stickyhold off', A, '                    // `-activate|pokemon|ability: Sticky Hold`\n                    self.show_ability(holder, ability);\n                    return FALSE;', '                    // `-activate|pokemon|ability: Sticky Hold`\n                    self.show_ability(holder, ability);\n                    return Res::Undef;'),
  ('minus/plus counts itself', A, "if a != holder && (self.has_ability(a, ab::MINUS)", "if (self.has_ability(a, ab::MINUS)"),
  ('firemane type', A, "(ab::FIREMANE, Ev::ModifyAtk | Ev::ModifySpA, Pre::On) => {\n                if mtype == Some(Type::Fire) {", "(ab::FIREMANE, Ev::ModifyAtk | Ev::ModifySpA, Pre::On) => {\n                if mtype == Some(Type::Water) {"),
  ('intimidate -1 -> -2', A, "self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);", "self.boost1(ATK, -2, Some(f), Some(holder), Eff::None);"),
- ('sturdy leaves 2 hp', A, "return Res::Num(m.hp as i32 - 1);", "return Res::Num(m.hp as i32 - 2);"),
+ ('sturdy leaves 2 hp', A, 'let left = m.hp as i32 - 1;', 'let left = m.hp as i32 - 2;'),
  ('regenerator 1/3 -> 1/4', A, "let amount = self.mon(holder).max_hp() as i32 / 3;", "let amount = self.mon(holder).max_hp() as i32 / 4;"),
  ('moody +2 -> +1', A, "[(plus, 2), (minus, -1)]", "[(plus, 1), (minus, -1)]"),
  ('synchronize passes freeze', A, "matches!(e.status, Status::Slp | Status::Frz)", "matches!(e.status, Status::Slp)"),
@@ -407,7 +409,7 @@ MUT = [
  ('fur coat 2 -> 1.5', A, "(ab::FURCOAT, Ev::ModifyDef, Pre::On) => self.chain_modify(2, 1),", "(ab::FURCOAT, Ev::ModifyDef, Pre::On) => self.chain_modify(3, 2),"),
  ('guts 1.5 -> 2', A, "(ab::GUTS, Ev::ModifyAtk, Pre::On) => {\n                if self.mon(holder).status != Status::None {\n                    return self.chain_modify(6144, 4096);", "(ab::GUTS, Ev::ModifyAtk, Pre::On) => {\n                if self.mon(holder).status != Status::None {\n                    return self.chain_modify(8192, 4096);"),
  ('compound eyes 1.3 -> 1.2', A, "(ab::COMPOUNDEYES, Ev::ModifyAccuracy, Pre::Source) => {\n                if matches!(relay, Res::Num(_)) {\n                    return self.chain_modify(5325, 4096);", "(ab::COMPOUNDEYES, Ev::ModifyAccuracy, Pre::Source) => {\n                if matches!(relay, Res::Num(_)) {\n                    return self.chain_modify(4915, 4096);"),
- ('queenly majesty blocks nothing', A, "if (self.is_ally(aimed_at, holder) || all) && am.priority > 0 {\n                    return FALSE;", "if (self.is_ally(aimed_at, holder) || all) && am.priority > 0 {\n                    return Res::Undef;"),
+ ('queenly majesty blocks nothing', A, '                    // `cant|holder|ability: Armor Tail|Move|[of] user`\n                    self.show_ability(holder, ability);\n                    return FALSE;', '                    // `cant|holder|ability: Armor Tail|Move|[of] user`\n                    self.show_ability(holder, ability);\n                    return Res::Undef;'),
  ('stench/kings rock 10% -> 20%', I, "                chance: 10,", "                chance: 20,"),
  # --- abilities checked directly in the simulator core
  ('prankster hits Dark types', M, "&& !self.type_allows(t, 7)", "&& false"),
@@ -608,8 +610,10 @@ def main():
         shutil.copytree(os.path.join(REPO, d), os.path.join(work, d), copy_function=shutil.copy)
     for f in ('Cargo.toml', 'Cargo.lock', 'rustfmt.toml'):
         shutil.copy(os.path.join(REPO, f), os.path.join(work, f))
-    shutil.rmtree(os.path.join(work, 'examples'), ignore_errors=True)
-    shutil.copytree(os.path.join(REPO, 'examples'), os.path.join(work, 'examples'), copy_function=shutil.copy)
+    # (`formats` is compiled in: src/format.rs includes the regulation files.)
+    for d in ('examples', 'formats'):
+        shutil.rmtree(os.path.join(work, d), ignore_errors=True)
+        shutil.copytree(os.path.join(REPO, d), os.path.join(work, d), copy_function=shutil.copy)
     results = []
     # baseline must pass
     r = sh('cargo build --release --bin difftest 2>&1 | tail -1', cwd=work)

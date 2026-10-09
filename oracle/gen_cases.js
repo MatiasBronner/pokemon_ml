@@ -61,6 +61,56 @@ if (FORCED_THEME) {
 }
 const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
 const STATS = args.stats || null;
+// --log: keep Showdown's battle log with every decision (what `--trace` keeps, without the random draws).
+const LOG = !!args.log || TRACE;
+// --holders FILE: for every kind of log line that names an ability or an item, count which of the
+// Pokémon the line mentions really has it. This is where the table in src/observer.rs comes from.
+const HOLDERS = args.holders || null;
+const holderTally = {};
+function watchHolders(battle) {
+	const resolve = ident => {
+		const m = /^(p[12])([ab]?): (.*)$/.exec(ident);
+		if (!m) return null;
+		const side = battle.sides[m[1] === 'p1' ? 0 : 1];
+		if (m[2]) return side.active[m[2] === 'a' ? 0 : 1];
+		return side.pokemon.find(p => p.name === m[3]) || null;
+	};
+	const note = raw => {
+		const parts = [];
+		for (const p of raw) {
+			if (typeof p === 'string') parts.push(...p.split('|'));
+			else parts.push(p);
+		}
+		const kind = parts[0];
+		const mons = [];
+		const named = [];
+		parts.forEach((p, i) => {
+			if (i === 0 || p === null || p === undefined) return;
+			if (p instanceof PS.Pokemon) { mons.push([`arg${i}`, p]); return; }
+			if (typeof p !== 'string') return;
+			let m;
+			if ((m = /^\[of\] (.*)$/.exec(p))) { const q = resolve(m[1]); if (q) mons.push(['of', q]); return; }
+			if (/^p[12][ab]?: /.test(p)) { const q = resolve(p); if (q) mons.push([`arg${i}`, q]); return; }
+			if ((m = /^(\[from\] )?(ability|item): (.*)$/.exec(p))) named.push([m[1] ? 'from' : `arg${i}`, m[2], PS.toID(m[3])]);
+		});
+		const str = i => (typeof parts[i] === 'string' ? PS.toID(parts[i]) : '');
+		if (kind === '-ability' && str(2)) named.push(['new', 'ability', str(2)]);
+		if ((kind === '-item' || kind === '-enditem') && str(2)) named.push(['arg2', 'item', str(2)]);
+		for (const [form, what, id] of named) {
+			const holders = mons.filter(([, p]) => (what === 'ability' ? p.ability === id || p.baseAbility === id :
+				p.item === id || p.lastItem === id)).map(([label]) => label);
+			const key = `${kind} ${form} ${what}`;
+			const who = holders.join('+') || 'nobody';
+			holderTally[key] = holderTally[key] || {};
+			holderTally[key][who] = holderTally[key][who] || {};
+			bump(holderTally[key][who], id);
+		}
+	};
+	for (const fn of ['add', 'addMove']) {
+		const orig = battle[fn].bind(battle);
+		battle[fn] = (...parts) => { note(parts); return orig(...parts); };
+	}
+}
 const tally = { moves: {}, events: {}, abilities: {}, items: {}, megas: {}, brought: { abilities: {}, items: {} } };
 const bump = (table, key) => { table[key] = (table[key] || 0) + 1; };
 function tallyLog(log) {
@@ -565,6 +615,7 @@ function runCase(id) {
 			return v;
 		};
 	}
+	if (HOLDERS) watchHolders(battle);
 	battle.setPlayer('p1', { name: 'P1', team: full1.map(toPsSet) });
 	battle.setPlayer('p2', { name: 'P2', team: full2.map(toPsSet) });
 	if (battle.requestState !== 'teampreview') throw new Error(`expected team preview, got ${battle.requestState}`);
@@ -579,7 +630,8 @@ function runCase(id) {
 
 	let logPos = battle.log.length;
 	const out = { id, seed, teams, initial: snapshot(battle), steps: [], truncated: false };
-	if (TRACE) { out.initial.draws = draws; out.initial.log = battle.log.slice(0); draws = []; }
+	if (TRACE) { out.initial.draws = draws; draws = []; }
+	if (LOG) out.initial.log = battle.log.slice(0);
 	while (!battle.ended) {
 		if (battle.turn > MAX_TURNS) { out.truncated = true; break; }
 		const legal = battle.sides.map(side => legalOptions(battle, side));
@@ -595,7 +647,8 @@ function runCase(id) {
 			}
 		});
 		const after = snapshot(battle);
-		if (TRACE) { after.draws = draws; draws = []; after.log = battle.log.slice(logPos); }
+		if (TRACE) { after.draws = draws; draws = []; }
+		if (LOG) after.log = battle.log.slice(logPos);
 		logPos = battle.log.length;
 		out.steps.push({ choices: choices.map(c => c.join(', ')), legal, after });
 	}
@@ -628,4 +681,5 @@ if (STATS) {
 	}, null, 1));
 	console.log(`moves used at least once: ${ALL_MOVES.length - unused.length}/${ALL_MOVES.length}; least used: ${least.slice(0, 5).map(x => x.join(' x')).join(', ')}`);
 }
+if (HOLDERS) fs.writeFileSync(HOLDERS, JSON.stringify(holderTally, null, 1));
 console.log(`wrote ${ids.length} battles, ${steps} decisions, ${truncated} cut off at turn ${MAX_TURNS}, mean length ${(turns / ids.length).toFixed(1)} turns -> ${OUT}`);

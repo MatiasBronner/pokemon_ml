@@ -110,8 +110,36 @@ impl Battle {
     fn block_intimidate(&mut self) -> Res {
         if self.event.effect == Eff::Ability(ab::INTIMIDATE) && self.event.boosts[ATK] != 0 {
             self.event.boosts[ATK] = 0;
+            // `-fail|target|unboost|atk|[from] ability: Inner Focus`
+            self.show_own_ability();
         }
         Res::Undef
+    }
+
+    /// Showdown's `(effect as Move)?.status`: the effect is a move whose own
+    /// effect is a status condition, or the stand-in Synchronize passes one on
+    /// with. An ability that blocks a status only says so then.
+    pub(crate) fn is_status_move(&self, effect: Eff) -> bool {
+        match effect {
+            Eff::Move(mi) => self.am[mi as usize].d().status != Status::None,
+            Eff::Ability(a) => a == ab::SYNCHRONIZE,
+            _ => false,
+        }
+    }
+
+    /// Showdown's `!(effect as ActiveMove).secondaries`: anything but a move
+    /// with secondary effects. An ability that blocks a stat drop only says so then.
+    pub(crate) fn no_secondaries(&self, effect: Eff) -> bool {
+        match effect {
+            Eff::Move(mi) => !self.am[mi as usize].has_secs,
+            _ => true,
+        }
+    }
+
+    /// Showdown's `effect.id === 'octolock'`: the drops Octolock deals at the end of
+    /// each turn, which it applies as the move.
+    fn is_octolock(&self, effect: Eff) -> bool {
+        matches!(effect, Eff::Move(mi) if self.am[mi as usize].id == mv::OCTOLOCK)
     }
 
     /// `Pokemon#getBestStat(true, true)`: index 1..=5 of the highest raw stat.
@@ -175,6 +203,8 @@ impl Battle {
                 // onUpdate(pokemon)
                 Ev::Update => {
                     if guarded.contains(&self.mon(holder).status) {
+                        // `-activate|pokemon|ability: Limber`
+                        self.show_ability(holder, ability);
                         self.cure_status(holder);
                     }
                     Res::Undef
@@ -182,6 +212,10 @@ impl Battle {
                 // onSetStatus(status, target, source, effect)
                 _ => {
                     if guarded.contains(&e.status) {
+                        if self.is_status_move(e.effect) {
+                            // `-immune|target|[from] ability: Limber`
+                            self.show_ability(holder, ability);
+                        }
                         return FALSE;
                     }
                     Res::Undef
@@ -192,7 +226,10 @@ impl Battle {
             // onTryHit(target, source, move)
             if e.target != e.source && mtype == Some(t) {
                 let amount = div1(self.mon(holder).max_hp() as u32, 4);
-                self.heal(amount, None, None, Eff::None);
+                if !self.heal(amount, None, None, Eff::None).truthy() {
+                    // `-immune|target|[from] ability: Water Absorb`
+                    self.show_ability(holder, ability);
+                }
                 return Res::Null;
             }
             return Res::Undef;
@@ -200,7 +237,10 @@ impl Battle {
         if let (Some((t, stat)), Ev::TryHit, Pre::On) = (absorb_boost(ability), ev, pre) {
             // onTryHit(target, source, move)
             if e.target != e.source && mtype == Some(t) {
-                self.boost1(stat, 1, None, None, Eff::None);
+                if !self.boost1(stat, 1, None, None, Eff::None).truthy() {
+                    // `-immune|target|[from] ability: Lightning Rod`
+                    self.show_ability(holder, ability);
+                }
                 return Res::Null;
             }
             return Res::Undef;
@@ -251,6 +291,10 @@ impl Battle {
             // set while the ability is on its way out, so that it no longer suppresses.
             // onSwitchIn(pokemon) runs onStart(pokemon)
             (ab::CLOUDNINE | ab::AIRLOCK, Ev::SwitchIn | Ev::Start, Pre::On) => {
+                if ev == Ev::SwitchIn {
+                    // `-ability|pokemon|Cloud Nine`
+                    self.show_ability(holder, ability);
+                }
                 self.mon_mut(holder).ability_st.a = 0;
                 self.each_event_from(Ev::WeatherChange, Eff::Ability(ability));
                 Res::Undef
@@ -383,6 +427,8 @@ impl Battle {
             // ---- Hydration: onResidual(pokemon)
             (ab::HYDRATION, Ev::Residual, Pre::On) => {
                 if self.mon(holder).status != Status::None && self.effective_weather(holder) == Weather::Raindance {
+                    // `-activate|pokemon|ability: Hydration`
+                    self.show_ability(holder, ability);
                     self.cure_status(holder);
                 }
                 Res::Undef
@@ -391,6 +437,9 @@ impl Battle {
             // onSetStatus(status, target, source, effect)
             (ab::LEAFGUARD, Ev::SetStatus, Pre::On) => {
                 if self.effective_weather(holder) == Weather::Sunnyday {
+                    if self.is_status_move(e.effect) {
+                        self.show_ability(holder, ability);
+                    }
                     return FALSE;
                 }
                 Res::Undef
@@ -398,6 +447,7 @@ impl Battle {
             // onTryAddVolatile(status, target): Yawn in the sun
             (ab::LEAFGUARD, Ev::TryAddVolatile, Pre::On) => {
                 if e.vol.is_some_and(|v| v.id() == "yawn") && self.effective_weather(holder) == Weather::Sunnyday {
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -426,6 +476,8 @@ impl Battle {
                 let want = if am.id == mv::KINGSSHIELD { "aegislash" } else { "aegislashblade" };
                 if SPECIES[mon.species as usize].id != want {
                     if let Some(species) = species_id(want) {
+                        // (Champions' `formeChange` names the ability behind a change only when it is
+                        // handed one, and this is not: `-formechange|pokemon|Aegislash-Blade`.)
                         self.forme_change(holder, species, false, false);
                     }
                 }
@@ -447,6 +499,8 @@ impl Battle {
             // onDamage(damage, target, source, effect): the first hit from a move does nothing.
             (ab::DISGUISE, Ev::Damage, Pre::On) => {
                 if e.effect.is_move() && SPECIES[self.mon(holder).species as usize].id == "mimikyu" {
+                    // `-activate|target|ability: Disguise`
+                    self.show_ability(holder, ability);
                     self.mon_mut(holder).ability_st.a = 1;
                     return Res::Num(0);
                 }
@@ -495,8 +549,17 @@ impl Battle {
                 }
                 Res::Undef
             }
-            // onSwitchIn(pokemon) only announces it.
-            (ab::ZEROTOHERO, Ev::SwitchIn, Pre::On) => Res::Undef,
+            // onSwitchIn(pokemon): `-activate|pokemon|ability: Zero to Hero`, the first time it
+            // comes in as a hero. (Once said, the ability is known, so saying it again changes nothing.)
+            (ab::ZEROTOHERO, Ev::SwitchIn, Pre::On) => {
+                let mon = self.mon(holder);
+                if SPECIES[mon.base_species as usize].base_species == "palafin"
+                    && SPECIES[mon.species as usize].id == "palafinhero"
+                {
+                    self.show_ability(holder, ability);
+                }
+                Res::Undef
+            }
             // ---- Abilities of species that are not in Champions (Eiscue, Cramorant,
             // Minior, Greninja's bonded forme). Every callback first checks for that
             // species, so on anything else they do nothing at all.
@@ -545,8 +608,12 @@ impl Battle {
             }
             // onEnd(pokemon): not while it is being called back, so that it leaves disguised.
             (ab::ILLUSION, Ev::End, Pre::On) => {
-                if !self.mon(holder).being_called_back {
+                if !self.mon(holder).being_called_back && self.mon(holder).illusion != 0 {
+                    let was = self.shown_as(holder);
                     self.mon_mut(holder).illusion = 0;
+                    // `replace`, then `-end|pokemon|Illusion`.
+                    self.shown_unmask(holder, was);
+                    self.show_ability(holder, ab::ILLUSION);
                 }
                 Res::Undef
             }
@@ -597,6 +664,8 @@ impl Battle {
                     if let Some(forme) = species_id(want) {
                         // A temporary forme change: types and stats, not the ability.
                         self.set_species(holder, forme);
+                        // `-formechange|pokemon|Castform-Sunny|[msg]|[from] ability: Forecast`
+                        self.show_ability(holder, ability);
                     }
                 }
                 Res::Undef
@@ -663,8 +732,9 @@ impl Battle {
                 // `oldTypes.join() === types.join()`: the types that count now, in order.
                 let (current, n) = self.get_types(holder, false);
                 let wanted: Vec<Type> = types.iter().copied().filter(|&t| t != Type::None).collect();
-                if current[..n] != wanted[..] {
-                    self.set_type(holder, types);
+                if current[..n] != wanted[..] && self.set_type(holder, types) {
+                    // `-start|pokemon|typechange|…|[from] ability: Mimicry`, or `-activate|pokemon|ability: Mimicry`.
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
@@ -710,15 +780,65 @@ impl Battle {
                 Res::Undef
             }
 
-            // ---- Anticipation, Frisk, Pressure, Mold Breaker, Fairy Aura: onStart only announces.
-            (ab::ANTICIPATION | ab::FRISK | ab::PRESSURE | ab::MOLDBREAKER | ab::FAIRYAURA, Ev::Start, Pre::On) => {
+            // ---- Pressure, Mold Breaker: onStart(pokemon) announces the ability.
+            (ab::PRESSURE | ab::MOLDBREAKER, Ev::Start, Pre::On) => {
+                self.show_ability(holder, ability);
+                Res::Undef
+            }
+            // ---- Fairy Aura: onStart(pokemon) announces it, unless it is being suppressed.
+            (ab::FAIRYAURA, Ev::Start, Pre::On) => {
+                if !self.suppressing_ability(Some(holder)) {
+                    self.show_ability(holder, ability);
+                }
+                Res::Undef
+            }
+            // ---- Anticipation: onStart(pokemon). It shudders if a foe has a move that
+            // would be super effective, or a one-hit knockout.
+            (ab::ANTICIPATION, Ev::Start, Pre::On) => {
+                let (foes, n) = self.allies_and_self(1 - holder.side as usize);
+                for &f in &foes[..n] {
+                    let m = *self.mon(f);
+                    for slot in &m.moves[..m.n_moves as usize] {
+                        let d = &MOVES[slot.id as usize];
+                        if d.category == Category::Status {
+                            continue;
+                        }
+                        // `dex.getImmunity` and `dex.getEffectiveness` go by the types alone.
+                        let (types, k) = self.get_types(holder, false);
+                        let chart = |t: Type| TYPE_CHART[d.typ as usize][t as usize];
+                        let immune = types[..k].iter().any(|&t| t != Type::Typeless && chart(t) == 3);
+                        let effectiveness: i32 = types[..k]
+                            .iter()
+                            .map(|&t| if t == Type::Typeless { 0 } else { crate::battle::type_effectiveness(d.typ, t) })
+                            .sum();
+                        if (!immune && effectiveness > 0) || d.ohko != Ohko::No {
+                            self.show_ability(holder, ability);
+                            return Res::Undef;
+                        }
+                    }
+                }
+                Res::Undef
+            }
+            // ---- Frisk: onStart(pokemon). `-item|target|Item|[from] ability: Frisk|[of] pokemon` for every foe holding something.
+            (ab::FRISK, Ev::Start, Pre::On) => {
+                let (foes, n) = self.allies_and_self(1 - holder.side as usize);
+                for &f in &foes[..n] {
+                    let item = self.mon(f).item;
+                    if item != it::NONE {
+                        self.show_item_gain(f, item);
+                        self.show_ability(holder, ability);
+                    }
+                }
                 Res::Undef
             }
             // ---- Screen Cleaner: onStart(pokemon). Both sides lose their screens.
             (ab::SCREENCLEANER, Ev::Start, Pre::On) => {
                 for cond in [SideCond::Reflect, SideCond::Lightscreen, SideCond::Auroraveil] {
                     for side in [holder.side as usize, 1 - holder.side as usize] {
-                        self.remove_side_condition(side, cond);
+                        if self.remove_side_condition(side, cond) {
+                            // `-activate|pokemon|ability: Screen Cleaner`
+                            self.show_ability(holder, ability);
+                        }
                     }
                 }
                 Res::Undef
@@ -732,6 +852,8 @@ impl Battle {
                 let side = if self.is_ally(source, target) { 1 - source.side as usize } else { source.side as usize };
                 let layers = self.sides[side].conds.get(SideCond::Toxicspikes).map(|c| c.data);
                 if mcat == Some(Category::Physical) && layers.is_none_or(|l| l < 2) {
+                    // `-activate|target|ability: Toxic Debris`
+                    self.show_ability(holder, ability);
                     self.add_side_condition(side, SideCond::Toxicspikes, Some(target), Eff::None);
                 }
                 Res::Undef
@@ -766,11 +888,16 @@ impl Battle {
                 let m = self.mon_mut(target);
                 m.switch_flag = true;
                 m.switch_move = NO_MOVE;
+                // `-activate|target|ability: Emergency Exit`
+                self.show_ability(holder, ability);
                 Res::Undef
             }
 
-            // ---- Suction Cups: onDragOut
-            (ab::SUCTIONCUPS, Ev::DragOut, Pre::On) => Res::Null,
+            // ---- Suction Cups: onDragOut. `-activate|pokemon|ability: Suction Cups`
+            (ab::SUCTIONCUPS, Ev::DragOut, Pre::On) => {
+                self.show_ability(holder, ability);
+                Res::Null
+            }
 
             // ---- Armor Tail / Queenly Majesty: onFoeTryMove(target, source, move).
             // Here `target` is the Pokémon using the move and `source` its target.
@@ -788,6 +915,8 @@ impl Battle {
                     return Res::Undef;
                 }
                 if (self.is_ally(aimed_at, holder) || all) && am.priority > 0 {
+                    // `cant|holder|ability: Armor Tail|Move|[of] user`
+                    self.show_ability(holder, ability);
                     return FALSE;
                 }
                 Res::Undef
@@ -796,6 +925,10 @@ impl Battle {
             // ---- Aroma Veil: onAllyTryAddVolatile(status, target, source, effect)
             (ab::AROMAVEIL, Ev::TryAddVolatile, Pre::Ally) => {
                 if e.vol.is_some_and(|v| AROMA_VEIL.contains(&v.id())) {
+                    if matches!(e.effect, Eff::Move(_)) {
+                        // `-block|target|ability: Aroma Veil|[of] holder`
+                        self.show_ability(holder, ability);
+                    }
                     return Res::Null;
                 }
                 Res::Undef
@@ -866,6 +999,12 @@ impl Battle {
                 };
                 if self.event.boosts[stat] < 0 {
                     self.event.boosts[stat] = 0;
+                    // `-fail|target|unboost|def|[from] ability: Big Pecks`, unless the drop was a move's side effect.
+                    // Nor does Big Pecks say anything about Octolock's drops at the end of a turn.
+                    let octolock = ability == ab::BIGPECKS && self.is_octolock(e.effect);
+                    if self.no_secondaries(e.effect) && !octolock {
+                        self.show_ability(holder, ability);
+                    }
                 }
                 Res::Undef
             }
@@ -880,6 +1019,8 @@ impl Battle {
             // ---- Bulletproof: onTryHit(pokemon, target, move)
             (ab::BULLETPROOF, Ev::TryHit, Pre::On) => {
                 if mflags & F_BULLET != 0 {
+                    // `-immune|pokemon|[from] ability: Bulletproof`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -896,6 +1037,11 @@ impl Battle {
             (ab::CLEARBODY | ab::WHITESMOKE, Ev::TryBoost, Pre::On) => {
                 if e.source.is_some() && e.target == e.source {
                     return Res::Undef;
+                }
+                // `-fail|target|unboost|[from] ability: Clear Body`, unless the drop was a move's
+                // side effect or Octolock's at the end of a turn.
+                if e.boosts.iter().any(|&b| b < 0) && self.no_secondaries(e.effect) && !self.is_octolock(e.effect) {
+                    self.show_ability(holder, ability);
                 }
                 self.clear_negative();
                 Res::Undef
@@ -962,6 +1108,9 @@ impl Battle {
                 self.mon_mut(holder).ability_st.b -= 1;
                 if self.mon(holder).ability_st.b <= 0 {
                     let item = st.a as u16;
+                    // `-activate|pokemon|ability: Cud Chew`. (The `-enditem|pokemon|Berry|[eat]` after
+                    // it is the berry it ate before, coming up again: nothing it holds now.)
+                    self.show_ability(holder, ability);
                     if self
                         .single_event(Ev::Eat, Eff::Item(item), None, Some(holder), None, Eff::None, Res::Undef)
                         .truthy()
@@ -983,6 +1132,8 @@ impl Battle {
                 let (allies, n) = self.adjacent_allies(holder);
                 for &a in &allies[..n] {
                     self.mon_mut(a).boosts = [0; 7];
+                    // `-clearboost|ally|[from] ability: Curious Medicine|[of] pokemon`
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
@@ -993,6 +1144,8 @@ impl Battle {
                 if mi.is_some_and(|m| {
                     matches!(self.am[m as usize].d().id, "explosion" | "mindblown" | "mistyexplosion" | "selfdestruct")
                 }) {
+                    // `cant|holder|ability: Damp|Move|[of] user`
+                    self.show_ability(holder, ability);
                     return FALSE;
                 }
                 Res::Undef
@@ -1023,8 +1176,13 @@ impl Battle {
                     return Res::Undef;
                 }
                 let am = &self.am[m as usize];
-                if am.flags & F_FUTUREMOVE == 0 && am.id != mv::STRUGGLE && self.chance(3, 10, "cursed body") {
-                    self.add_volatile(source, VolKind::Disable, Some(holder), Eff::None);
+                if am.flags & F_FUTUREMOVE == 0
+                    && am.id != mv::STRUGGLE
+                    && self.chance(3, 10, "cursed body")
+                    && self.add_volatile(source, VolKind::Disable, Some(holder), Eff::None).truthy()
+                {
+                    // `-start|source|Disable|Move|[from] ability: Cursed Body|[of] holder`
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
@@ -1034,15 +1192,22 @@ impl Battle {
                 let (Some(m), Some(source)) = (mi, e.source) else {
                     return Res::Undef;
                 };
-                if self.makes_contact(m) && self.chance(3, 10, "cute charm") {
-                    self.add_volatile(source, VolKind::Attract, Some(holder), Eff::None);
+                if self.makes_contact(m)
+                    && self.chance(3, 10, "cute charm")
+                    && self.add_volatile(source, VolKind::Attract, Some(holder), Eff::None).truthy()
+                {
+                    // `-start|source|Attract|[from] ability: Cute Charm|[of] holder`
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
 
             // ---- Electromorphosis: onDamagingHit(damage, target, source, move)
             (ab::ELECTROMORPHOSIS, Ev::DamagingHit, Pre::On) => {
-                self.add_volatile(holder, VolKind::Charge, None, Eff::None);
+                if self.add_volatile(holder, VolKind::Charge, None, Eff::None).truthy() {
+                    // `-start|pokemon|Charge|Move|[from] ability: Electromorphosis`
+                    self.show_ability(holder, ability);
+                }
                 Res::Undef
             }
 
@@ -1111,6 +1276,8 @@ impl Battle {
                 if let (Some(m), true) = (mi, e.target != e.source && mtype == Some(Type::Fire)) {
                     self.am[m as usize].accuracy = 0;
                     self.add_volatile(holder, VolKind::Flashfire, None, Eff::None);
+                    // `-start|target|ability: Flash Fire`, or `-immune|target|[from] ability: Flash Fire` if it already burns.
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1130,6 +1297,10 @@ impl Battle {
                 if (e.source.is_some() && e.target == e.source) || !self.has_type(target, Type::Grass) {
                     return Res::Undef;
                 }
+                if e.boosts.iter().any(|&b| b < 0) && self.no_secondaries(e.effect) {
+                    // `-block|target|ability: Flower Veil|[of] holder`
+                    self.show_ability(holder, ability);
+                }
                 self.clear_negative();
                 Res::Undef
             }
@@ -1145,6 +1316,14 @@ impl Battle {
                     && e.effect != Eff::None
                     && e.effect != Eff::Vol(VolKind::Yawn)
                 {
+                    let said = match e.effect {
+                        Eff::Ability(a) => a == ab::SYNCHRONIZE,
+                        Eff::Move(m) => !self.am[m as usize].has_secs,
+                        _ => false,
+                    };
+                    if said {
+                        self.show_ability(holder, ability);
+                    }
                     return Res::Null;
                 }
                 Res::Undef
@@ -1155,6 +1334,8 @@ impl Battle {
                 if e.vol == Some(VolKind::Yawn)
                     && (!grass_only || e.target.is_some_and(|t| self.has_type(t, Type::Grass)))
                 {
+                    // `-block|target|ability: Sweet Veil|[of] holder`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1178,6 +1359,7 @@ impl Battle {
                 let (foes, n) = self.allies_and_self(1 - holder.side as usize);
                 let mut best = 1;
                 let mut count = 0;
+                let mut warned = [(holder, NO_MOVE); 2 * MAX_MOVES];
                 for &f in &foes[..n] {
                     let m = self.mon(f);
                     for slot in &m.moves[..m.n_moves as usize] {
@@ -1194,14 +1376,19 @@ impl Battle {
                         }
                         if bp > best {
                             best = bp;
-                            count = 1;
-                        } else if bp == best {
+                            count = 0;
+                        }
+                        if bp == best {
+                            warned[count as usize] = (f, slot.id);
                             count += 1;
                         }
                     }
                 }
                 if count > 0 {
-                    self.rand(count, "forewarn");
+                    // `-activate|pokemon|ability: Forewarn|Move|[of] foe`
+                    let (foe, mv) = warned[self.rand(count, "forewarn") as usize];
+                    self.show_ability(holder, ability);
+                    self.show_move(foe, mv);
                 }
                 Res::Undef
             }
@@ -1231,6 +1418,8 @@ impl Battle {
             // ---- Good as Gold: onTryHit(target, source, move)
             (ab::GOODASGOLD, Ev::TryHit, Pre::On) => {
                 if mcat == Some(Category::Status) && e.target != e.source {
+                    // `-immune|target|[from] ability: Good as Gold`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1240,6 +1429,8 @@ impl Battle {
             (ab::GOOEY, Ev::DamagingHit, Pre::On) => {
                 if let (Some(m), Some(source)) = (mi, e.source) {
                     if self.makes_contact(m) {
+                        // `-ability|target|Gooey`
+                        self.show_ability(holder, ability);
                         self.boost1(SPE, -1, Some(source), e.target, Eff::None);
                     }
                 }
@@ -1247,7 +1438,11 @@ impl Battle {
             }
 
             // ---- Guard Dog
-            (ab::GUARDDOG, Ev::DragOut, Pre::On) => Res::Null,
+            // onDragOut(pokemon): `-activate|pokemon|ability: Guard Dog`
+            (ab::GUARDDOG, Ev::DragOut, Pre::On) => {
+                self.show_ability(holder, ability);
+                Res::Null
+            }
             // onTryBoost(boost, target, source, effect)
             (ab::GUARDDOG, Ev::TryBoost, Pre::On) => {
                 if e.effect == Eff::Ability(ab::INTIMIDATE) && self.event.boosts[ATK] != 0 {
@@ -1273,6 +1468,9 @@ impl Battle {
                         let item = m.last_item;
                         self.set_item(holder, item, None, Eff::None);
                         self.mon_mut(holder).last_item = it::NONE;
+                        // `-item|pokemon|Berry|[from] ability: Harvest`
+                        self.show_item_gain(holder, item);
+                        self.show_ability(holder, ability);
                     }
                 }
                 Res::Undef
@@ -1283,6 +1481,8 @@ impl Battle {
                 let (allies, n) = self.adjacent_allies(holder);
                 for &a in &allies[..n] {
                     if self.mon(a).status != Status::None && self.chance(1, 2, "healer") {
+                        // `-activate|pokemon|ability: Healer`
+                        self.show_ability(holder, ability);
                         self.cure_status(a);
                     }
                 }
@@ -1366,6 +1566,8 @@ impl Battle {
             // ---- Insomnia / Vital Spirit / Purifying Salt: onTryAddVolatile(status, target) blocks Yawn.
             (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {
                 if e.vol == Some(VolKind::Yawn) {
+                    // `-immune|target|[from] ability: Insomnia`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1374,6 +1576,10 @@ impl Battle {
             // ---- Intimidate: onStart(pokemon)
             (ab::INTIMIDATE, Ev::Start, Pre::On) => {
                 let (foes, n) = self.allies_and_self(1 - holder.side as usize);
+                if n > 0 {
+                    // `-ability|pokemon|Intimidate|boost`
+                    self.show_ability(holder, ability);
+                }
                 for &f in &foes[..n] {
                     if !self.has_vol_named(f, "substitute") {
                         self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);
@@ -1414,6 +1620,8 @@ impl Battle {
                 if t != Type::Typeless && t != Type::None && !self.is_only_type(holder, t) {
                     self.set_type(holder, [t, Type::None]);
                     self.mon_mut(holder).ability_st.a = 1;
+                    // `-start|source|typechange|Type|[from] ability: Protean`
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
@@ -1433,6 +1641,10 @@ impl Battle {
                 let loc = self.loc_of(user, holder);
                 if self.valid_target_loc(loc, user, t) {
                     self.am[m as usize].smart_target = false;
+                    if relay != Res::Mon(holder) {
+                        // `-activate|holder|ability: Lightning Rod`
+                        self.show_ability(holder, ability);
+                    }
                     return Res::Mon(holder);
                 }
                 Res::Undef
@@ -1520,12 +1732,21 @@ impl Battle {
                 }
                 Res::Undef
             }
-            // Soundproof's version only writes to the log.
-            (ab::SOUNDPROOF, Ev::TryHitSide, Pre::Ally) => Res::Undef,
+            // Soundproof's version: `-immune|holder|[from] ability: Soundproof`
+            (ab::SOUNDPROOF, Ev::TryHitSide, Pre::Ally) => {
+                if mflags & F_SOUND != 0 {
+                    self.show_ability(holder, ability);
+                }
+                Res::Undef
+            }
 
             // ---- Magic Guard: onDamage(damage, target, source, effect)
             (ab::MAGICGUARD, Ev::Damage, Pre::On) => {
                 if !e.effect.is_move() {
+                    // Warding off another ability's damage names that ability: `-activate|source|ability: Rough Skin`
+                    if let (Eff::Ability(theirs), Some(source)) = (e.effect, e.source) {
+                        self.show_ability(source, theirs);
+                    }
                     return FALSE;
                 }
                 Res::Undef
@@ -1570,6 +1791,10 @@ impl Battle {
                         self.mon_mut(pokemon).item = taken;
                         continue;
                     }
+                    // `-item|source|Item|[from] ability: Magician|[of] pokemon`
+                    self.show_item_lost(pokemon, taken);
+                    self.show_item_arrived(source, taken);
+                    self.show_ability(holder, ability);
                     return Res::Undef;
                 }
                 Res::Undef
@@ -1579,6 +1804,8 @@ impl Battle {
             // onUpdate(pokemon)
             (ab::MAGMAARMOR, Ev::Update, Pre::On) => {
                 if self.mon(holder).status == Status::Frz {
+                    // `-activate|pokemon|ability: Magma Armor`
+                    self.show_ability(holder, ability);
                     self.cure_status(holder);
                 }
                 Res::Undef
@@ -1634,6 +1861,8 @@ impl Battle {
                         }
                         self.event.boosts[k] = 0;
                         if self.mon(source).hp > 0 {
+                            // `-ability|target|Mirror Armor`
+                            self.show_ability(holder, ability);
                             self.boost1(k, b, Some(source), Some(target), Eff::None);
                         }
                     }
@@ -1724,7 +1953,10 @@ impl Battle {
 
             // ---- Natural Cure (Champions): onSwitchOut(pokemon)
             (ab::NATURALCURE, Ev::SwitchOut, Pre::On) => {
-                self.cure_status(holder);
+                if self.cure_status(holder) {
+                    // `-curestatus|pokemon|status|[from] ability: Natural Cure|[silent]`
+                    self.show_ability(holder, ability);
+                }
                 Res::Undef
             }
 
@@ -1747,6 +1979,10 @@ impl Battle {
             // ---- Oblivious (its Intimidate block is with Inner Focus)
             // onUpdate(pokemon)
             (ab::OBLIVIOUS, Ev::Update, Pre::On) => {
+                if self.vols(holder).has(VolKind::Attract) || self.vols(holder).has(VolKind::Taunt) {
+                    // `-activate|pokemon|ability: Oblivious`
+                    self.show_ability(holder, ability);
+                }
                 self.remove_volatile(holder, VolKind::Attract);
                 self.remove_volatile(holder, VolKind::Taunt);
                 Res::Undef
@@ -1761,6 +1997,8 @@ impl Battle {
             // onTryHit(pokemon, target, move)
             (ab::OBLIVIOUS, Ev::TryHit, Pre::On) => {
                 if mi.is_some_and(|m| matches!(self.am[m as usize].id, mv::ATTRACT | mv::TAUNT)) {
+                    // `-immune|pokemon|[from] ability: Oblivious`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1814,6 +2052,8 @@ impl Battle {
             // onTryHit(target, source, move)
             (ab::OVERCOAT, Ev::TryHit, Pre::On) => {
                 if mflags & F_POWDER != 0 && e.target != e.source && self.type_allows(holder, 5) {
+                    // `-immune|target|[from] ability: Overcoat`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -1823,6 +2063,8 @@ impl Battle {
             // onUpdate(pokemon)
             (ab::OWNTEMPO, Ev::Update, Pre::On) => {
                 if self.vols(holder).has(VolKind::Confusion) {
+                    // `-activate|pokemon|ability: Own Tempo`
+                    self.show_ability(holder, ability);
                     self.remove_volatile(holder, VolKind::Confusion);
                 }
                 Res::Undef
@@ -1834,7 +2076,13 @@ impl Battle {
                 }
                 Res::Undef
             }
-            (ab::OWNTEMPO, Ev::Hit, Pre::On) => Res::Undef,
+            // onHit(target, source, move): `-immune|target|confusion|[from] ability: Own Tempo` to a move that would confuse.
+            (ab::OWNTEMPO, Ev::Hit, Pre::On) => {
+                if mi.is_some_and(|m| self.am[m as usize].d().volatile == Some(VolKind::Confusion)) {
+                    self.show_ability(holder, ability);
+                }
+                Res::Undef
+            }
 
             // ---- Parental Bond
             // onPrepareHit(source, target, move)
@@ -1879,6 +2127,11 @@ impl Battle {
                 }
                 if !self.set_item(target, taken, None, Eff::None) {
                     self.mon_mut(source).item = taken;
+                } else {
+                    // `-enditem|source|Item|[silent]`, `-item|target|Item|[from] ability: Pickpocket|[of] source`
+                    self.show_item_lost(source, taken);
+                    self.show_item_arrived(target, taken);
+                    self.show_ability(holder, ability);
                 }
                 Res::Undef
             }
@@ -1904,6 +2157,9 @@ impl Battle {
                 let from = cands[self.rand(k as u32, "pickup") as usize];
                 let item = self.mon(from).last_item;
                 self.mon_mut(from).last_item = it::NONE;
+                // `-item|pokemon|Item|[from] ability: Pickup`
+                self.show_item_gain(holder, item);
+                self.show_ability(holder, ability);
                 self.set_item(holder, item, None, Eff::None);
                 Res::Undef
             }
@@ -1981,7 +2237,13 @@ impl Battle {
 
             // ---- Purifying Salt
             // onSetStatus(status, target, source, effect)
-            (ab::PURIFYINGSALT, Ev::SetStatus, Pre::On) => FALSE,
+            (ab::PURIFYINGSALT, Ev::SetStatus, Pre::On) => {
+                if self.is_status_move(e.effect) {
+                    // `-immune|target|[from] ability: Purifying Salt`
+                    self.show_ability(holder, ability);
+                }
+                FALSE
+            }
             // onSourceModifyAtk / onSourceModifySpA(atk, attacker, defender, move)
             (ab::PURIFYINGSALT, Ev::ModifyAtk | Ev::ModifySpA, Pre::Source) => {
                 if mtype == Some(Type::Ghost) {
@@ -1993,6 +2255,8 @@ impl Battle {
             // ---- Quick Draw: onFractionalPriority(priority, pokemon, target, move)
             (ab::QUICKDRAW, Ev::FractionalPriority, Pre::On) => {
                 if mcat != Some(Category::Status) && self.chance(3, 10, "quick draw") {
+                    // `-activate|pokemon|ability: Quick Draw`
+                    self.show_ability(holder, ability);
                     return Res::Num(1);
                 }
                 Res::Undef
@@ -2050,7 +2314,10 @@ impl Battle {
             // ---- Regenerator (Champions): onSwitchOut(pokemon)
             (ab::REGENERATOR, Ev::SwitchOut, Pre::On) => {
                 let amount = self.mon(holder).max_hp() as i32 / 3;
-                self.heal_mon(holder, amount);
+                if self.heal_mon(holder, amount) != 0 {
+                    // `-heal|pokemon|hp|[from] ability: Regenerator|[silent]`
+                    self.show_ability(holder, ability);
+                }
                 Res::Undef
             }
 
@@ -2058,6 +2325,10 @@ impl Battle {
             // onTryHeal(damage, target, source, effect)
             (ab::RIPEN, Ev::TryHeal, Pre::On) => {
                 if let Eff::Item(i) = e.effect {
+                    if i == it::LEFTOVERS {
+                        // `-activate|target|ability: Ripen`
+                        self.show_ability(holder, ability);
+                    }
                     if ITEMS[i as usize].flags & IF_BERRY != 0 {
                         return self.chain_modify(2, 1);
                     }
@@ -2083,7 +2354,11 @@ impl Battle {
                 }
                 Res::Undef
             }
-            (ab::RIPEN, Ev::TryEatItem, Pre::On) => Res::Undef,
+            // onTryEatItem(item, pokemon): `-activate|pokemon|ability: Ripen`
+            (ab::RIPEN, Ev::TryEatItem, Pre::On) => {
+                self.show_ability(holder, ability);
+                Res::Undef
+            }
             // onEatItem(item, pokemon)
             (ab::RIPEN, Ev::EatItem, Pre::On) => {
                 self.mon_mut(holder).ability_st.a = crate::items::is_resist_berry(e.item) as i16;
@@ -2172,6 +2447,8 @@ impl Battle {
             (ab::SHEDSKIN, Ev::Residual, Pre::On) => {
                 let m = self.mon(holder);
                 if m.hp > 0 && m.status != Status::None && self.chance(33, 100, "shed skin") {
+                    // `-activate|pokemon|ability: Shed Skin`
+                    self.show_ability(holder, ability);
                     self.cure_status(holder);
                 }
                 Res::Undef
@@ -2240,6 +2517,8 @@ impl Battle {
             // ---- Soundproof: onTryHit(target, source, move)
             (ab::SOUNDPROOF, Ev::TryHit, Pre::On) => {
                 if e.target != e.source && mflags & F_SOUND != 0 {
+                    // `-immune|target|[from] ability: Soundproof`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -2316,6 +2595,8 @@ impl Battle {
                 // Nobody else takes it, and Knock Off does not remove it either.
                 let knock_off = self.active_move.is_some_and(|m| self.am[m as usize].id == mv::KNOCKOFF);
                 if (e.source.is_some() && e.source != Some(holder)) || knock_off {
+                    // `-activate|pokemon|ability: Sticky Hold`
+                    self.show_ability(holder, ability);
                     return FALSE;
                 }
                 Res::Undef
@@ -2325,6 +2606,8 @@ impl Battle {
             // onTryHit(pokemon, target, move): immune to one-hit knockouts.
             (ab::STURDY, Ev::TryHit, Pre::On) => {
                 if mi.is_some_and(|m| self.am[m as usize].d().ohko != Ohko::No) {
+                    // `-immune|pokemon|[from] ability: Sturdy`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -2333,7 +2616,10 @@ impl Battle {
             (ab::STURDY, Ev::Damage, Pre::On) => {
                 let m = self.mon(holder);
                 if m.hp == m.max_hp() && relay.num() >= m.hp as i32 && e.effect.is_move() {
-                    return Res::Num(m.hp as i32 - 1);
+                    let left = m.hp as i32 - 1;
+                    // `-ability|target|Sturdy`
+                    self.show_ability(holder, ability);
+                    return Res::Num(left);
                 }
                 Res::Undef
             }
@@ -2347,6 +2633,8 @@ impl Battle {
                     return Res::Undef;
                 }
                 self.mon_mut(holder).syrup_triggered = true;
+                // `-ability|pokemon|Supersweet Syrup`
+                self.show_ability(holder, ability);
                 let (foes, n) = self.allies_and_self(1 - holder.side as usize);
                 for &f in &foes[..n] {
                     if !self.has_vol_named(f, "substitute") {
@@ -2361,6 +2649,10 @@ impl Battle {
             (ab::SUPREMEOVERLORD, Ev::Start, Pre::On) => {
                 let fallen = self.sides[holder.side as usize].total_fainted.min(5);
                 self.mon_mut(holder).ability_st.a = fallen as i16;
+                if fallen > 0 {
+                    // `-activate|pokemon|ability: Supreme Overlord`
+                    self.show_ability(holder, ability);
+                }
                 Res::Undef
             }
             (ab::SUPREMEOVERLORD, Ev::End, Pre::On) => Res::Undef,
@@ -2377,6 +2669,8 @@ impl Battle {
             // ---- Sweet Veil: onAllySetStatus(status, target, source, effect)
             (ab::SWEETVEIL, Ev::SetStatus, Pre::Ally) => {
                 if e.status == Status::Slp {
+                    // `-block|target|ability: Sweet Veil|[of] holder`
+                    self.show_ability(holder, ability);
                     return Res::Null;
                 }
                 Res::Undef
@@ -2396,6 +2690,11 @@ impl Battle {
                 }
                 if !self.set_item(pokemon, mine, None, Eff::None) {
                     self.mon_mut(holder).item = mine;
+                } else {
+                    // `-activate|holder|ability: Symbiosis|Item|[of] pokemon`
+                    self.show_ability(holder, ability);
+                    self.show_item_lost(holder, mine);
+                    self.show_item_arrived(pokemon, mine);
                 }
                 Res::Undef
             }
@@ -2412,6 +2711,8 @@ impl Battle {
                 {
                     return Res::Undef;
                 }
+                // `-activate|target|ability: Synchronize`
+                self.show_ability(holder, ability);
                 self.try_set_status(source, e.status, Some(target), Eff::Ability(ab::SYNCHRONIZE));
                 Res::Undef
             }
@@ -2436,6 +2737,8 @@ impl Battle {
             (ab::TELEPATHY, Ev::TryHit, Pre::On) => {
                 if let (Some(target), Some(source)) = (e.target, e.source) {
                     if target != source && self.is_ally(target, source) && mcat != Some(Category::Status) {
+                        // `-activate|target|ability: Telepathy`
+                        self.show_ability(holder, ability);
                         return Res::Null;
                     }
                 }
@@ -2542,6 +2845,10 @@ impl Battle {
 
             // ---- Unnerve. `ability_st.a` is `effectState.unnerved`.
             (ab::UNNERVE, Ev::Start, Pre::On) => {
+                if self.mon(holder).ability_st.a == 0 {
+                    // `-ability|pokemon|Unnerve`
+                    self.show_ability(holder, ability);
+                }
                 self.mon_mut(holder).ability_st.a = 1;
                 Res::Undef
             }
@@ -2556,7 +2863,7 @@ impl Battle {
             (ab::WANDERINGSPIRIT, Ev::DamagingHit, Pre::On) => {
                 if let (Some(m), Some(target), Some(source)) = (mi, e.target, e.source) {
                     if self.makes_contact(m) {
-                        self.skill_swap(source, target);
+                        self.skill_swap(source, target, true);
                     }
                 }
                 Res::Undef

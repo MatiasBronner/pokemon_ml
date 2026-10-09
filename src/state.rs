@@ -6,6 +6,7 @@ use crate::data::{
     Terrain, Type, VolKind, Weather,
 };
 use crate::rng::Rng;
+use crate::shown::Shown;
 
 /// Largest team a side can bring into battle.
 pub const MAX_TEAM: usize = 6;
@@ -322,6 +323,8 @@ pub struct Pokemon {
     /// the next turn of a rampage, the second turn of a charging move, or the
     /// `recharge` placeholder. Worked out when the request is made.
     pub locked_move: u16,
+    /// What has been shown of it during this stay on the field (see `shown.rs`); `seen` is 0 when there is none.
+    pub(crate) live: Shown,
 }
 
 impl Pokemon {
@@ -365,6 +368,10 @@ pub struct Side {
     pub conds: SideConds,
     /// Conditions on each active position (Wish).
     pub slot_conds: [SlotConds; ACTIVE],
+    /// What has been shown of each Pokémon, by team index, as of when it was last off the field,
+    /// and how many have appeared.
+    pub(crate) shown: [Shown; MAX_TEAM],
+    pub(crate) n_seen: u8,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]

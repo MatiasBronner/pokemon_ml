@@ -377,11 +377,14 @@ impl Battle {
                 for idx in 0..self.sides[side as usize].n {
                     let ally = MonRef { side, idx };
                     let ignored = self.am[mi as usize].ignore_ability && self.active_pokemon != Some(ally);
-                    if ally != source
-                        && !ignored
-                        && (self.has_ability(ally, ab::SOUNDPROOF) || self.has_ability(ally, ab::GOODASGOLD))
-                    {
-                        continue;
+                    if ally != source && !ignored {
+                        // `-immune|ally|[from] ability: Soundproof`
+                        if let Some(deaf) =
+                            [ab::SOUNDPROOF, ab::GOODASGOLD].into_iter().find(|&a| self.has_ability(ally, a))
+                        {
+                            self.show_ability(ally, deaf);
+                            continue;
+                        }
                     }
                     success |= self.cure_status(ally);
                 }
@@ -597,14 +600,17 @@ impl Battle {
                 if last == NO_MOVE || self.deduct_pp(target, last, 4) == 0 {
                     return FALSE;
                 }
+                // `-activate|target|move: Spite|Move|4`
+                self.show_move(target, last);
                 Res::Undef
             }
             // ---- Eerie Spell: its secondary's onHit(target). Three PP off the target's last move.
             (mv::EERIESPELL, Ev::SecondaryHit) => {
                 if let Some(target) = e.target {
                     let last = self.mon(target).last_move;
-                    if self.mon(target).hp > 0 && last != NO_MOVE {
-                        self.deduct_pp(target, last, 3);
+                    if self.mon(target).hp > 0 && last != NO_MOVE && self.deduct_pp(target, last, 3) != 0 {
+                        // `-activate|target|move: Eerie Spell|Move|3`
+                        self.show_move(target, last);
                     }
                 }
                 Res::Undef
@@ -619,10 +625,13 @@ impl Battle {
                 if m.status == Status::Slp || self.has_ability(source, ab::COMATOSE) {
                     return FALSE;
                 }
-                if m.hp == m.max_hp()
-                    || self.has_ability(source, ab::INSOMNIA)
-                    || self.has_ability(source, ab::VITALSPIRIT)
+                if m.hp == m.max_hp() {
+                    return Res::Null;
+                }
+                // `-fail|source|[from] ability: Insomnia`
+                if let Some(awake) = [ab::INSOMNIA, ab::VITALSPIRIT].into_iter().find(|&a| self.has_ability(source, a))
                 {
+                    self.show_ability(source, awake);
                     return Res::Null;
                 }
                 Res::Undef
@@ -659,7 +668,7 @@ impl Battle {
             // ============================================ abilities changed by moves
             // ---- Skill Swap: onHit(target, source, move)
             (mv::SKILLSWAP, Ev::Hit) => match (e.target, e.source) {
-                (Some(target), Some(source)) => Res::Bool(self.skill_swap(source, target)),
+                (Some(target), Some(source)) => Res::Bool(self.skill_swap(source, target, false)),
                 _ => Res::Undef,
             },
             // ---- Entrainment: the target gets the user's ability.
@@ -852,7 +861,9 @@ impl Battle {
             // onAfterHit(target, source)
             (mv::KNOCKOFF, Ev::AfterHit) => {
                 if let Some(target) = e.target {
-                    self.take_item(target, None);
+                    let item = self.take_item(target, None);
+                    // `-enditem|target|Item|[from] move: Knock Off`
+                    self.show_item_lost(target, item);
                 }
                 Res::Undef
             }
@@ -868,6 +879,10 @@ impl Battle {
                     if !self.item_lets_go(item, source, target, mi) || !self.set_item(source, item, None, Eff::None) {
                         // It goes straight back.
                         self.mon_mut(target).item = item;
+                    } else {
+                        // `-enditem|target|Item|[silent]`, `-item|source|Item|[from] move: Thief|[of] target`
+                        self.show_item_lost(target, item);
+                        self.show_item_arrived(source, item);
                     }
                 }
                 Res::Undef
@@ -903,11 +918,19 @@ impl Battle {
                     }
                     return FALSE;
                 }
+                // Each ends up with the other's item (`-item`), or with nothing (`-enditem`).
+                // (An item used up the moment it arrives, a White Herb say, has had its `-enditem` by then.)
                 if my_item != it::NONE {
                     self.set_item(target, my_item, None, Eff::None);
+                    self.show_item_arrived(target, my_item);
+                } else {
+                    self.show_item_lost(target, your_item);
                 }
                 if your_item != it::NONE {
                     self.set_item(source, your_item, None, Eff::None);
+                    self.show_item_arrived(source, your_item);
+                } else {
+                    self.show_item_lost(source, my_item);
                 }
                 Res::Undef
             }
@@ -921,6 +944,8 @@ impl Battle {
                     && ITEMS[item as usize].flags & IF_BERRY != 0
                     && self.try_take_item(target, Some(source)) == Taken::Item(item)
                 {
+                    // `-enditem|target|Berry|[from] stealeat`
+                    self.show_item_lost(target, item);
                     let me = Eff::Move(mi);
                     if self
                         .single_event(
@@ -947,7 +972,9 @@ impl Battle {
             // ---- Corrosive Gas: onHit(target, source). The target's item is gone.
             (mv::CORROSIVEGAS, Ev::Hit) => {
                 if let Some(target) = e.target {
-                    self.take_item(target, e.source);
+                    let item = self.take_item(target, e.source);
+                    // `-enditem|target|Item|[from] move: Corrosive Gas`
+                    self.show_item_lost(target, item);
                 }
                 Res::Undef
             }
@@ -961,13 +988,21 @@ impl Battle {
                     return FALSE;
                 }
                 self.mon_mut(pokemon).last_item = it::NONE;
+                // `-item|pokemon|Item|[from] move: Recycle`
+                self.show_item_gain(pokemon, last);
                 self.set_item(pokemon, last, e.source, Eff::Move(mi));
                 Res::Undef
             }
             // ---- Poltergeist: onTry(source, target). The target must hold something.
             (mv::POLTERGEIST, Ev::Try) => Res::Bool(e.source.is_some_and(|t| self.mon(t).item != it::NONE)),
-            // (Its onTryHit only announces the item.)
-            (mv::POLTERGEIST, Ev::TryHit) => Res::Undef,
+            // onTryHit(target, source, move): `-activate|target|move: Poltergeist|Item`
+            (mv::POLTERGEIST, Ev::TryHit) => {
+                if let Some(target) = e.target {
+                    let item = self.mon(target).item;
+                    self.show_item_gain(target, item);
+                }
+                Res::Undef
+            }
             // ---- Belch: onTry(source). Only after eating a berry.
             (mv::BELCH, Ev::Try) => Res::Bool(e.target.is_some_and(|s| self.mon(s).ate_berry)),
             // ---- Stuff Cheeks: eat the held berry for +2 Defense.
@@ -1685,7 +1720,7 @@ impl Battle {
                 match id {
                     // No charging turn in the sun.
                     mv::SOLARBEAM | mv::SOLARBLADE => {
-                        if self.effective_weather(attacker) == Weather::Sunnyday {
+                        if self.effective_weather_aloud(attacker) == Weather::Sunnyday {
                             return Res::Undef;
                         }
                     }
@@ -2019,7 +2054,7 @@ impl Battle {
                     return Res::Undef;
                 };
                 // 0.667, 0.25 and 0.5 as Showdown's `modify` sees them.
-                let factor = match self.effective_weather(pokemon) {
+                let factor = match self.effective_weather_aloud(pokemon) {
                     Weather::Sunnyday => 2732,
                     Weather::None => 2048,
                     _ => 1024,

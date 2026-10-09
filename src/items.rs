@@ -203,7 +203,13 @@ impl Battle {
         }
         match (item, ev, pre) {
             // ---- Air Balloon (the levitation itself is in `is_grounded`)
-            (it::AIRBALLOON, Ev::Start, Pre::On) => Res::Undef,
+            // onStart(target): `-item|target|Air Balloon`, the one item that announces itself.
+            (it::AIRBALLOON, Ev::Start, Pre::On) => {
+                if !self.ignoring_item(holder) && !self.field.pseudo.has(Pseudo::Gravity) {
+                    self.show_item_gain(holder, item);
+                }
+                Res::Undef
+            }
             // onDamagingHit: popped by any damaging hit, without counting as "used".
             // onAfterSubDamage(damage, target, source, effect): and by a move that hits its substitute.
             (it::AIRBALLOON, Ev::DamagingHit | Ev::AfterSubDamage, Pre::On) => {
@@ -213,6 +219,8 @@ impl Battle {
                 if !matches!(e.effect, Eff::Move(_)) {
                     return Res::Undef;
                 }
+                // `-enditem|target|Air Balloon`
+                self.show_item_lost(target, item);
                 {
                     let m = self.mon_mut(target);
                     m.item = it::NONE;
@@ -277,6 +285,8 @@ impl Battle {
                     return Res::Undef;
                 };
                 if self.chance(1, 10, "focus band") && relay.num() >= self.mon(target).hp as i32 && e.effect.is_move() {
+                    // `-activate|target|item: Focus Band`
+                    self.show_item(target, item);
                     return Res::Num(self.mon(target).hp as i32 - 1);
                 }
                 Res::Undef
@@ -363,6 +373,9 @@ impl Battle {
                     .or_else(|| m.moves[..n].iter().position(|s| s.pp < s.maxpp));
                 if let Some(k) = slot {
                     m.moves[k].pp = (m.moves[k].pp + added).min(m.moves[k].maxpp);
+                    // `-activate|pokemon|item: Leppa Berry|Move`
+                    let restored = m.moves[k].id;
+                    self.show_move(holder, restored);
                 }
                 Res::Undef
             }
@@ -562,6 +575,8 @@ impl Battle {
             // ---- Quick Claw: onFractionalPriority(priority, pokemon, target, move)
             (it::QUICKCLAW, Ev::FractionalPriority, Pre::On) => {
                 if relay.num() <= 0 && self.chance(1, 5, "quick claw") {
+                    // `-activate|pokemon|item: Quick Claw`
+                    self.show_item(holder, item);
                     return Res::Num(1);
                 }
                 Res::Undef

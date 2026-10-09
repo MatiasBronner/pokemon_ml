@@ -556,8 +556,35 @@ impl Battle {
         item != it::AIRBALLOON
     }
 
+    /// The ability that keeps `r` off the ground, where `Pokemon#isGrounded`
+    /// answers `null`: Levitate or Eelevate on a Pokémon nothing else grounds or lifts.
+    fn levitating(&mut self, r: MonRef) -> Option<u16> {
+        if self.field.pseudo.has(Pseudo::Gravity)
+            || self.has_vol_named(r, "ingrain")
+            || self.has_vol_named(r, "smackdown")
+        {
+            return None;
+        }
+        if !self.ignoring_item(r) && self.mon(r).item == it::IRONBALL {
+            return None;
+        }
+        if self.has_type(r, Type::Flying) && !(self.has_type(r, Type::Typeless) && self.has_vol_named(r, "roost")) {
+            return None;
+        }
+        if self.suppressing_ability(Some(r)) {
+            return None;
+        }
+        [ab::LEVITATE, ab::EELEVATE].into_iter().find(|&a| self.has_ability(r, a))
+    }
+
     /// `Pokemon#runImmunity` for a move: false means the move's type cannot hit.
     pub(crate) fn run_immunity(&mut self, target: MonRef, mi: u8) -> bool {
+        self.run_immunity_ex(target, mi, false)
+    }
+
+    /// `runImmunity` with its `message` flag: said aloud, an immunity that
+    /// comes from Levitate names it (`-immune|pokemon|[from] ability: Levitate`).
+    pub(crate) fn run_immunity_ex(&mut self, target: MonRef, mi: u8, message: bool) -> bool {
         let am = &self.am[mi as usize];
         let typ = am.typ;
         match am.ignore_immunity {
@@ -570,7 +597,13 @@ impl Battle {
         }
         // The NegateImmunity event has no listeners among modelled effects.
         if typ == Type::Ground {
-            return self.is_grounded(target, false);
+            let grounded = self.is_grounded(target, false);
+            if !grounded && message {
+                if let Some(a) = self.levitating(target) {
+                    self.show_ability(target, a);
+                }
+            }
+            return grounded;
         }
         let (types, n) = self.get_types(target, false);
         !types[..n].iter().any(|&t| t != Type::Typeless && TYPE_CHART[typ as usize][t as usize] == 3)
@@ -1076,6 +1109,16 @@ impl Battle {
     fn mega_forme_change(&mut self, r: MonRef, species: u16) {
         // Mega Evolution counts as having acted.
         self.mon_mut(r).move_this_turn = TRUE;
+        // `-mega|pokemon|Species|Stone`: the stone is named, and a Mega has the one ability.
+        let stone = self.mon(r).item;
+        let named = match self.mon(r).illusion {
+            0 => SPECIES[species as usize].base_species,
+            _ => SPECIES[self.sides[r.side as usize].team[self.shown_as(r)].species as usize].id,
+        };
+        let ability = crate::shown::mega_ability(stone, named);
+        self.show_item_gain(r, stone);
+        let rec = self.shown_mut(r);
+        (rec.ability, rec.base_ability, rec.ability_changed) = (ability, ability, false);
         self.forme_change(r, species, true, true);
     }
 
@@ -1089,6 +1132,7 @@ impl Battle {
             return;
         }
         self.mon_mut(r).base_species = species;
+        self.shown_new_forme(r, species);
         self.update_max_hp(r);
         if new_ability {
             if self.mon(r).illusion != 0 {
@@ -1149,6 +1193,12 @@ impl Battle {
                 }
             }
         }
+        // `-transform|pokemon|target|[from] ability: Imposter`: it has the ability its model has.
+        if let Eff::Ability(a) = self.effect {
+            self.show_ability(r, a);
+        }
+        let theirs = self.shown_mut(target).ability;
+        self.show_ability_change(r, theirs);
         // `setAbility(ability, this, null, true, true)`: no one is asked, and an
         // ability the Pokémon already had does not start again.
         let (old, new) = (self.mon(r).ability, t.ability);
@@ -1236,6 +1286,7 @@ impl Battle {
                 self.clear_volatile(old, true);
             }
             let old_new_pos = self.mon(incoming).position;
+            self.shown_leave(old, false);
             {
                 let o = self.mon_mut(old);
                 o.is_active = false;
@@ -1276,6 +1327,8 @@ impl Battle {
         let st = self.new_state(has_item, incoming);
         self.mon_mut(incoming).item_st = st;
         self.run_event(Ev::BeforeSwitchIn, Some(incoming), None, Eff::None, Res::Undef);
+        // The `switch` line.
+        self.shown_enter(incoming);
         // `queue.insertChoice({choice: 'runSwitch', pokemon})`: the speed is
         // computed once to cache it and once more for the action.
         if is_drag {
@@ -1465,6 +1518,10 @@ impl Battle {
             }
             let dealt = self.damage_mon(target, amount, source, effect) as i32;
             damage[i] = Res::Num(dealt);
+            // `-damage|target|hp|[from] ability: X|[of] source`.
+            if matches!(effect, Eff::Ability(_) | Eff::Item(_)) {
+                self.show_from(effect, target, source.filter(|&s| s != target || matches!(effect, Eff::Ability(_))));
+            }
             if dealt != 0 {
                 self.mon_mut(target).hurt_this_turn = self.mon(target).hp;
             }
@@ -1509,6 +1566,10 @@ impl Battle {
         let new = (m.hp as i32 + amount).min(m.max_hp() as i32);
         let healed = new - m.hp as i32;
         m.hp = new as u16;
+        // `-heal|target|hp|[from] item: X`.
+        if matches!(effect, Eff::Ability(_) | Eff::Item(_)) {
+            self.show_from(effect, t, source.filter(|&s| s != t));
+        }
         self.run_event(Ev::Heal, target, source, effect, Res::Num(healed));
         Res::Num(healed)
     }
@@ -1558,6 +1619,8 @@ impl Battle {
             if !self.mon(r).fainted
                 && self.run_event(Ev::BeforeFaint, Some(r), fd.source, fd.effect, Res::Undef).truthy()
             {
+                // The `faint` line.
+                self.shown_leave(r, true);
                 let side = &mut self.sides[r.side as usize];
                 if side.pokemon_left > 0 {
                     side.pokemon_left -= 1;
@@ -1681,6 +1744,10 @@ impl Battle {
             (m.status, m.status_time, m.tox_stage, m.status_st) = prev;
             return FALSE;
         }
+        // `-status|target|brn|[from] ability: Flame Body|[of] source`.
+        if let (Eff::Ability(a), Some(s)) = (source_effect, source) {
+            self.show_ability(s, a);
+        }
         let mut e = Event::new(Ev::AfterSetStatus, Some(r), source, source_effect);
         e.status = status;
         if self.event_mask & Ev::AfterSetStatus.bit() != 0 && !self.run_event_ex(e, Res::Undef, false, false).0.truthy()
@@ -1719,6 +1786,8 @@ impl Battle {
         m.tox_stage = 0;
         let st = self.new_state(false, r);
         self.mon_mut(r).status_st = st;
+        // `-curestatus|p1: Name|status`: for a Pokémon on the bench (Heal Bell), the news is all there is.
+        self.shown_bench_update(r);
         true
     }
 
@@ -1878,6 +1947,16 @@ impl Battle {
         weather
     }
 
+    /// `effectiveWeather(undefined, true)`: the same, said aloud. Mega Sol
+    /// making sun of other weather is announced (`-activate|pokemon|ability: Mega Sol`).
+    pub(crate) fn effective_weather_aloud(&mut self, r: MonRef) -> Weather {
+        let weather = self.effective_weather(r);
+        if weather == Weather::Sunnyday && self.field_weather() != Weather::Sunnyday {
+            self.show_ability(r, ab::MEGASOL);
+        }
+        weather
+    }
+
     /// `Field#setWeather`. `Res::Null` is Showdown's "blocked, say nothing".
     pub(crate) fn set_weather(&mut self, w: Weather, source: Option<MonRef>, source_effect: Eff) -> Res {
         let source_effect = if source_effect == Eff::None { self.effect } else { source_effect };
@@ -1902,6 +1981,10 @@ impl Battle {
         if !self.single_event_at(Ev::FieldStart, Eff::Weather(w), Holder::Field, source, source_effect).truthy() {
             self.field.weather = prev;
             return FALSE;
+        }
+        // `-weather|RainDance|[from] ability: Drizzle|[of] source`
+        if let (Eff::Ability(a), Some(s)) = (source_effect, source) {
+            self.show_ability(s, a);
         }
         self.each_event_from(Ev::WeatherChange, source_effect);
         TRUE
@@ -1942,6 +2025,10 @@ impl Battle {
         if !self.single_event_at(Ev::FieldStart, Eff::Terrain(t), Holder::Field, source, source_effect).truthy() {
             self.field.terrain = prev;
             return false;
+        }
+        // `-fieldstart|move: Grassy Terrain|[from] ability: Grassy Surge|[of] source`
+        if let (Eff::Ability(a), Some(s)) = (source_effect, source) {
+            self.show_ability(s, a);
         }
         self.each_event_from(Ev::TerrainChange, source_effect);
         true
@@ -2185,6 +2272,17 @@ impl Battle {
             let new = (cur + b[k]).clamp(-6, 6);
             if new != cur {
                 self.mon_mut(r).boosts[k] = new;
+                if !success {
+                    // `-ability|target|X|boost` for an ability raising its own holder's stats (one acting on
+                    // someone else announces itself); `-boost|...|[from] item: X` for an item.
+                    match effect {
+                        Eff::Ability(a) if self.effect_holder == Some(Holder::Mon(r)) || self.effect != effect => {
+                            self.show_ability(r, a)
+                        }
+                        Eff::Item(i) => self.show_item(r, i),
+                        _ => {}
+                    }
+                }
                 success = true;
                 if self.event_mask & Ev::AfterEachBoost.bit() != 0 {
                     let mut e = Event::new(Ev::AfterEachBoost, Some(r), source, effect);
@@ -2283,6 +2381,8 @@ impl Battle {
                 return false;
             }
         }
+        // `-enditem|pokemon|Item|[eat]`.
+        self.show_item_lost(r, item);
         self.single_event(Ev::Eat, Eff::Item(item), Some(r), Some(r), source, source_effect, Res::Undef);
         let mut e = Event::new(Ev::EatItem, Some(r), source, source_effect);
         e.item = item;
@@ -2326,6 +2426,8 @@ impl Battle {
         if !self.run_event_ex(e, Res::Undef, false, false).0.truthy() {
             return false;
         }
+        // `-enditem|pokemon|Item`.
+        self.show_item_lost(r, item);
         if let Some(b) = ITEMS[item as usize].boosts {
             self.boost(b, Some(r), source, Eff::Item(item));
         }
@@ -2460,6 +2562,16 @@ impl Battle {
         self.mon_mut(r).ability = ability;
         self.listen(ABILITIES[ability as usize].events, ABILITIES[ability as usize].events_pre);
         self.new_ability_state(r);
+        if source_effect != Eff::None && !from_forme_change {
+            // `-ability|pokemon|New|Old|[from] effect|[of] source`: what it had, what it has now,
+            // and (when the new one was copied from someone) that the source has it too. Mummy says
+            // the same in its own words: `-activate|source|ability: Mummy|pokemon|[ability] Old`.
+            self.show_ability(r, old);
+            self.show_ability_change(r, ability);
+            if let Some(s) = source.filter(|&s| self.shown_live(s)) {
+                self.show_ability(s, ability);
+            }
+        }
         self.single_event(Ev::Start, Eff::Ability(ability), Some(r), Some(r), source, Eff::None, Res::Undef);
         true
     }
@@ -2470,8 +2582,9 @@ impl Battle {
         if self.set_ability_ex(r, ability, source, Eff::None, false) { Res::Undef } else { FALSE }
     }
 
-    /// `Battle#skillSwap`.
-    pub(crate) fn skill_swap(&mut self, source: MonRef, target: MonRef) -> bool {
+    /// `Battle#skillSwap`. Skill Swap, or (`wandering`) the Wandering Spirit of `target`, which
+    /// `source` has just touched.
+    pub(crate) fn skill_swap(&mut self, source: MonRef, target: MonRef, wandering: bool) -> bool {
         if self.mon(source).fainted || self.mon(target).fainted {
             return false;
         }
@@ -2480,6 +2593,24 @@ impl Battle {
             return false;
         }
         // The SetAbility event has no listeners among modelled effects.
+        // `-activate|source|Skill Swap|theirs|mine|[of] target`; between allies the abilities are not named.
+        if self.is_ally(source, target) {
+            let (mine, theirs) = (self.shown_mut(source).ability, self.shown_mut(target).ability);
+            if wandering {
+                // No move called Skill Swap was used, so this was a Wandering Spirit, and
+                // the one that was hit had it. What it got in return is not said.
+                self.show_ability(target, ab::WANDERINGSPIRIT);
+                self.show_ability_change(source, ab::WANDERINGSPIRIT);
+            } else {
+                self.show_ability_change(source, theirs);
+            }
+            self.show_ability_change(target, mine);
+        } else {
+            self.show_ability(source, sa);
+            self.show_ability(target, ta);
+            self.show_ability_change(source, ta);
+            self.show_ability_change(target, sa);
+        }
         self.single_event(Ev::End, Eff::Ability(sa), Some(source), Some(source), None, Eff::None, Res::Undef);
         self.single_event(Ev::End, Eff::Ability(ta), Some(target), Some(target), None, Eff::None, Res::Undef);
         self.mon_mut(source).ability = ta;
@@ -2605,6 +2736,8 @@ impl Battle {
                 m.faint_queued = false;
                 m.status = Status::None;
                 m.hp = (m.max_hp() / 2).max(1);
+                // `-heal|p1: Name|hp|[from] move: Revival Blessing`
+                self.shown_bench_update(t);
                 let pos = self.mon(r).position as usize;
                 self.remove_slot_condition(side, pos, SlotCond::Revivalblessing);
             }

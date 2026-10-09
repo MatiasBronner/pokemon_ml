@@ -6,6 +6,39 @@ thread_local! {
     static LOG: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+#[cfg(feature = "trace")]
+thread_local! {
+    #[allow(clippy::type_complexity)]
+    static SHOWN: std::cell::RefCell<std::collections::BTreeMap<(&'static str, u32, &'static str), (u64, u64)>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+/// Counts one use of a place in the engine where something is recorded as
+/// shown: where it is, what was shown (an ability, item or move id), and
+/// whether that was news.
+#[inline(always)]
+#[allow(unused_variables)]
+pub fn shown_site(at: &'static std::panic::Location<'static>, what: &'static str, news: bool) {
+    #[cfg(feature = "trace")]
+    SHOWN.with(|m| {
+        let mut m = m.borrow_mut();
+        let e = m.entry((at.file(), at.line(), what)).or_insert((0, 0));
+        e.0 += 1;
+        e.1 += news as u64;
+    });
+}
+
+/// Every such place used so far: file, line, what was shown, how often, and
+/// how often it was news. Empty without the `trace` feature.
+pub fn shown_sites() -> Vec<(&'static str, u32, &'static str, u64, u64)> {
+    #[cfg(feature = "trace")]
+    {
+        return SHOWN.with(|m| m.borrow().iter().map(|(&(f, l, w), &(n, news))| (f, l, w, n, news)).collect());
+    }
+    #[allow(unreachable_code)]
+    Vec::new()
+}
+
 /// Records one RNG draw: what it was for, the range, and the value drawn.
 #[inline(always)]
 #[allow(unused_variables)]

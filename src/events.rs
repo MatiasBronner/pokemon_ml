@@ -448,8 +448,19 @@ impl Battle {
         let parent = (self.effect, self.effect_holder);
         self.effect = h.eff;
         self.effect_holder = Some(h.holder);
+        // `this.effectState.target = effectHolder`: running a handler inside an event leaves
+        // its mark on the condition's state.
         if let Eff::Pseudo(kind) = h.eff {
             if let Some(c) = self.field.pseudo.get_mut(kind) {
+                c.targeted = true;
+            }
+        }
+        // For a condition on a position the holder is the Pokémon standing there, and that
+        // matters: see `field_event`. (Only Healing Wish has a handler that runs this way,
+        // `onSwap`, when Ally Switch moves a Pokémon onto it.)
+        if let (Eff::SlotCond(kind), Holder::Mon(r)) = (h.eff, h.holder) {
+            let (side, pos) = (r.side as usize, self.mon(r).position as usize);
+            if let Some(c) = self.sides[side].slot_conds.get_mut(pos).and_then(|cs| cs.get_mut(kind)) {
                 c.targeted = true;
             }
         }
@@ -934,6 +945,19 @@ impl Battle {
             // (Showdown does not check slot conditions.)
             if !matches!(h.eff, Eff::SlotCond(_)) && self.live_uid(&h) != Some(h.uid) {
                 continue;
+            }
+            // What it does do to them is a slip. Once a slot condition's handler has run
+            // inside an event (`call_handler`), its state names a Pokémon as its target, and
+            // the check above then looks for the condition among that Pokémon's volatiles,
+            // does not find it, and passes it over. So a Healing Wish that Ally Switch has
+            // moved a healthy Pokémon onto no longer heals whoever switches in there; it
+            // waits for the next Ally Switch.
+            if let (Eff::SlotCond(kind), Holder::Mon(r)) = (h.eff, h.holder) {
+                let (side, pos) = (r.side as usize, self.mon(r).position as usize);
+                let slot = self.sides[side].slot_conds.get(pos).and_then(|cs| cs.get(kind));
+                if slot.is_some_and(|c| c.targeted) {
+                    continue;
+                }
             }
             if h.has_cb {
                 // The event is named after what the handler sits on.

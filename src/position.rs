@@ -46,6 +46,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::battle::{Error, PokemonSet, calc_stats};
 use crate::data::*;
+use crate::shown::{Bar, ItemShown, NOTHING_SHOWN, SHOWN_MOVES, Shown, ShownMon, UNKNOWN};
 use crate::state::*;
 
 fn is_default<T: Default + PartialEq>(v: &T) -> bool {
@@ -147,6 +148,11 @@ pub struct CondState {
     #[serde(skip_serializing_if = "is_default")]
     pub order: u32,
     /// Bookkeeping: one of its handlers has run inside an event.
+    ///
+    /// For a Healing Wish waiting on a position it is more than bookkeeping:
+    /// Ally Switch has moved a Pokémon onto it that it had nothing to heal,
+    /// and since then (a slip of Showdown's) it does nothing for a Pokémon
+    /// that switches in there, only for one that another Ally Switch brings.
     #[serde(skip_serializing_if = "is_default")]
     pub targeted: bool,
 }
@@ -420,6 +426,112 @@ pub struct PokemonState {
     /// Bookkeeping: its number in the order the team was brought. Absent: its place in the list.
     #[serde(skip_serializing_if = "is_default")]
     pub team_index: Option<u8>,
+    /// What the other player has been shown of it, as of when it was last
+    /// off the field. Absent: nothing, except that a Pokémon on the field has
+    /// been seen.
+    #[serde(skip_serializing_if = "is_default")]
+    pub shown: Option<ShownState>,
+    /// The same for its present stay on the field, which is where anything
+    /// shown now is noted (under Illusion, as the Pokémon it passes for).
+    /// Absent: as `shown`.
+    #[serde(skip_serializing_if = "is_default")]
+    pub shown_now: Option<ShownState>,
+}
+
+/// What a battle has shown of one Pokémon: what the other player knows about
+/// it. See [`crate::shown`].
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ShownState {
+    /// Its place in the order its side's Pokémon first appeared: 1, 2, ...
+    /// 0: not seen yet (a Pokémon on the field is given the next number).
+    #[serde(skip_serializing_if = "is_default")]
+    pub id: u8,
+    /// The species it was when last on the field under its own name. Empty: its species now.
+    #[serde(skip_serializing_if = "is_default")]
+    pub species: String,
+    /// Moves it has been seen to have.
+    #[serde(skip_serializing_if = "is_default")]
+    pub moves: Vec<String>,
+    /// Its item, if shown; empty for "holds nothing".
+    #[serde(skip_serializing_if = "is_default")]
+    pub item: Option<String>,
+    /// The item it was shown to lose, when it holds nothing.
+    #[serde(skip_serializing_if = "is_default")]
+    pub item_lost: String,
+    /// The ability it has now, and the one it returns to off the field, if shown.
+    #[serde(skip_serializing_if = "is_default")]
+    pub ability: Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub base_ability: Option<String>,
+    /// Its ability has been replaced since it came in.
+    #[serde(skip_serializing_if = "is_default")]
+    pub ability_changed: bool,
+    /// HP as a whole percentage, bar colour and status when it was last on the field. Absent: full and healthy.
+    #[serde(skip_serializing_if = "is_default")]
+    pub hp: Option<u8>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub bar: Bar,
+    #[serde(skip_serializing_if = "is_default")]
+    pub status: String,
+    #[serde(skip_serializing_if = "is_default")]
+    pub fainted: bool,
+}
+
+impl ShownState {
+    fn of(rec: &Shown) -> ShownState {
+        let view = ShownMon::from_record(rec, 0, Gender::N);
+        ShownState {
+            id: rec.seen,
+            species: if rec.species == NO_SPECIES {
+                String::new()
+            } else {
+                SPECIES[rec.species as usize].id.to_string()
+            },
+            moves: view.moves,
+            item: view.item,
+            item_lost: view.item_lost,
+            ability: view.ability,
+            base_ability: view.base_ability,
+            ability_changed: rec.ability_changed,
+            hp: Some(rec.hp),
+            bar: rec.bar,
+            status: view.status,
+            fainted: rec.fainted,
+        }
+    }
+
+    fn record(&self) -> Result<Shown, Error> {
+        let mut rec = NOTHING_SHOWN;
+        rec.seen = self.id;
+        if !self.species.is_empty() {
+            rec.species = find_species(&self.species)?;
+        }
+        if self.moves.len() > SHOWN_MOVES {
+            return Err(bad(format!("at most {SHOWN_MOVES} moves can have been shown of one Pokémon")));
+        }
+        for m in &self.moves {
+            rec.add_move(find_move(m)?);
+        }
+        rec.item = match &self.item {
+            None => ItemShown::Unknown,
+            Some(i) if !i.is_empty() => ItemShown::Holds(find_item(i)?),
+            Some(_) if !self.item_lost.is_empty() => ItemShown::Lost(find_item(&self.item_lost)?),
+            Some(_) => return Err(bad("a Pokémon shown to hold nothing was shown to lose something: item_lost")),
+        };
+        let ability = |name: &Option<String>| name.as_ref().map_or(Ok(UNKNOWN), |a| find_ability(a));
+        rec.ability = ability(&self.ability)?;
+        rec.base_ability = ability(&self.base_ability)?;
+        rec.ability_changed = self.ability_changed;
+        rec.hp = self.hp.unwrap_or(100);
+        rec.bar = self.bar;
+        rec.status = STATUSES
+            .into_iter()
+            .find(|st| st.id() == self.status)
+            .ok_or_else(|| bad(format!("unknown status {}", self.status)))?;
+        rec.fainted = self.fainted;
+        Ok(rec)
+    }
 }
 
 impl PokemonState {
@@ -668,7 +780,8 @@ impl BattleState {
         for side in &mut s.sides {
             side.pokemon_left = None;
             side.conditions.iter_mut().for_each(strip);
-            side.slot_conditions.iter_mut().flatten().for_each(strip);
+            // (For a condition on a position `targeted` is not bookkeeping: see `CondState`.)
+            side.slot_conditions.iter_mut().flatten().for_each(|c| c.order = 0);
             for (p, m) in side.pokemon.iter_mut().enumerate() {
                 m.speed = 0;
                 m.trapped = Trapped::No;
@@ -1040,6 +1153,11 @@ impl Battle {
             skip_before_switch_out: m.skip_before_switch_out,
             being_called_back: m.being_called_back,
             team_index: Some(r.idx),
+            shown: {
+                let rec = &self.sides[r.side as usize].shown[r.idx as usize];
+                (*rec != NOTHING_SHOWN).then(|| ShownState::of(rec))
+            },
+            shown_now: (m.is_active && m.live.seen != 0).then(|| ShownState::of(&m.live)),
         }
     }
 
@@ -1510,7 +1628,73 @@ impl Battle {
             b.work_out_bookkeeping();
         }
         b.queue_from(st, &names)?;
+        // Last, so that nothing the working-out above did (a Quick Claw rolled again for a
+        // pending move, say) is taken for something the battle showed.
+        b.shown_from(st, &names)?;
         Ok(b)
+    }
+
+    /// What each side has been shown: as given, and for a Pokémon on the field
+    /// with nothing said, that it has been seen.
+    fn shown_from(&mut self, st: &BattleState, names: &Names) -> Result<(), Error> {
+        for (s, side) in st.sides.iter().enumerate() {
+            self.sides[s].shown = [NOTHING_SHOWN; MAX_TEAM];
+            for mon in self.sides[s].team.iter_mut() {
+                mon.live = NOTHING_SHOWN;
+            }
+            let mut taken = [false; MAX_TEAM + 1];
+            for (p, ps) in side.pokemon.iter().enumerate() {
+                let idx = names.order[s][p] as usize;
+                if let Some(shown) = &ps.shown {
+                    let rec = shown.record()?;
+                    if rec.seen as usize > side.pokemon.len() || (rec.seen != 0 && taken[rec.seen as usize]) {
+                        return Err(bad(format!(
+                            "side {}: shown.id must number the Pokémon seen from 1, each once",
+                            s + 1
+                        )));
+                    }
+                    taken[rec.seen as usize] = true;
+                    self.sides[s].shown[idx] = rec;
+                }
+                if let Some(shown) = &ps.shown_now {
+                    if !self.sides[s].team[idx].is_active {
+                        return Err(bad(format!("{}: only a Pokémon on the field has shown_now", ps.species)));
+                    }
+                    self.sides[s].team[idx].live = shown.record()?;
+                }
+            }
+            // Whoever is on the field has been seen, as whoever it passes for.
+            for p in 0..ACTIVE.min(side.pokemon.len()) {
+                let r = MonRef { side: s as u8, idx: names.order[s][p] };
+                if !self.mon(r).is_active {
+                    continue;
+                }
+                let a = self.shown_as(r);
+                let side = &mut self.sides[s];
+                if side.shown[a].seen == 0 {
+                    let free = (1..=MAX_TEAM).find(|&id| !taken[id]).unwrap_or(MAX_TEAM);
+                    taken[free] = true;
+                    side.shown[a].seen = free as u8;
+                }
+                if side.shown[a].species == NO_SPECIES {
+                    side.shown[a].species = side.team[a].species;
+                }
+                if side.team[r.idx as usize].live.seen == 0 {
+                    let mut live = side.shown[a];
+                    live.fainted = false;
+                    side.team[r.idx as usize].live = live;
+                }
+            }
+            let side = &mut self.sides[s];
+            for a in 0..side.n as usize {
+                // (A Pokémon seen and now on the bench was last seen as what it is.)
+                if side.shown[a].seen != 0 && side.shown[a].species == NO_SPECIES {
+                    side.shown[a].species = side.team[a].species;
+                }
+            }
+            side.n_seen = (0..side.n as usize).map(|a| side.shown[a].seen).max().unwrap_or(0);
+        }
+        Ok(())
     }
 
     /// A hand-written position has to be one a battle can be in.

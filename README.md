@@ -312,6 +312,12 @@ One observation is one side's view at one decision
   not a guess. Never the opponent's stats.
 - **The four positions on the field**: who stands there, stat stages, types,
   the conditions it is under, the move it last used.
+- **Speed**, the one thing a snapshot of the battle cannot show: for each
+  opposing Pokémon the range its Speed can still be in given
+  [who has moved before whom](#what-the-order-of-moves-shows), whether it can
+  or must be holding a Choice Scarf, and for each pair of Pokémon facing each
+  other, which goes first if both use moves of the same priority: this one,
+  that one, or not known.
 - **The eight moves** the player's two active Pokémon can pick from.
 - **What is legal**, as a mask.
 
@@ -330,6 +336,46 @@ long it has been up, not how long it has left, since an item the opponent
 may not have seen makes it last 8 turns for 5. `tests/env.rs` rebuilds the
 opponent's half of the observation from `Battle::shown` alone at every
 decision of 80 games and requires it to be the same.
+
+### What the order of moves shows
+
+A player never sees the other side's Speed, but sees who moves first and
+knows its own Pokémon's Speed exactly. `src/speed.rs` keeps what follows from
+that, for both sides, from decision to decision.
+
+For each opposing Pokémon it holds the set of ways the Pokémon can have been
+built that are still possible: each amount of stat points in Speed (0 to 32),
+with each thing a nature can do to Speed, with each thing an item can (nothing,
+Choice Scarf, Iron Ball). It starts as everything the rules allow, which for a
+Garchomp is a Speed of 109 to 169 before items, and an open team sheet narrows
+it at once by giving the nature and the item. Every time one of theirs and one
+of the player's own move in the same priority bracket, the combinations that
+would have moved in the other order are struck out, after allowing for what is
+public: stat stages, paralysis, Tailwind, Trick Room.
+
+```rust
+let mut game = Game::new([ours, theirs], false)?;     // Milotic (Speed 101) and Sylveon lead for us
+game.act([[0, 0], [0, 0]], seed)?;                    // Team Preview
+game.act([[0, 0], [0, 0]], seed)?;                    // a turn: their Garchomp and Snorlax move first
+let snorlax = game.speeds().belief(1, 1);
+assert_eq!(snorlax.items(), [true, true, false, false]);                // a Choice Scarf: no Snorlax reaches 101 without
+assert_eq!(game.speeds().first(game.battle().unwrap(), 0, 0, 1), Some(First::Theirs));
+```
+
+Because the set is about how the Pokémon was built and not about one number,
+"it must be holding a Choice Scarf" falls out when nothing else explains what
+was seen, and Mega Evolution needs no special case: the same points and nature
+give the new forme's Speed.
+
+A comparison is passed over whenever something the player has not been shown
+could be at work: an ability the Pokémon may legally have that changes Speed
+or priority as things stand (Swift Swim in rain, Prankster on a status move,
+Stall, Unburden once the item is gone, Klutz), a Pokémon that may be an
+Illusion, a Speed Swap. Passing one over costs a little knowledge; using one
+wrongly would rule out the truth. `tests/speed.rs` plays games between random
+legal teams, with every ability and item the format has, and checks at every
+decision that the truth is still in each set and that no "this one goes
+first" is wrong: SPEED_RESULT
 
 ### What a model answers
 
@@ -926,6 +972,7 @@ src/format.rs      a regulation as data: Format, the team validator, random lega
 src/teams.rs       teams from outside: reading team sheets, guessing stat points, a pool of teams
 src/env.rs         games for a model to play: Team Preview, actions as numbers, many games at once
 src/obs.rs         one side's view of a game as arrays, and static data to embed ids with
+src/speed.rs       what the order of moves has shown about each Pokémon's Speed
 src/python.rs      the two above as a Python module (feature `python`, built by maturin)
 src/shown.rs       what the battle has shown of each Pokémon: Battle::shown
 src/observer.rs    the same, read from Showdown's log
@@ -955,6 +1002,7 @@ tests/shown.rs     what each side has been shown, as examples; a fixture of batt
 tests/perish_trap.rs  the perish trap, step by step, on battles played out in Showdown from a script
 tests/teams.rs     team sheets read, stat points guessed, a pool saved, loaded and played
 tests/env.rs       the training environment: actions, masks, what each side is given, many games at once
+tests/speed.rs     Speed worked out from the order of moves: an example, and that it is never wrong
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -991,8 +1039,9 @@ likely first steps when speed starts to matter.
 1. **A league.** Past versions of the network as opponents, so that
    self-play cannot go in circles, and a rating of each checkpoint against
    the others.
-2. **More for the network to go on**: tokens for the last turns' events, and
-   heads that predict the opponent's hidden sets and next action.
+2. **More for the network to go on**: what damage has shown about attack and
+   bulk, kept the way Speed is; and heads that predict the opponent's hidden
+   sets and next action.
 3. **Sampling hidden information** into a position: the opponent's
    unrevealed moves, items, abilities, spreads and bench, drawn from the
    network's own predictions and consistent with what has been shown. This

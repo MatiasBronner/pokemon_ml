@@ -29,6 +29,14 @@
 //! `2` is "holds nothing" (the item table's first entry) while item `1` is
 //! "holds something unknown, or nothing".
 //!
+//! # Speed
+//!
+//! Each Pokémon comes with the lowest and highest its Speed can be and what
+//! is known of an item that changes it, and each position with who goes first
+//! against each position across the field. For the viewer's own Pokémon
+//! these are facts. For the other side's they are what the order of moves has
+//! left possible ([`crate::speed`]).
+//!
 //! # Timers
 //!
 //! How long a weather, a terrain or a screen has left is not public: an item
@@ -41,6 +49,7 @@ use std::sync::OnceLock;
 use crate::battle::PokemonSet;
 use crate::data::*;
 use crate::shown::{ItemShown, Shown, UNKNOWN};
+use crate::speed::{self, Belief, First, Speeds};
 use crate::state::*;
 
 /// Pokémon a player registers. The environment plays the regulation's six.
@@ -59,8 +68,8 @@ pub const MOVE_TOKENS: usize = ACTIVE * MAX_MOVES;
 pub const INFO: usize = 4;
 
 pub const FIELD_F: usize = 64;
-pub const MON_F: usize = 46;
-pub const ACT_F: usize = 119;
+pub const MON_F: usize = 52;
+pub const ACT_F: usize = 125;
 pub const MOVE_F: usize = 4;
 /// Where a position's volatile conditions begin in its features, one flag for each [`VolKind`].
 pub const ACT_VOLATILES: usize = 38;
@@ -276,6 +285,9 @@ struct Tok {
     gender: Gender,
     nature: Option<(u8, u8)>,
     pp: [f32; MAX_MOVES],
+    /// The lowest and highest its Speed stat can be, and what is known of an item that changes it.
+    speed: (u32, u32),
+    speed_items: [bool; 4],
     species: i16,
     item: i16,
     lost: i16,
@@ -305,12 +317,26 @@ impl Tok {
             gender,
             nature: None,
             pp: [0.0; MAX_MOVES],
+            speed: (0, 0),
+            speed_items: [false; 4],
             species: id(species),
             item: ID_UNKNOWN,
             lost: ID_NONE,
             ability: ID_UNKNOWN,
             moves: [ID_UNKNOWN; MAX_MOVES],
         }
+    }
+
+    /// Its own side's Pokémon: the Speed stat is known.
+    fn speed_known(&mut self, stat: u16, item: u16) {
+        let (speed, items) = speed::own(stat, item);
+        (self.speed, self.speed_items) = ((speed, speed), items);
+    }
+
+    /// The other side's: what the order of moves has left possible.
+    fn speed_believed(&mut self, belief: &Belief, species: u16) {
+        self.speed = belief.range(species);
+        self.speed_items = belief.items();
     }
 
     /// Everything a team sheet says.
@@ -359,6 +385,9 @@ impl Tok {
             _ => w.skip(10),
         }
         self.pp.iter().for_each(|&p| w.put(p));
+        w.put(self.speed.0 as f32 / 200.0);
+        w.put(self.speed.1 as f32 / 200.0);
+        self.speed_items.iter().for_each(|&on| w.flag(on));
         debug_assert_eq!(w.at, MON_F);
         i[0] = self.species;
         i[1] = self.item;
@@ -415,6 +444,7 @@ impl Parts<'_> {
 /// the viewer's own Pokémon's.
 pub fn observe_preview(
     rosters: [&[PokemonSet]; 2],
+    speeds: &Speeds,
     stats: &[[u16; 6]; ROSTER],
     open: bool,
     view: usize,
@@ -437,6 +467,7 @@ pub fn observe_preview(
         tok.can_mega = mega_stone_for(set.item, set.species);
         tok.pp = [0.0; MAX_MOVES];
         tok.pp[..set.moves.len().min(MAX_MOVES)].fill(1.0);
+        tok.speed_known(stats[j][5], set.item);
         p.mon(j, &tok);
     }
     for (j, set) in rosters[1 - view].iter().take(ROSTER).enumerate() {
@@ -445,6 +476,7 @@ pub fn observe_preview(
             tok.sheet(set.item, set.ability, &set.moves, set.nature);
             tok.can_mega = mega_stone_for(set.item, set.species);
         }
+        tok.speed_believed(speeds.belief(1 - view, j), set.species);
         p.mon(ROSTER + j, &tok);
     }
     p.info[0] = Phase::Preview as i16;
@@ -459,6 +491,7 @@ pub fn observe_preview(
 pub fn observe_battle(
     b: &Battle,
     timers: &Timers,
+    speeds: &Speeds,
     stats: &[[u16; 6]; ROSTER],
     view: usize,
     f: &mut [f32],
@@ -516,6 +549,7 @@ pub fn observe_battle(
             tok.sheet(listed.item, listed.ability, listed.moves(), listed.nature);
             tok.stats = Some(stats[j]);
             tok.left_behind = true;
+            tok.speed_known(stats[j][5], listed.item);
             p.mon(j, &tok);
             continue;
         }
@@ -544,6 +578,7 @@ pub fn observe_battle(
         tok.transformed = m.transformed;
         tok.gender = m.gender;
         tok.nature = Some(m.nature);
+        tok.speed_known(m.stats[5], m.item);
         p.mon(j, &tok);
     }
 
@@ -608,6 +643,7 @@ pub fn observe_battle(
         // A Mega Stone in plain sight, on a side that has not used one yet.
         let species = (tok.species - ID_BASE) as u16;
         tok.can_mega = !they_megaed && tok.item >= ID_BASE && mega_stone_for((tok.item - ID_BASE) as u16, species);
+        tok.speed_believed(speeds.belief(opp, j), species);
         filled[j] = true;
         p.mon(ROSTER + j, &tok);
     }
@@ -622,10 +658,18 @@ pub fn observe_battle(
         }
         // Once all the Pokémon brought have appeared, the rest are known to have stayed behind.
         tok.left_behind = them.n_seen == them.n;
+        tok.speed_believed(speeds.belief(opp, j), listed.species);
         p.mon(ROSTER + j, &tok);
     }
 
     // ---- the four positions
+    // Who goes first of each of the viewer's two and each of the other two, as far as the viewer can tell.
+    let mut firsts = [[None; ACTIVE]; ACTIVE];
+    for (mine, row) in firsts.iter_mut().enumerate() {
+        for (theirs, first) in row.iter_mut().enumerate() {
+            *first = speeds.first(b, view, mine, theirs);
+        }
+    }
     for (slot, (side, pos)) in [(view, 0), (view, 1), (opp, 0), (opp, 1)].into_iter().enumerate() {
         let own = side == view;
         if pos >= b.sides[side].n as usize {
@@ -688,6 +732,15 @@ pub fn observe_battle(
         w.put(vols.get(VolKind::Stall).map_or(0.0, |v| 1.0 - 1.0 / v.data.max(1) as f32));
         for kind in SlotCond::ALL {
             w.flag(b.sides[side].slot_conds[pos].has(kind));
+        }
+        // Against each position across the field, with moves of the same priority: this one
+        // goes first, goes second, or the viewer cannot tell.
+        for across in 0..ACTIVE {
+            match if own { firsts[pos][across] } else { firsts[across][pos] } {
+                None => w.skip(3),
+                Some(First::Unknown) => w.one_hot(3, 2),
+                Some(who) => w.one_hot(3, ((who == First::Mine) != own) as usize),
+            }
         }
         debug_assert_eq!(w.at, ACT_F);
     }

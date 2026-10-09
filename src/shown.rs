@@ -598,7 +598,11 @@ impl Battle {
     /// `r` has used this move as its own, or been stopped from using it: see [`Shown::use_move`].
     #[track_caller]
     pub(crate) fn show_move_used(&mut self, r: MonRef, move_id: u16) {
-        if move_id == NO_MOVE || move_id == crate::battle::struggle_id() || self.mon(r).transformed {
+        if move_id == NO_MOVE {
+            return;
+        }
+        self.note_move_named(r, move_id);
+        if move_id == crate::battle::struggle_id() || self.mon(r).transformed {
             return;
         }
         self.show(r, MOVES[move_id as usize].id, |rec| rec.use_move(move_id));
@@ -641,6 +645,7 @@ impl Battle {
     #[track_caller]
     pub(crate) fn show_item_gain(&mut self, r: MonRef, item: u16) {
         if item != it::NONE {
+            self.note_item(r, item, false);
             self.show(r, ITEMS[item as usize].id, |rec| rec.item = ItemShown::Holds(item));
         }
     }
@@ -650,6 +655,9 @@ impl Battle {
     /// once has had its own `-enditem`): then that stands.
     #[track_caller]
     pub(crate) fn show_item_arrived(&mut self, r: MonRef, item: u16) {
+        // (Noted even if it is gone again already: a White Herb handed to a Pokémon with a
+        // lowered stat is used up before the log gets to say it arrived.)
+        self.note_item(r, item, false);
         if self.mon(r).item == item {
             self.show_item_gain(r, item);
         }
@@ -659,6 +667,7 @@ impl Battle {
     #[track_caller]
     pub(crate) fn show_item_lost(&mut self, r: MonRef, item: u16) {
         if item != it::NONE {
+            self.note_item(r, item, true);
             self.show(r, ITEMS[item as usize].id, |rec| rec.item = ItemShown::Lost(item));
         }
     }
@@ -703,7 +712,7 @@ impl Battle {
     }
 
     /// The entries of `side`'s registered team that have Illusion, as far as the other side can tell.
-    fn shown_illusionists(&self, side: usize) -> u8 {
+    pub(crate) fn shown_illusionists(&self, side: usize) -> u8 {
         let s = &self.sides[side];
         illusionists(&s.roster[..s.n_roster as usize], self.open_team_sheets)
     }

@@ -78,7 +78,7 @@ Results for the code in this repository, against Showdown commit `ad7ca5d`
 
 | Check | Battles | Decisions | Diverged |
 |---|---|---|---|
-| Everything modelled now | 45,400 | 1,071,459 | 0 |
+| Everything modelled now | 51,000 | 1,210,052 | 0 |
 | Recorded before two-turn moves, pivoting, forced switches and forme changes existed | 16,900 | 364,631 | 0 |
 | Recorded before Fake Out, Substitute and the volatile conditions existed | 19,300 | 385,071 | 0 |
 | Recorded before weather and the other field effects existed | 5,500 | 101,656 | 0 |
@@ -119,7 +119,7 @@ How the battles are made up:
 - Some effects only matter in combinations that random teams almost never
   produce: Aurora Veil on a side that also has Reflect up, or a Mega Stone
   being stolen. `gen_cases.js --moves`, `--species`, `--abilities` and
-  `--items` build batches around such a combination; about 25,000 of the
+  `--items` build batches around such a combination; about 30,000 of the
   battles in the first three rows are of this kind.
 
 Two further checks:
@@ -136,18 +136,17 @@ Two further checks:
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
-  replays recorded battles. All 413 hand-written bugs are caught. A second
-  mode switches off one callback at a time (one ability's reaction to one
-  event, one move's script); of the 171 callbacks added for the last batch of
-  mechanics, 167 are caught and the other four do nothing that can be
-  observed in Champions (the script lists them with the reason, along with
-  eight hand-written bugs dropped for the same reason). The 447 older
-  callbacks have had the hand-written bugs aimed at them but not yet this
-  sweep. Not every bug is caught by random battles: 11 of the last 265 got
-  past 41,000 recorded battles and were only caught by a batch built around
-  the effect, such as Sleep Talk on a Pokémon that also knows Rest and
-  Meteor Beam, or Dragon Darts into a Protect beside a Berserk Pokémon at
-  just over half HP. `scripts/targeted.sh` records all such batches.
+  replays recorded battles. A second mode switches off one callback at a time
+  (one ability's reaction to one event, one move's script). All 413
+  hand-written bugs and all 602 switched-off callbacks are caught. Another 15
+  callbacks, and eight hand-written bugs that were tried, change nothing
+  that can be observed in Champions (Ripen doubling the stat changes of
+  berries, where no berry in the game changes stats); the script lists each
+  with its reason. Random battles are not enough for this: with 3,000
+  general battles, 86 of the 1,015 bugs were only caught by a batch built
+  around the effect, such as Sleep Talk on a Pokémon that also knows Rest
+  and Meteor Beam, or Dragon Darts into a Protect beside a Berserk Pokémon
+  at just over half HP. `scripts/targeted.sh` records all such batches.
 
 What this does **not** establish: agreement with the cartridge games where
 they differ from Showdown. And coverage of rare interactions is uneven. Every
@@ -175,7 +174,7 @@ The mutation test needs recorded battles to replay: the batches built around
 particular effects, and a few thousand general ones.
 
 ```sh
-scripts/targeted.sh corpus                                              # 41 batches, about 11,000 battles
+scripts/targeted.sh corpus                                              # 55 batches, about 17,000 battles
 node oracle/gen_cases.js --n 3000 --seed 9500 --out corpus/general.jsonl
 scripts/mutation_test.py corpus/*.jsonl --handlers                      # slow: a rebuild per injected bug
 ```
@@ -365,9 +364,7 @@ likely first steps when speed starts to matter.
 2. **Python bindings and batched stepping** for training.
 3. **Speed.** The per-Pokémon listener cache described above, then
    profiling.
-4. The switch-off-one-callback mutation sweep over the 447 callbacks written
-   before that mode existed, and a batch for whatever it finds uncovered.
-5. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
+4. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
    moving the pin, `node oracle/gen_data.js` regenerates the tables, a
    missing callback body panics with its name, and `scripts/fuzz.sh` finds
    behaviour changes.

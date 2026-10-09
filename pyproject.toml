@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pokemon_ml"
+version = "0.1.0"
+description = "Self-play training for Pokémon Champions doubles on the vgc_engine simulator"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "torch>=2.2"]
+
+[tool.maturin]
+# The Rust crate at the root of the repository, built as pokemon_ml/_engine.*.so
+# next to the Python sources in python/pokemon_ml.
+features = ["python"]
+module-name = "pokemon_ml._engine"
+python-source = "python"
+bindings = "pyo3"
+strip = true

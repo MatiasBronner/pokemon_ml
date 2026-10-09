@@ -8,3 +8,8 @@
 corpus/
 __pycache__/
 teams/raw/cache/
+runs/
+.venv/
+.pytest_cache/
+*.so
+*.egg-info/

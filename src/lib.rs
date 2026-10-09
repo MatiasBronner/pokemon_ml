@@ -22,6 +22,7 @@ mod tables;
 pub mod rng;
 pub mod shown;
 pub mod state;
+pub mod teams;
 pub mod trace;
 
 pub use battle::{Error, PokemonSet};

@@ -52,9 +52,10 @@ that does not exist in Champions (Tinted Lens, a forme of a
 species the game lacks) rather than guessing how it would behave.
 
 A set built with `from_names` has no ability and no item until you add them,
-and takes the species' fixed gender or male. The engine does not check that a
-species can legally have an ability, move or item; neither does Showdown's
-simulator (its team validator does that separately).
+and takes the species' fixed gender or male. `Battle::new` does not ask
+whether a species can legally have an ability, move or item; neither does
+Showdown's simulator. That is a separate question, answered per regulation:
+see [Legal teams and regulations](#legal-teams-and-regulations).
 
 ## Starting from the middle of a battle
 
@@ -126,6 +127,73 @@ What to know before relying on it:
   Some(0)` and `active_turns: Some(0)` for one that has just come in.
 
 How this is checked is under [How it is checked](#how-it-is-checked).
+
+## Legal teams and regulations
+
+What a regulation allows is data, one file per regulation in `formats/`,
+and `format::Format` checks teams against it:
+
+```rust
+use vgc_engine::format::Format;
+
+let format = Format::current();                     // Reg M-C, the one the engine is built for
+for problem in format.check_team(&team) {           // all six, as registered
+    println!("{problem}");                          // "Garchomp cannot learn Moonblast"
+}
+let rule = format.rule(garchomp.species).unwrap();  // its legal moves, abilities, genders, Mega Stones
+let random = format.random_team(&mut rng);          // six legal Pokémon, drawn uniformly
+```
+
+The file lists every species that can be brought with its legal moves,
+abilities and genders, the items anyone may hold, and the team rules (for
+Reg M-C: bring six and pick four, no two Pokémon with the same Pokédex number,
+no item held twice, at most 32 stat points in a stat and 66 in all).
+
+**Nothing in the file is written by hand.** `oracle/gen_format.js` asks
+Showdown's own team validator, one question at a time: is this species
+accepted, and with this move, this ability, this item? So the file is what
+Showdown accepts, by construction, and a new regulation needs no rules
+transcribed.
+
+**Moving to another regulation:**
+
+```sh
+node oracle/gen_format.js gen9championsvgc2026regmb     # any format id Showdown knows
+scripts/check-teams.sh 5000 1 gen9championsvgc2026regmb # verdicts against Showdown's, both ways
+```
+
+```rust
+let reg_mb = Format::from_json(&std::fs::read_to_string("formats/gen9championsvgc2026regmb.json")?)?;
+```
+
+The file also records whether the regulation changes anything the simulator
+computes with, as opposed to what may be brought. Reg M-B, the previous
+regulation, is in the repository as the example: 29 fewer species, 18 fewer
+items, and two moves with different PP (Wish and Strength Sap), which the file
+lists under `differences` and `Format::simulated_exactly` reports. Teams can
+be checked against such a regulation, but battles under it would be off by
+those differences until the engine's tables are regenerated from that data.
+
+For a regulation newer than the pinned Showdown: move the pin
+(`scripts/setup-oracle.sh`), regenerate the tables (`node oracle/gen_data.js`;
+a new move or ability stops the build by name until its callback is written,
+and `scripts/fuzz.sh` checks it), set the format id in `oracle/lib.js` and the
+file name in `Format::current`, and generate its file. `Format::from_json`
+refuses a file that names anything the engine's tables lack.
+
+What the validator does not do, where Showdown's does:
+
+- **It reports, it does not repair.** Showdown accepts a Mega written as the
+  species (and turns it into the ordinary forme holding its stone) and
+  corrects an impossible gender. Here both are violations.
+- **Levels.** Everything is level 50. Showdown also refuses a Pokémon whose
+  stated level is too low for it to have evolved; there is no level to state
+  here.
+- **Nicknames**, and Showdown's reminder that a Pokémon with no stat points at
+  all and a Serious nature looks unfinished. (Teams written out for Showdown
+  use Hardy for a neutral nature, for that reason.)
+- **Picking four of the six.** `Battle::new` takes the Pokémon picked; team
+  preview is not modelled.
 
 ## How it is checked
 
@@ -202,6 +270,17 @@ Two further checks:
   Imprison has sealed every move of a side's last active Pokémon, Showdown
   still lists the moves, and wants the forced Struggle spelled as a use of
   the first one, target included. `legal_choices` spells it that way.)
+- **Legality.** `scripts/check-teams.sh` compares the team validator with
+  Showdown's in both directions. Showdown judges random teams, most of them
+  legal or one step from it (a move the Pokémon cannot learn, an ability from
+  another species, an item held twice, a 33rd stat point, a second forme of
+  the same Pokémon, five Pokémon); the engine gave the same verdict on all
+  80,000 (40,000 for each of the two regulations, about 43% of them legal).
+  And the engine makes random legal teams, which Showdown must accept: all
+  80,000 were. The teams are built from Showdown's data
+  directly, not from the regulation file, so the file is not checked against
+  itself. Fourteen faults injected into the validator (a rule skipped, a
+  limit off by one) were all noticed.
 - **Positions.** `difftest --by-hand` replays the recorded battles and at
   every decision writes the position down (through JSON), builds a battle
   back from it and requires the two to be the same data, field for field,
@@ -402,19 +481,24 @@ src/conditions.rs  callbacks of statuses, volatiles, weather, terrain and side c
 src/movecbs.rs     script callbacks of moves (onTry, onHit, basePowerCallback, ...)
 src/choice.rs      Battle::new, legal choices, submitting choices
 src/position.rs    a position as data: Battle::to_state, Battle::from_state, JSON
+src/format.rs      a regulation as data: Format, the team validator, random legal teams
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
 src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
-src/bin/difftest.rs, src/bin/bench.rs
+src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs
 oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
 oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
-scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, mutation_test.py
+oracle/gen_format.js Showdown's team validator -> formats/<id>.json
+oracle/gen_teams.js  random teams with Showdown's verdict on each
+formats/             what each regulation allows (generated)
+scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, check-teams.sh, mutation_test.py
 tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
 tests/position.rs  positions written by hand: defaults, timers, switches in the middle of a turn
+tests/format.rs    legal and illegal teams, a second regulation, fixtures of teams judged by Showdown
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -452,9 +536,14 @@ likely first steps when speed starts to matter.
    (usage statistics, or the bot's own model) and consistent with what has
    been seen.
 2. **Python bindings and batched stepping** for training.
-3. **Speed.** The per-Pokémon listener cache described above, then
+3. **Team preview** (picking four of six), and tracking what each player has
+   been shown, which a policy needs before it can be trained.
+4. **Searching for teams**: the regulation file gives the space of legal
+   teams and steps that stay inside it; scoring a team needs a pool of
+   opponents and a policy to play it, so this follows the bot.
+5. **Speed.** The per-Pokémon listener cache described above, then
    profiling.
-4. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
+6. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after
    moving the pin, `node oracle/gen_data.js` regenerates the tables, a
    missing callback body panics with its name, and `scripts/fuzz.sh` finds
    behaviour changes.

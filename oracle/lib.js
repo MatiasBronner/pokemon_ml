@@ -27,6 +27,7 @@ const BASE_KEYS = new Set([
 const EXTRA_OK = new Set([
 	'boosts', 'self', 'drain', 'recoil', 'heal', 'thawsTarget', 'willCrit', 'ignoreEvasion', 'multihit',
 	'stallingMove', 'struggleRecoil', 'condition', 'sideCondition', 'slotCondition', 'pseudoWeather', 'terrain',
+	'breaksProtect',
 ]);
 const TARGETS_OK = new Set([
 	'normal', 'any', 'adjacentFoe', 'allAdjacentFoes', 'allAdjacent', 'self', 'adjacentAlly', 'adjacentAllyOrSelf', 'allies',
@@ -40,7 +41,12 @@ const HAND_MOVES = new Set(('protect detect struggle auroraveil ' +
 	// weather, terrain, screens and hazards
 	'blizzard hurricane thunder weatherball growth moonlight morningsun synthesis expandingforce risingvoltage ' +
 	'grassyglide terrainpulse steelroller icespinner brickbreak psychicfangs defog rapidspin mortalspin tidyup ' +
-	'courtchange magneticflux haze').split(' '));
+	'courtchange magneticflux haze ' +
+	// moves that depend on the flow of the turn, and the volatile conditions
+	'fakeout firstimpression followme ragepowder helpinghand wideguard quickguard endure banefulbunker kingsshield ' +
+	'spikyshield disable attract substitute leechseed magnetrise noretreat octolock electrify gastroacid lockon ' +
+	'perishsong yawn stockpile spitup swallow destinybond sparklingaria block meanlook jawlock throatchop ' +
+	'spiritshackle').split(' '));
 // Callback-like move properties, mapped to the event the Rust engine files them under.
 const MOVE_CALLBACKS = {
 	basePowerCallback: 'BasePowerCallback', damageCallback: 'DamageCallback', beforeMoveCallback: 'BeforeMoveCallback',
@@ -179,9 +185,18 @@ function mulberry32(a) {
 // Conditions the Rust engine implements. Each list is one Rust enum, in this order;
 // every callback of a listed condition has a hand-written body in src/conditions.rs.
 // Volatile conditions sit on a Pokémon (`VolKind`).
-const VOLATILES = ['protect', 'stall', 'flinch', 'confusion', 'choicelock', 'gem', 'metronome', 'flashfire', 'unburden'];
+const VOLATILES = ['protect', 'stall', 'flinch', 'confusion', 'choicelock', 'gem', 'metronome', 'flashfire', 'unburden',
+	'followme', 'ragepowder', 'helpinghand', 'endure', 'banefulbunker', 'kingsshield', 'spikyshield',
+	'taunt', 'encore', 'disable', 'torment', 'imprison', 'attract', 'healblock', 'substitute',
+	'aquaring', 'ingrain', 'leechseed', 'focusenergy', 'dragoncheer', 'magnetrise', 'minimize', 'noretreat', 'trapped',
+	'trapper', 'octolock', 'powertrick', 'smackdown', 'saltcure', 'syrupbomb', 'throatchop', 'charge', 'destinybond',
+	'electrify', 'gastroacid', 'lockon', 'perishsong', 'yawn', 'glaiverush', 'stockpile', 'sparklingaria',
+	'partiallytrapped'];
+// Volatiles that are only a marker: Showdown has no condition data for them at all.
+const BARE_VOLATILES = new Set(['sparklingaria']);
 // Side conditions sit on one side of the field (`SideCond`).
-const SIDE_CONDS = ['tailwind', 'reflect', 'lightscreen', 'auroraveil', 'safeguard', 'spikes', 'toxicspikes', 'stealthrock', 'stickyweb'];
+const SIDE_CONDS = ['tailwind', 'reflect', 'lightscreen', 'auroraveil', 'safeguard', 'spikes', 'toxicspikes', 'stealthrock', 'stickyweb',
+	'wideguard', 'quickguard'];
 // Slot conditions sit on one active position of a side (`SlotCond`).
 const SLOT_CONDS = ['wish'];
 // Pseudo-weathers sit on the whole field (`Pseudo`).
@@ -203,9 +218,6 @@ const defer = (why, ids) => { for (const id of ids.split(' ')) DEFERRED_ABILITIE
 defer('forme changes', 'iceface');
 defer('forme changes', 'battlebond disguise gulpmissile hungerswitch shieldsdown stancechange zerotohero terashell');
 defer('Illusion and Transform', 'illusion imposter');
-defer('the Disable volatile', 'cursedbody');
-defer('the Attract volatile', 'cutecharm');
-defer('the Charge volatile', 'electromorphosis');
 defer('switching out mid-turn', 'emergencyexit wimpout');
 const SUPPORTED_ABILITIES = new Set(['noability']);
 // Modelled effects with a part that can never come up yet, because it reacts to
@@ -214,34 +226,24 @@ const SUPPORTED_ABILITIES = new Set(['noability']);
 const DORMANT_PARTS = {
 	abilities: {
 		anticipation: 'only writes to the battle log',
-		aromaveil: 'blocks Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled',
 		damp: 'blocks self-destructing moves, which are not modelled (its Aftermath block is)',
 		embodyaspectcornerstone: 'needs Terastallization, which Champions does not have',
 		embodyaspecthearthflame: 'needs Terastallization, which Champions does not have',
 		embodyaspectteal: 'needs Terastallization, which Champions does not have',
 		embodyaspectwellspring: 'needs Terastallization, which Champions does not have',
-		flowerveil: 'its Yawn block (Yawn is not modelled)',
 		forewarn: 'only writes to the battle log (its random pick is still drawn)',
 		frisk: 'only writes to the battle log',
 		gluttony: 'only matters for pinch berries, which are not in Champions',
 		guarddog: 'its block on being forced out (forced switches are not modelled)',
 		heavymetal: 'weight is only read by moves that are not modelled',
-		infiltrator: 'bypasses Substitute, which is not modelled (screens, Safeguard and Aurora Veil are)',
-		insomnia: 'its Yawn block (Yawn is not modelled)',
 		lightmetal: 'weight is only read by moves that are not modelled',
-		oblivious: 'its Attract and Taunt immunity (neither is modelled)',
 		parentalbond: 'its Secret Power special case (not in Champions)',
-		purifyingsalt: 'its Yawn block (Yawn is not modelled)',
 		stickyhold: 'its Knock Off block (Knock Off is not modelled)',
 		sturdy: 'its one-hit-KO immunity (those moves are not modelled)',
 		suctioncups: 'blocks being forced out (forced switches are not modelled)',
-		sweetveil: 'its Yawn block (Yawn is not modelled)',
-		vitalspirit: 'its Yawn block (Yawn is not modelled)',
 	},
 	items: {
-		bigroot: 'boosting Leech Seed, Ingrain, Aqua Ring and Strength Sap (only draining moves are modelled)',
-		bindingband: 'boosts binding moves, which are not modelled',
-		mentalherb: 'cures Taunt, Encore, Disable, Torment, Attract and Heal Block, none of which is modelled',
+		bigroot: 'boosting Strength Sap, which is not modelled (draining moves, Leech Seed, Ingrain and Aqua Ring are)',
 	},
 };
 // Items: everything except the ones listed here with the mechanic they wait for. (A Mega Stone is
@@ -361,7 +363,7 @@ if (process.env.VGC_ABILITIES !== undefined) {
 
 module.exports = {
 	PS, dex, MOD, FORMAT, STAT_IDS, BOOST_IDS, STATUSES, EVENTS, HAND_MOVES,
-	VOLATILES, SIDE_CONDS, SLOT_CONDS, PSEUDO_WEATHERS, WEATHERS, TERRAINS, condClass, moveCallbacks,
+	VOLATILES, BARE_VOLATILES, SIDE_CONDS, SLOT_CONDS, PSEUDO_WEATHERS, WEATHERS, TERRAINS, condClass, moveCallbacks,
 	SUPPORTED_ABILITIES, SUPPORTED_ITEMS, DEFERRED_ABILITIES, DEFERRED_ITEMS, DORMANT_PARTS,
 	unsupportedReasons, legalSpecies, learnableMoves, tableMoves, tableSpecies, mulberry32,
 	callbacks, tableAbilities, legalAbilities, tableItems,

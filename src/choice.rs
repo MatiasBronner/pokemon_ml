@@ -14,7 +14,7 @@ impl Battle {
     /// in the order picked (the first two lead), and plays the opening
     /// switch-ins. `seed` is Showdown's four 16-bit seed words.
     pub fn new(teams: [&[PokemonSet]; 2], seed: [u16; 4]) -> Result<Battle, Error> {
-        let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false };
+        let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false, hidden: false };
         let blank_mon = Pokemon {
             species: 0,
             base_species: 0,
@@ -54,6 +54,10 @@ impl Battle {
             active_turns: 0,
             move_this_turn: Res::Undef,
             move_last_turn: Res::Undef,
+            last_move: NO_MOVE,
+            last_move_loc: 0,
+            active_move_actions: 0,
+            newly_switched: true,
             speed: 0,
         };
         let blank_side = Side {
@@ -165,7 +169,7 @@ impl Battle {
                     if !d.supported {
                         return Err(Error::Unsupported(format!("move {}", d.name)));
                     }
-                    mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false };
+                    mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false, hidden: false };
                 }
                 mon.n_moves = set.moves.len() as u8;
                 b.sides[s].team[i] = mon;
@@ -203,6 +207,31 @@ impl Battle {
         m.moves[..m.n_moves as usize].iter().any(Battle::slot_usable)
     }
 
+    /// `Pokemon#isLastActive`: no living ally stands to its right.
+    fn is_last_active(&self, r: MonRef) -> bool {
+        let m = self.mon(r);
+        m.is_active && (m.position as usize + 1..ACTIVE).all(|p| self.mon(self.active(r.side as usize, p)).fainted)
+    }
+
+    /// The one move choice of a Pokémon with no usable move, which Showdown
+    /// turns into Struggle. Normally that is `move 1`. But Showdown does not
+    /// tell a side's last active Pokémon which of its moves a foe's Imprison
+    /// has sealed, so there it lists the real moves and wants the choice
+    /// spelled like a use of the first one, target included.
+    fn struggle_choice(&self, r: MonRef) -> Choice {
+        let m = self.mon(r);
+        let listed = self.is_last_active(r) && m.moves[..m.n_moves as usize].iter().any(|s| s.hidden && s.pp > 0);
+        if listed {
+            let t = MOVES[m.moves[0].id as usize].target;
+            if t.is_chosen() {
+                if let Some(loc) = [1i8, 2, -1, -2].into_iter().find(|&loc| self.valid_target_loc(loc, r, t)) {
+                    return Choice::mv(0, loc);
+                }
+            }
+        }
+        Choice::mv(0, 0)
+    }
+
     /// Every choice the given active slot may make at the current request.
     pub fn legal_choices(&self, side: usize, pos: usize) -> Vec<Choice> {
         let mut out = Vec::new();
@@ -224,7 +253,7 @@ impl Battle {
                     return out;
                 }
                 if !self.usable_moves(r) {
-                    out.push(Choice::mv(0, 0));
+                    out.push(self.struggle_choice(r));
                 } else {
                     // Any usable move can be combined with Mega Evolution.
                     let megas: &[bool] = if m.can_mega != NO_SPECIES { &[false, true] } else { &[false] };
@@ -291,7 +320,7 @@ impl Battle {
                 Choice::Move { slot, target, mega } => {
                     if !self.usable_moves(r) {
                         // Struggle; Showdown would ignore a Mega flag here, so it is not offered.
-                        return slot == 0 && target == 0 && !mega;
+                        return c == self.struggle_choice(r);
                     }
                     if slot >= m.n_moves || !Battle::slot_usable(&m.moves[slot as usize]) {
                         return false;
@@ -378,7 +407,12 @@ impl Battle {
                 match choices[side][pos] {
                     Choice::Pass => {}
                     Choice::Move { slot, target, mega } => {
-                        let id = if self.usable_moves(r) { self.mon(r).moves[slot as usize].id } else { struggle_id() };
+                        // Struggle picks its own target, whatever the choice said.
+                        let (id, target) = if self.usable_moves(r) {
+                            (self.mon(r).moves[slot as usize].id, target)
+                        } else {
+                            (struggle_id(), 0)
+                        };
                         if mega {
                             // Resolved (and queued) ahead of the move itself.
                             let a = self.resolve_mega(r);

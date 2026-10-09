@@ -19,6 +19,8 @@ pub const VOL_CAP: usize = 20;
 pub const NO_SLOT: u8 = u8::MAX;
 
 /// "No species" in fields that hold an optional species index.
+/// "No move" in fields that hold a move table index.
+pub const NO_MOVE: u16 = u16::MAX;
 pub const NO_SPECIES: u16 = u16::MAX;
 
 /// A Pokémon identified by side and by its fixed index in that side's team.
@@ -36,6 +38,9 @@ pub struct MoveSlot {
     pub maxpp: u8,
     /// Cannot be chosen this turn (Choice lock and the like). Recomputed every turn.
     pub disabled: bool,
+    /// Disabled only by something its player has not been shown (a foe's
+    /// Imprison). Showdown still lists such a move in the request it sends.
+    pub hidden: bool,
 }
 
 /// Bookkeeping Showdown attaches to every effect instance (`EffectState`).
@@ -256,6 +261,13 @@ pub struct Pokemon {
     /// Speed as last cached by Showdown's `updateSpeed`; several orderings read
     /// this stale value rather than the live stat.
     pub speed: i32,
+    /// The move this Pokémon last used since coming in (`NO_MOVE` if none), and where it aimed it.
+    pub last_move: u16,
+    pub(crate) last_move_loc: i8,
+    /// How many times it has started to move since coming in (Fake Out works while this is at most 1).
+    pub active_move_actions: u8,
+    /// Came in this turn, or has not had a turn yet.
+    pub(crate) newly_switched: bool,
 }
 
 impl Pokemon {
@@ -553,6 +565,8 @@ pub(crate) enum Res {
 
 pub(crate) const TRUE: Res = Res::Bool(true);
 pub(crate) const FALSE: Res = Res::Bool(false);
+/// Showdown's `HIT_SUBSTITUTE`, which is the number 0.
+pub(crate) const HIT_SUBSTITUTE: Res = Res::Num(0);
 
 impl Res {
     pub fn truthy(self) -> bool {
@@ -717,6 +731,8 @@ pub(crate) struct ActiveMove {
     pub prankster_boosted: bool,
     pub tracks_target: bool,
     pub infiltrates: bool,
+    /// The move has lost its `volatileStatus` (No Retreat on a Pokémon that is already trapped).
+    pub no_volatile: bool,
     pub has_bounced: bool,
     /// The ability that changed this move's type and boosts it (Pixilate and so on).
     pub type_changer_boosted: Eff,
@@ -786,6 +802,7 @@ impl ActiveMove {
             prankster_boosted: false,
             tracks_target: false,
             infiltrates: false,
+            no_volatile: false,
             has_bounced: false,
             type_changer_boosted: Eff::None,
             source_effect: Eff::None,

@@ -159,7 +159,7 @@ moves.forEach((m, index) => {
 		`off_stat: ${statIdx(m.overrideOffensiveStat)}, def_stat: ${statIdx(m.overrideDefensiveStat)}, ` +
 		`off_from_target: ${m.overrideOffensivePokemon === 'target'}, ignore_defensive: ${!!m.ignoreDefensive}, ` +
 		`ignore_evasion: ${!!m.ignoreEvasion}, thaws_target: ${!!m.thawsTarget}, ignore_immunity: ${m.ignoreImmunity === true}, ` +
-		`stalling_move: ${!!m.stallingMove}, struggle_recoil: ${!!m.struggleRecoil}, ` +
+		`stalling_move: ${!!m.stallingMove}, struggle_recoil: ${!!m.struggleRecoil}, breaks_protect: ${!!m.breaksProtect}, ` +
 		`events: ${supported ? evMask(L.moveCallbacks(m)) : '0'}, supported: ${supported} },\n`;
 });
 for (const id of L.HAND_MOVES) if (!moves.some(m => m.id === id)) throw new Error('hand-written move not in table: ' + id);
@@ -190,7 +190,7 @@ function condRows(ids, cls, prefix) {
 	let rows = '';
 	for (const id of ids) {
 		const c = dex.conditions.get(id);
-		if (!c.exists) throw new Error('unknown condition ' + id);
+		if (!c.exists && !L.BARE_VOLATILES.has(id)) throw new Error('unknown condition ' + id);
 		const [cbs, mask, maskPre] = cbTable(`CB_${prefix}_${id.toUpperCase()}`, c, 'condition', cls);
 		rows += `    CondData { id: ${rs(id)}, duration: ${c.duration || 0}, affects_fainted: ${!!c.affectsFainted}, no_copy: ${!!c.noCopy}, ` +
 			`duration_cb: ${!!c.durationCallback}, cbs: ${cbs}, events: ${mask}, events_pre: ${maskPre} },\n`;

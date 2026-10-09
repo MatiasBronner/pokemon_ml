@@ -135,6 +135,13 @@ impl Battle {
                     let slot = self.slot_index(target);
                     let am = &self.am[mi as usize];
                     if am.typ == t && (item == it::CHILANBERRY || am.hit_data[slot].type_mod > 0) {
+                        // Not for a hit its substitute is about to take.
+                        let hit_sub = self.vols(target).has(VolKind::Substitute)
+                            && am.flags & F_BYPASSSUB == 0
+                            && !am.infiltrates;
+                        if hit_sub {
+                            return Res::Undef;
+                        }
                         if self.eat_item(target, false, None, Eff::None) {
                             return self.chain_modify(2048, 4096);
                         }
@@ -197,10 +204,14 @@ impl Battle {
             // ---- Air Balloon (the levitation itself is in `is_grounded`)
             (it::AIRBALLOON, Ev::Start, Pre::On) => Res::Undef,
             // onDamagingHit: popped by any damaging hit, without counting as "used".
-            (it::AIRBALLOON, Ev::DamagingHit, Pre::On) => {
+            // onAfterSubDamage(damage, target, source, effect): and by a move that hits its substitute.
+            (it::AIRBALLOON, Ev::DamagingHit | Ev::AfterSubDamage, Pre::On) => {
                 let Some(target) = e.target else {
                     return Res::Undef;
                 };
+                if !matches!(e.effect, Eff::Move(_)) {
+                    return Res::Undef;
+                }
                 {
                     let m = self.mon_mut(target);
                     m.item = it::NONE;
@@ -213,11 +224,13 @@ impl Battle {
                 self.run_event_ex(ae, Res::Undef, false, false);
                 Res::Undef
             }
-            (it::AIRBALLOON, Ev::AfterSubDamage, Pre::On) => Res::Undef,
 
             // ---- Big Root: onTryHeal(damage, target, source, effect)
             (it::BIGROOT, Ev::TryHeal, Pre::On) => {
-                if e.effect == Eff::Drain {
+                // Draining moves, Leech Seed, Ingrain, Aqua Ring and Strength Sap.
+                if matches!(e.effect, Eff::Drain | Eff::Vol(VolKind::Leechseed | VolKind::Ingrain | VolKind::Aquaring))
+                    || self.eff_is_named(e.effect, "strengthsap")
+                {
                     return self.chain_modify(5324, 4096);
                 }
                 Res::Undef

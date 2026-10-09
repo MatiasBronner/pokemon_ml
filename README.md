@@ -8,11 +8,12 @@ matches Showdown before anything is trained on it.
 
 **Status: not yet a full simulator.** Modelled so far: the turn loop, damage,
 status conditions, switching, Mega Evolution, weather, terrain, Trick Room,
-Tailwind, screens and entry hazards, 284 of the 510 moves Champions Pokémon
-can learn, 210 of the 225 abilities and 83 of the 85 held items. Staples such
-as Fake Out, Follow Me, Helping Hand, Wide Guard and U-turn are still
-missing, so many real tournament teams cannot be played yet. See
-[What is and is not modelled](#what-is-and-is-not-modelled).
+Tailwind, screens and entry hazards, Fake Out, redirection, Protect and its
+relatives, Substitute, Taunt, Encore and the other volatile conditions; 341 of
+the 510 moves Champions Pokémon can learn, 213 of the 225 abilities and 83 of
+the 85 held items. Pivoting moves (U-turn), forced switches (Roar) and
+two-turn moves are still missing, so many real tournament teams cannot be
+played yet. See [What is and is not modelled](#what-is-and-is-not-modelled).
 
 ## Quick start
 
@@ -43,7 +44,7 @@ println!("{:?}", battle.winner);              // Some(0), Some(1) or None for a 
 ```
 
 `Battle` is `Copy`: cloning a position for search is a plain memory copy
-(about 6.1 kB). Choices use Showdown's conventions (`Choice::to_showdown`
+(about 6.3 kB). Choices use Showdown's conventions (`Choice::to_showdown`
 prints `move 2 1`, `move 1 2 mega`, `switch 3`, `pass`), so they can be sent
 to a Showdown server unchanged. A Pokémon holding its Mega Stone is offered
 every move a second time with `mega: true`; a side can Mega Evolve once.
@@ -75,18 +76,21 @@ Results for the code in this repository, against Showdown commit `ad7ca5d`
 
 | Check | Battles | Decisions | Diverged |
 |---|---|---|---|
-| Everything modelled now: field effects, Megas, abilities, items | 19,300 | 385,071 | 0 |
+| Everything modelled now | 16,900 | 364,631 | 0 |
+| Recorded before Fake Out, Substitute and the volatile conditions existed | 19,300 | 385,071 | 0 |
 | Recorded before weather and the other field effects existed | 5,500 | 101,656 | 0 |
 | Recorded before Mega Evolution | 21,000 | 393,381 | 0 |
 | Items but no abilities | 5,000 | 93,086 | 0 |
 | Neither (how the engine's first version was checked) | 15,200 | 270,196 | 0 |
-| Comparing every individual RNG draw as well | 1,900 | 37,175 | 0 |
-| 1,000-turn limit (both sides only ever switch) | 16 | 16,000 | 0 |
+| Comparing every individual RNG draw as well | 2,400 | 47,870 | 0 |
+| 1,000-turn limit (both sides only ever switch) | 24 | 24,000 | 0 |
 
 Each row compares state, RNG seed and legal choices after every decision.
-State includes the weather, terrain, pseudo-weathers and each side's
-conditions with their remaining turns. The older rows are battles recorded at
-earlier stages and replayed with the current code.
+State includes every Pokémon's volatile conditions with what they remember
+(a substitute's HP, the move an Encore holds it to), the weather, terrain,
+pseudo-weathers and each side's conditions with their remaining turns. The
+older rows are battles recorded at earlier stages and replayed with the
+current code.
 
 How the battles are made up:
 
@@ -110,8 +114,8 @@ How the battles are made up:
 - Some effects only matter in combinations that random teams almost never
   produce: Aurora Veil on a side that also has Reflect up, or a Mega Stone
   being stolen. `gen_cases.js --moves`, `--species`, `--abilities` and
-  `--items` build batches around such a combination; 2,400 of the battles in
-  the first row are of this kind.
+  `--items` build batches around such a combination; about 5,000 of the
+  battles in the first two rows are of this kind.
 
 Two further checks:
 
@@ -119,17 +123,23 @@ Two further checks:
   state rather than from the request Showdown sends the player, because the
   request deliberately hides some things (a Shadow Tag trap not yet revealed).
   `gen_cases.js --check-legal` confirms that list against Showdown's own
-  validation by submitting every conceivable choice: 750 battles, 13,999
-  decisions, no disagreement.
+  validation by submitting every conceivable choice: 1,800 battles, 38,396
+  decisions, no disagreement. (One oddity this turned up: when a foe's
+  Imprison has sealed every move of a side's last active Pokémon, Showdown
+  still lists the moves, and wants the forced Struggle spelled as a use of
+  the first one, target included. `legal_choices` spells it that way.)
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
-  replays recorded battles. Of 206 injected bugs, 204 were caught. The other
-  two cannot make a difference yet: one only matters for abilities that are
-  not modelled, the other for a self-inflicted status no modelled move causes.
-  Six of the 204 slipped past the general batches and were only caught by
-  battles built around the effect in question, which is what the targeted
-  batches above are for.
+  replays recorded battles. Of 315 injected bugs, 312 were caught. Two of the
+  other three cannot make a difference yet: one only matters for abilities
+  that are not modelled, the other for a self-inflicted status no modelled
+  move causes. The third (Electrify leaving Struggle's type alone) needs a
+  Pokémon to be electrified on a turn it is forced to Struggle, which no
+  recorded battle contains; a unit test covers it instead. Some of the bugs
+  slip past the general batches and are only caught by battles built around
+  the effect in question (six of the first 206 did), which is what the
+  targeted batches above are for.
 
 What this does **not** establish: agreement with the cartridge games where
 they differ from Showdown, or anything about mechanics outside the modelled
@@ -198,6 +208,14 @@ Modelled, and verified as above:
 - Burn, paralysis, poison, toxic, sleep and freeze with the Champions rules
   (1-in-8 full paralysis, sleep for 2 or 3 turns, freeze for at most 3)
 - Confusion, flinching, Protect with its consecutive-use counter
+- **Fake Out**, First Impression, **Follow Me / Rage Powder**, **Helping
+  Hand**, **Wide Guard / Quick Guard**, Feint, Endure, Baneful Bunker, King's
+  Shield, Spiky Shield
+- **Substitute**, with everything that does and does not get past one
+- **Taunt, Encore, Disable**, Torment, Imprison, Attract, Heal Block, Yawn,
+  Leech Seed, Perish Song, Destiny Bond, the binding moves (Wrap, Fire Spin,
+  ...), the trapping moves (Mean Look, Jaw Lock, ...), Gastro Acid, Stockpile
+  and about twenty more lingering conditions
 - **Weather** (rain, sun, sandstorm, snow) and **terrain** (Electric, Grassy,
   Misty, Psychic), with the rocks, the Terrain Extender and the seeds
 - **Trick Room**, Gravity, Magic Room, Wonder Room, Fairy Lock
@@ -208,7 +226,7 @@ Modelled, and verified as above:
   moves, stat-override moves (Body Press, Foul Play, Psyshock)
 - Switching, fainting, replacements, PP, Struggle, trapping, disabled moves,
   win and tie conditions, the 1,000-turn limit
-- **210 abilities**, including Intimidate and everything that answers it,
+- **213 abilities**, including Intimidate and everything that answers it,
   the weather and terrain setters and everything that feeds on them, the
   absorbing and contact abilities, Mold Breaker, Prankster, Magic Bounce,
   Parental Bond, Trace, Protean, Unaware, Sheer Force, Shadow Tag
@@ -219,23 +237,25 @@ Modelled, and verified as above:
 
 Not modelled yet:
 
-- Fake Out, Follow Me / Rage Powder, Helping Hand, Wide Guard, Quick Guard
 - Pivoting moves (U-turn, Parting Shot), forced switches (Roar)
-- Two-turn and recharge moves, Substitute, Encore, Taunt, Disable
+- Two-turn moves (Fly, Solar Beam), recharge moves (Hyper Beam), rampages
+  (Outrage), Counter and Focus Punch
+- Moves whose power depends on the state of the battle (Acrobatics, Gyro
+  Ball, Eruption, ...), moves that tamper with items (Knock Off, Trick) and
+  about a hundred other moves with a script of their own
 - Team preview itself: the engine starts from the four Pokémon picked
-- **15 abilities**: 9 that change forme (Stance Change, Disguise, ...),
-  Illusion and Imposter, and Cursed Body, Cute Charm, Electromorphosis and
-  Emergency Exit, which need a mechanic from the list above
+- **12 abilities**: 9 that change forme (Stance Change, Disguise, ...),
+  Illusion and Imposter, and Emergency Exit, which needs switching mid-turn
 - **2 items**: Eject Button and Red Card
 
 `oracle/coverage.json` has the full lists with the mechanic each one waits
-for. It also lists the *dormant parts* of modelled effects: Mental Herb cures
-Taunt and Encore, which do not exist yet; Aroma Veil blocks six conditions of
-which none is modelled. These effects are exact for every battle the engine
-accepts, but each has to be revisited when the missing mechanic arrives, and
-the list says which. (That list earned its keep: adding field effects woke up
-branches of Armor Tail, Synchronize, Screen Cleaner and Iron Ball that had
-been unreachable, and the fuzzer found each within 6,000 battles.)
+for. It also lists the *dormant parts* of modelled effects: Damp blocks
+self-destructing moves, which do not exist yet; Sticky Hold would stop Knock
+Off. These effects are exact for every battle the engine accepts, but each
+has to be revisited when the missing mechanic arrives, and the list says
+which. (That list earns its keep: each new mechanic so far has woken up
+branches of older effects, such as Armor Tail, Screen Cleaner, Mental Herb
+and the resist berries, and the list said where to look.)
 
 For moves, `coverage.json` lists every unmodelled one and the Showdown feature
 blocking it. The largest groups are moves with their own lingering condition,
@@ -279,9 +299,10 @@ Xeon:
 
 | Teams | Battles/s | Decisions/s |
 |---|---|---|
-| No abilities or items | about 11,000 | about 190,000 |
-| Random abilities and items | about 6,000 | about 115,000 |
-| The same with weather, terrain and the other field effects in play | about 5,500 | about 110,000 |
+| No abilities or items | about 9,400 | about 165,000 |
+| Random abilities and items | about 5,500 | about 105,000 |
+| The same with weather, terrain and the other field effects in play | about 5,000 | about 100,000 |
+| The same with Substitute, Encore and the other volatile conditions in play | about 4,500 | about 97,000 |
 
 The event system roughly halved the speed of the first version, which ran
 about 20,000 battles per second with nothing to dispatch. Nothing has been
@@ -291,12 +312,12 @@ matter.
 
 ## Suggested order for what comes next
 
-1. **Fake Out, redirection (Follow Me, Rage Powder), Helping Hand, Wide
-   Guard**, and the remaining volatile conditions (Substitute, Taunt, Encore,
-   Disable).
+1. **Two-turn moves, recharging and rampages**, and the moves with a script
+   of their own (power that depends on the battle, item and ability
+   tampering).
 2. **Pivoting and forced switches**, with Emergency Exit, Eject Button and
    Red Card.
-3. The remaining moves and the forme-changing abilities.
+3. The forme-changing abilities, Illusion and Transform.
 4. **Building a `Battle` from an arbitrary mid-battle state**, which a bot
    needs to search from a live game, and sampling hidden information into it.
 5. Python bindings and batched stepping for training.

@@ -817,6 +817,38 @@ impl Battle {
                 Res::Undef
             }
 
+            // ---- Cursed Body: onDamagingHit(damage, target, source, move)
+            (ab::CURSEDBODY, Ev::DamagingHit, Pre::On) => {
+                let (Some(m), Some(source)) = (mi, e.source) else {
+                    return Res::Undef;
+                };
+                if self.has_vol_named(source, "disable") {
+                    return Res::Undef;
+                }
+                let am = &self.am[m as usize];
+                if am.flags & F_FUTUREMOVE == 0 && am.id != mv::STRUGGLE && self.chance(3, 10, "cursed body") {
+                    self.add_volatile(source, VolKind::Disable, Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Cute Charm: onDamagingHit(damage, target, source, move)
+            (ab::CUTECHARM, Ev::DamagingHit, Pre::On) => {
+                let (Some(m), Some(source)) = (mi, e.source) else {
+                    return Res::Undef;
+                };
+                if self.makes_contact(m) && self.chance(3, 10, "cute charm") {
+                    self.add_volatile(source, VolKind::Attract, Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Electromorphosis: onDamagingHit(damage, target, source, move)
+            (ab::ELECTROMORPHOSIS, Ev::DamagingHit, Pre::On) => {
+                self.add_volatile(holder, VolKind::Charge, None, Eff::None);
+                Res::Undef
+            }
+
             // ---- Effect Spore: onDamagingHit(damage, target, source, move)
             (ab::EFFECTSPORE, Ev::DamagingHit, Pre::On) => {
                 let (Some(m), Some(source)) = (mi, e.source) else {
@@ -909,13 +941,27 @@ impl Battle {
                 let Some(target) = e.target else {
                     return Res::Undef;
                 };
-                if self.has_type(target, Type::Grass) && e.source.is_some() && e.target != e.source {
+                // (Sleep from a Yawn that got through is not its business.)
+                if self.has_type(target, Type::Grass)
+                    && e.source.is_some()
+                    && e.target != e.source
+                    && e.effect != Eff::None
+                    && e.effect != Eff::Vol(VolKind::Yawn)
+                {
                     return Res::Null;
                 }
                 Res::Undef
             }
-            // onAllyTryAddVolatile(status, target): only blocks Yawn, which is not modelled.
-            (ab::FLOWERVEIL | ab::SWEETVEIL, Ev::TryAddVolatile, Pre::Ally) => Res::Undef,
+            // onAllyTryAddVolatile(status, target): blocks Yawn (Flower Veil only for Grass types).
+            (ab::FLOWERVEIL | ab::SWEETVEIL, Ev::TryAddVolatile, Pre::Ally) => {
+                let grass_only = ability == ab::FLOWERVEIL;
+                if e.vol == Some(VolKind::Yawn)
+                    && (!grass_only || e.target.is_some_and(|t| self.has_type(t, Type::Grass)))
+                {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
 
             // ---- Fluffy: onSourceModifyDamage(damage, source, target, move)
             (ab::FLUFFY, Ev::ModifyDamage, Pre::Source) => {
@@ -1112,14 +1158,21 @@ impl Battle {
                 self.block_intimidate()
             }
 
-            // ---- Insomnia / Vital Spirit / Purifying Salt: onTryAddVolatile only blocks Yawn, which is not modelled.
-            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => Res::Undef,
+            // ---- Insomnia / Vital Spirit / Purifying Salt: onTryAddVolatile(status, target) blocks Yawn.
+            (ab::INSOMNIA | ab::VITALSPIRIT | ab::PURIFYINGSALT, Ev::TryAddVolatile, Pre::On) => {
+                if e.vol == Some(VolKind::Yawn) {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
 
             // ---- Intimidate: onStart(pokemon)
             (ab::INTIMIDATE, Ev::Start, Pre::On) => {
                 let (foes, n) = self.allies_and_self(1 - holder.side as usize);
                 for &f in &foes[..n] {
-                    self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);
+                    if !self.has_vol_named(f, "substitute") {
+                        self.boost1(ATK, -1, Some(f), Some(holder), Eff::None);
+                    }
                 }
                 Res::Undef
             }
@@ -1177,7 +1230,10 @@ impl Battle {
 
             // ---- Liquid Ooze: onSourceTryHeal(damage, target, source, effect)
             (ab::LIQUIDOOZE, Ev::TryHeal, Pre::Source) => {
-                if e.effect == Eff::Drain {
+                // Draining moves, Leech Seed and Strength Sap.
+                if matches!(e.effect, Eff::Drain | Eff::Vol(VolKind::Leechseed))
+                    || self.eff_is_named(e.effect, "strengthsap")
+                {
                     self.damage(relay.num(), None, None, Eff::None);
                     return Res::Num(0);
                 }
@@ -1476,8 +1532,27 @@ impl Battle {
                 relay
             }
 
-            // ---- Oblivious: Attract and Taunt are not modelled, so only the Intimidate block does anything.
-            (ab::OBLIVIOUS, Ev::Update | Ev::Immunity | Ev::TryHit, Pre::On) => Res::Undef,
+            // ---- Oblivious (its Intimidate block is with Inner Focus)
+            // onUpdate(pokemon)
+            (ab::OBLIVIOUS, Ev::Update, Pre::On) => {
+                self.remove_volatile(holder, VolKind::Attract);
+                self.remove_volatile(holder, VolKind::Taunt);
+                Res::Undef
+            }
+            // onImmunity(type, pokemon)
+            (ab::OBLIVIOUS, Ev::Immunity, Pre::On) => {
+                if e.imm == Some(Imm::Vol(VolKind::Attract)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onTryHit(pokemon, target, move)
+            (ab::OBLIVIOUS, Ev::TryHit, Pre::On) => {
+                if mi.is_some_and(|m| matches!(self.am[m as usize].id, mv::ATTRACT | mv::TAUNT)) {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
 
             // ---- Opportunist. `ability_boosts` holds the copies waiting to be applied,
             // `ability_st.a` whether Showdown's `effectState.boosts` exists at all.
@@ -2047,7 +2122,9 @@ impl Battle {
                 self.mon_mut(holder).syrup_triggered = true;
                 let (foes, n) = self.allies_and_self(1 - holder.side as usize);
                 for &f in &foes[..n] {
-                    self.boost1(EVA, -1, Some(f), Some(holder), Eff::None);
+                    if !self.has_vol_named(f, "substitute") {
+                        self.boost1(EVA, -1, Some(f), Some(holder), Eff::None);
+                    }
                 }
                 Res::Undef
             }

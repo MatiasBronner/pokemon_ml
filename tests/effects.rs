@@ -3,8 +3,8 @@
 //! `parity.rs` and `scripts/fuzz.sh`; these only pin down outcomes that do not
 //! depend on the random number generator.
 
-use vgc_engine::data::{ABILITIES, ATK, Pseudo, SPECIES, SideCond, Type, Weather};
-use vgc_engine::{Battle, Choice, Error, PokemonSet};
+use vgc_engine::data::{ABILITIES, ATK, Pseudo, SPA, SPECIES, SideCond, Type, Weather};
+use vgc_engine::{Battle, Choice, Error, PokemonSet, VolKind};
 
 fn set(species: &str, moves: &[&str]) -> PokemonSet {
     PokemonSet::from_names(species, moves, "Hardy", [0; 6]).unwrap()
@@ -114,9 +114,9 @@ fn effects_that_are_not_modelled_are_refused() {
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
     let mut p2 = filler();
-    p2[0] = set("Incineroar", &["Fake Out", "Protect"]);
+    p2[0] = set("Incineroar", &["U-turn", "Protect"]);
     match Battle::new([&p1, &p2], seed()) {
-        Err(Error::Unsupported(what)) => assert!(what.contains("Fake Out"), "{what}"),
+        Err(Error::Unsupported(what)) => assert!(what.contains("U-turn"), "{what}"),
         other => panic!("expected an unsupported error, got {:?}", other.map(|_| ())),
     }
 }
@@ -184,6 +184,111 @@ fn mega_evolution_changes_stats_type_and_ability_once_per_side() -> Result<(), E
     assert!(m.stats[ATK + 1] > before[ATK + 1]);
     // One Mega Evolution per side: Venusaur has lost its chance.
     assert!(!b.legal_choices(0, 1).contains(&mega));
+    Ok(())
+}
+
+#[test]
+fn fake_out_flinches_once_and_is_then_unavailable() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Incineroar", &["Fake Out", "Protect"]);
+    let mut p2 = filler();
+    p2[0] = set("Snorlax", &["Calm Mind", "Protect"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let fake_out = |c: &Choice| matches!(c, Choice::Move { slot: 0, .. });
+    assert!(b.legal_choices(0, 0).iter().any(fake_out));
+
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [Choice::mv(0, 0), protect]])?;
+    let snorlax = b.active(1, 0);
+    assert!(b.mon(snorlax).hp < b.mon(snorlax).max_hp());
+    assert_eq!(b.mon(snorlax).boosts[SPA], 0, "Snorlax flinched instead of using Calm Mind");
+    assert!(!b.legal_choices(0, 0).iter().any(fake_out), "Fake Out only works on the first turn out");
+    Ok(())
+}
+
+#[test]
+fn follow_me_redirects_single_target_moves() -> Result<(), Error> {
+    let p1 = filler();
+    let mut p2 = filler();
+    p2[0] = set("Snorlax", &["Calm Mind", "Protect"]);
+    p2[1] = set("Clefable", &["Follow Me", "Protect"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    // Snorlax aims Body Slam at the foe on the left; Clefable, on the right, calls it over.
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [Choice::mv(0, 0), Choice::mv(0, 0)]])?;
+    let (left, clefable) = (b.active(1, 0), b.active(1, 1));
+    assert_eq!(b.mon(left).hp, b.mon(left).max_hp());
+    assert!(b.mon(clefable).hp < b.mon(clefable).max_hp());
+    Ok(())
+}
+
+#[test]
+fn a_substitute_costs_a_quarter_of_max_hp_and_blocks_status_moves() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Snorlax", &["Substitute", "Protect"]);
+    let mut p2 = filler();
+    p2[0] = set("Clefable", &["Charm", "Protect"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 0), protect], [protect, protect]])?;
+    let snorlax = b.active(0, 0);
+    let max = b.mon(snorlax).max_hp();
+    assert_eq!(b.mon(snorlax).hp, max - max / 4);
+    assert!(b.vols(snorlax).has(VolKind::Substitute));
+
+    // Charm never misses, but it cannot get past the substitute.
+    b.choose([[Choice::mv(0, 0), protect], [Choice::mv(0, 1), protect]])?;
+    assert_eq!(b.mon(snorlax).boosts[ATK], 0);
+    assert!(b.vols(snorlax).has(VolKind::Substitute));
+    Ok(())
+}
+
+#[test]
+fn taunt_takes_status_moves_off_the_menu() -> Result<(), Error> {
+    let p1 = filler();
+    let mut p2 = filler();
+    p2[0] = set("Arcanine", &["Taunt", "Protect"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 1), protect], [Choice::mv(0, 1), protect]])?;
+    if b.ended || b.mon(b.active(0, 0)).fainted {
+        return Ok(());
+    }
+    // Snorlax knows Body Slam (slot 0) and Protect (slot 1).
+    let slots: Vec<u8> = b
+        .legal_choices(0, 0)
+        .iter()
+        .filter_map(|c| match c {
+            Choice::Move { slot, .. } => Some(*slot),
+            _ => None,
+        })
+        .collect();
+    assert!(slots.contains(&0) && !slots.contains(&1), "only the attack is offered, got {slots:?}");
+    Ok(())
+}
+
+/// A Pokémon locked into a status move by its Choice Scarf and then taunted can
+/// only Struggle. Electrify turns its target's move Electric, but not Struggle.
+#[test]
+fn electrify_does_not_change_the_type_of_struggle() -> Result<(), Error> {
+    let mut p1 = filler();
+    p1[0] = set("Snorlax", &["Swords Dance", "Body Slam"]).item("Choice Scarf")?;
+    let mut p2 = filler();
+    // Two Ground types: an Electric Struggle would do nothing to either.
+    // Hippowdon is slower than a scarfed Snorlax, so its Taunt lands after the Swords Dance.
+    p2[0] = set("Garchomp", &["Protect", "Electrify"]);
+    p2[1] = set("Hippowdon", &["Taunt", "Slack Off"]);
+    let mut b = Battle::new([&p1, &p2], seed())?;
+    let protect = Choice::mv(1, 0);
+    b.choose([[Choice::mv(0, 0), protect], [Choice::mv(0, 0), Choice::mv(0, 1)]])?;
+    let snorlax = b.active(0, 0);
+    assert_eq!(b.legal_choices(0, 0).iter().filter(|c| matches!(c, Choice::Move { .. })).count(), 1);
+    let before: u32 = (0..2).map(|pos| b.mon(b.active(1, pos)).hp as u32).sum();
+
+    b.choose([[Choice::mv(0, 0), protect], [Choice::mv(1, 1), Choice::mv(1, 0)]])?;
+    let after: u32 = (0..2).map(|pos| b.mon(b.active(1, pos)).hp as u32).sum();
+    assert!(after < before, "Struggle hit a Ground type, so it was not Electric");
+    assert!(b.mon(snorlax).hp < b.mon(snorlax).max_hp(), "and Snorlax took Struggle's recoil");
     Ok(())
 }
 

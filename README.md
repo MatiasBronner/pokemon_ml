@@ -13,7 +13,9 @@ below. Any team that is legal in the format can be played, from turn 1 or
 [from any position in the middle of a battle](#starting-from-the-middle-of-a-battle),
 and the engine keeps track of
 [what each player has been shown](#what-each-side-has-been-shown) of the
-other's team.
+other's team. On top of it sit a [training environment](#training-a-bot)
+that steps thousands of games at once and hands each side's view to a model
+as arrays, and a first, small self-play learner in PyTorch.
 
 ## Quick start
 
@@ -265,6 +267,124 @@ Two things to know about what comes out:
   and `teampool` will not write a pool with no teams in it.
   `scripts/check_scraper.py` checks both steps without a network, on a
   made-up tournament whose answers have the shape of the real ones.
+
+## Training a bot
+
+The pieces, from the engine up:
+
+| | | |
+|---|---|---|
+| `src/env.rs` | Rust | a game as a run of decisions (Team Preview, then the battle), actions as numbers, many games stepped at once on all cores |
+| `src/obs.rs` | Rust | one side's view of a game written straight into arrays |
+| `src/python.rs` | Rust | the two above as a Python module that fills NumPy arrays in place |
+| `python/pokemon_ml/model.py` | PyTorch | embeddings, a small transformer, policy and value heads |
+| `python/pokemon_ml/ppo.py`, `train.py` | PyTorch | PPO self-play, evaluation against two fixed players, checkpoints |
+
+```sh
+python3 -m venv .venv && source .venv/bin/activate
+pip install maturin numpy torch pytest
+maturin develop --release                      # builds the engine into the Python package
+python -m pokemon_ml.train --pool teams/2027-frankfurt.json --run runs/first
+```
+
+`train` plays `--envs` games at once (512) with the network on both sides,
+updates it every `--steps` decisions (64), and every `--eval-every` updates
+plays it against a player that picks at random and one that picks its
+strongest attack. It saves `runs/first/checkpoint.pt` as it goes, when
+`--hours` of wall-clock time are up and on Ctrl-C, and the same command
+carries on from there, so a job with a time limit loses nothing. The
+network's sizes are flags (`--width 128 --layers 3 --heads 4 --ff 256`,
+about 920,000 parameters); `--help` lists the rest.
+
+### What a model is given
+
+One observation is one side's view at one decision
+(`python/pokemon_ml/env.py` names the parts; `src/obs.rs` documents every number):
+
+- **The field**: weather, terrain, Trick Room and the like, each side's
+  screens, Tailwind and hazards, the turn, whether the team sheets are open.
+- **Twelve Pokémon**, the player's six and the opponent's six in Team
+  Preview order, so that a token is one Pokémon from Team Preview to the end.
+  The player's own are given in full. The opponent's are given as
+  [the battle has shown them](#what-each-side-has-been-shown): species, HP as
+  the bar shows it, status, and the item, ability and moves that have come to
+  light or are on an open team sheet. What is not known is the id "unknown",
+  not a guess. Never the opponent's stats.
+- **The four positions on the field**: who stands there, stat stages, types,
+  the conditions it is under, the move it last used.
+- **The eight moves** the player's two active Pokémon can pick from.
+- **What is legal**, as a mask.
+
+Species, items, abilities and moves are ids for the model to embed, and the
+module hands over a table of static data for each (`TABLES`: a species'
+types and base stats; a move's type, power, accuracy, priority, target and
+effects). There is no damage calculator and no usage statistics in it: the
+state of the game and what things are, as in the two write-ups this follows
+([Jaxcalibur](https://jaxcalibur.github.io/) for singles, and mikumiku37's
+account of adapting it to this format).
+
+Two things are done to keep hidden information hidden. The conditions an
+unrevealed item or ability keeps on a Pokémon (a Choice lock) are left out of
+the opponent's view. And a weather, a terrain or a screen is given by how
+long it has been up, not how long it has left, since an item the opponent
+may not have seen makes it last 8 turns for 5. `tests/env.rs` rebuilds the
+opponent's half of the observation from `Battle::shown` alone at every
+decision of 80 games and requires it to be the same.
+
+### What a model answers
+
+At Team Preview, one of the 90 ways to pick two leads and two more. In
+battle, one action for each of the side's two positions, out of 47: a move
+with its target and whether to Mega Evolve first, a switch to one of its six
+by name, or a pass (`src/env.rs` has the table). The second position is
+chosen given the first, since the two cannot switch to the same Pokémon or
+both Mega Evolve.
+
+### The network and the learning
+
+The observation becomes 25 tokens (the field, twelve Pokémon, four
+positions, eight moves) that a transformer mixes. A Pokémon's token is the
+sum of the embeddings of its species, item, ability and moves and a
+projection of its numbers. The policy is read off the tokens that stand for
+what it can pick: a move's logits from the move's token and its target's, a
+switch's from the token of the Pokémon coming in, Team Preview from pairs of
+the player's own six. The value is read off the field token.
+
+Learning is PPO with generalized advantage estimation on games the network
+plays against itself. The only reward is the result (1 for a win, -1 for a
+loss, when the game ends), undiscounted, with an entropy bonus and
+Jaxcalibur's term that keeps every legal action from dying out. Teams come
+from the pool, [varied from game to game](#teams-from-tournaments), half the
+games with open team sheets and half without.
+
+### How fast, and what has been checked
+
+`cargo run --release --bin envbench` measures the environment by itself: on
+one core of a 2.1 GHz cloud Xeon it steps about 54,000 decisions a second
+with random players, writing both sides' observations at every one (18.5 µs a
+decision, of which the battle itself is about 12), and scales with cores. A
+network on a GPU will be the slower half of the loop. Training speed on a
+GPU has not been measured: the machine this was written on has none, and its
+two cores train the default network at a few hundred decisions a second.
+
+What has been checked is that the machinery is right, not that the default
+settings are good ones: `tests/env.rs` (actions and choices agree, the masks
+are exactly the legal actions, nothing hidden is in the opponent's view, a
+fixed seed replays the same games) and `python/tests` (a choice's
+probability is the same when it is made and when it is learned from, the
+advantages match a calculation by hand, and 25 updates of a tiny network
+raise its win rate against the random player). A longer run on that machine,
+a quarter-size network on 100 random legal teams for 150 updates (43,000
+games, 17 minutes), went from 50% to 99% against the random player and from
+about 20% to about 50% against the greedy one, and stopped and resumed from
+its checkpoint. That shows the loop learns. It says nothing yet about how
+strong the default network gets on real teams with a GPU.
+
+This is a first learner, kept simple on purpose. Not in it yet: a league of
+past versions to play against (self-play against only the current network
+can go in circles), tokens for what happened on earlier turns, heads that
+predict the opponent's hidden sets and next action (which Jaxcalibur found
+worth a lot), and search at play time.
 
 ## What each side has been shown
 
@@ -804,6 +924,9 @@ src/choice.rs      Battle::new, legal choices, submitting choices
 src/position.rs    a position as data: Battle::to_state, Battle::from_state, JSON
 src/format.rs      a regulation as data: Format, the team validator, random legal teams
 src/teams.rs       teams from outside: reading team sheets, guessing stat points, a pool of teams
+src/env.rs         games for a model to play: Team Preview, actions as numbers, many games at once
+src/obs.rs         one side's view of a game as arrays, and static data to embed ids with
+src/python.rs      the two above as a Python module (feature `python`, built by maturin)
 src/shown.rs       what the battle has shown of each Pokémon: Battle::shown
 src/observer.rs    the same, read from Showdown's log
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
@@ -811,7 +934,9 @@ src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
-src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs
+src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs, src/bin/envbench.rs
+python/pokemon_ml/  the learner: env.py, model.py, ppo.py, train.py; python/tests/ checks them (pytest)
+pyproject.toml     how maturin builds the engine into that package
 oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
 oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
@@ -829,6 +954,7 @@ tests/format.rs    legal and illegal teams, a second regulation, fixtures of tea
 tests/shown.rs     what each side has been shown, as examples; a fixture of battles recorded with their logs
 tests/perish_trap.rs  the perish trap, step by step, on battles played out in Showdown from a script
 tests/teams.rs     team sheets read, stat points guessed, a pool saved, loaded and played
+tests/env.rs       the training environment: actions, masks, what each side is given, many games at once
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -862,23 +988,22 @@ likely first steps when speed starts to matter.
 
 ## What comes next
 
-1. **Team preview**: bringing six and picking four, as a decision the engine
-   asks for. (The teams as registered are already there:
-   `Battle::with_rosters`.)
-2. **The observation and the action space**: one view of the battle for a
-   policy (its own side, `shown` of the other, the public field) and the
-   encoding of choices. What goes into it depends on the model that will
-   read it.
-3. **Python bindings and batched stepping** for training.
-4. **Sampling hidden information** into a position: the opponent's
-   unrevealed moves, items, abilities, spreads and bench, drawn from a prior
-   (usage statistics, or the bot's own model) and consistent with what has
-   been shown.
+1. **A league.** Past versions of the network as opponents, so that
+   self-play cannot go in circles, and a rating of each checkpoint against
+   the others.
+2. **More for the network to go on**: tokens for the last turns' events, and
+   heads that predict the opponent's hidden sets and next action.
+3. **Sampling hidden information** into a position: the opponent's
+   unrevealed moves, items, abilities, spreads and bench, drawn from the
+   network's own predictions and consistent with what has been shown. This
+   is what search needs.
+4. **Search at play time**: one turn ahead as the simultaneous game it is,
+   over sampled worlds.
 5. **A Showdown client** that feeds the log to `observer` and plays the
    policy's choices.
 6. **Searching for teams**: the regulation file gives the space of legal
    teams and steps that stay inside it; scoring a team needs a pool of
-   opponents and a policy to play it, so this follows the bot.
+   opponents and a policy to play it.
 7. **Speed.** The per-Pokémon listener cache described above, then
    profiling.
 8. Keeping up with Showdown: `scripts/setup-oracle.sh` pins a commit; after

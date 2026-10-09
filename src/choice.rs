@@ -298,11 +298,11 @@ impl Battle {
     }
 
     /// Whether a move slot can be chosen (`Pokemon#getMoves`: PP left and not disabled).
-    fn slot_usable(s: &MoveSlot) -> bool {
+    pub(crate) fn slot_usable(s: &MoveSlot) -> bool {
         s.pp > 0 && !s.disabled
     }
 
-    fn usable_moves(&self, r: MonRef) -> bool {
+    pub(crate) fn usable_moves(&self, r: MonRef) -> bool {
         let m = self.mon(r);
         m.moves[..m.n_moves as usize].iter().any(Battle::slot_usable)
     }
@@ -479,7 +479,7 @@ impl Battle {
     /// switching to the same Pokémon, only one Mega Evolution, and at a switch
     /// request every open slot filled while replacements last.
     #[inline(always)]
-    fn pair_ok(&self, side: usize, c: &[Choice; ACTIVE]) -> bool {
+    pub(crate) fn pair_ok(&self, side: usize, c: &[Choice; ACTIVE]) -> bool {
         if let (Choice::Switch { to: a }, Choice::Switch { to: b }) = (c[0], c[1]) {
             if a == b {
                 return false;

@@ -9,13 +9,17 @@ pub mod battle;
 mod choice;
 mod conditions;
 pub mod data;
+pub mod env;
 mod events;
 pub mod format;
 mod items;
 mod movecbs;
 mod moves;
+pub mod obs;
 pub mod observer;
 pub mod position;
+#[cfg(feature = "python")]
+mod python;
 pub mod replay;
 #[rustfmt::skip]
 mod tables;

@@ -735,7 +735,7 @@ impl Battle {
     }
 
     /// HP and status of `r` as the log has them now.
-    fn shown_condition(&self, r: MonRef) -> (u8, Bar, Status) {
+    pub(crate) fn shown_condition(&self, r: MonRef) -> (u8, Bar, Status) {
         let m = self.mon(r);
         let (hp, bar) = hp_shown(m.hp, m.max_hp());
         (hp, bar, if m.hp == 0 { Status::None } else { m.status })

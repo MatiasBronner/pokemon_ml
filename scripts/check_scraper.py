@@ -109,7 +109,7 @@ def main():
         print(scraped.stdout.strip())
         assert scraped.returncode == 0, scraped.stderr
         out = os.path.join(tmp, 'nowhere.json')
-        pooled = subprocess.run([os.path.join(REPO, 'target', 'release', 'teampool'), raw, '--out', out, '--play', '200'],
+        pooled = subprocess.run([os.path.join(REPO, 'target', 'release', 'teampool'), raw, '--out', out, '--play', '2000', '--vary'],
                                 capture_output=True, text=True)
         print(pooled.stdout.strip())
         assert pooled.returncode == 0, pooled.stderr

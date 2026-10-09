@@ -1,7 +1,7 @@
 //! Turns team sheets collected by `scripts/scrape_teams.py` into a pool of teams the engine can play.
 //!
 //!     teampool teams/raw/2027-frankfurt.json [--out teams/2027-frankfurt.json]
-//!              [--section TEXT] [--top N] [--play N] [--seed S]
+//!              [--section TEXT] [--top N] [--play N] [--vary] [--seed S]
 //!
 //! Reads each sheet, fills in the stat points a sheet does not give (by rule
 //! of thumb: see `vgc_engine::teams::guess_spread`), checks the team against
@@ -9,7 +9,10 @@
 //! out and why. `--section` keeps only the teams whose heading at the source
 //! contains the text (a division, say); `--top` only the first N of those.
 //! `--play N` then plays N battles between teams of the pool, picked and
-//! played at random, as a check that every one of them runs.
+//! played at random, as a check that every one of them runs; with `--vary`
+//! the teams are varied the way training will vary them
+//! (`vgc_engine::teams::Variation`: stat points moved, Pokémon swapped in
+//! from other teams).
 
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -18,8 +21,8 @@ use serde::Deserialize;
 use vgc_engine::data::{SPECIES, species_id, to_id};
 use vgc_engine::format::Format;
 use vgc_engine::rng::Rng;
-use vgc_engine::teams::{Pool, PoolTeam, guess_spread, read_sheet};
-use vgc_engine::{ACTIVE, Battle, PokemonSet};
+use vgc_engine::teams::{Pool, PoolTeam, Sampler, Variation, guess_spread, read_sheet};
+use vgc_engine::{ACTIVE, Battle};
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
@@ -67,6 +70,7 @@ fn main() {
     let mut top = usize::MAX;
     let mut play = 0usize;
     let mut seed = 1u16;
+    let mut vary = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         let mut number = |what: &str| {
@@ -76,12 +80,14 @@ fn main() {
             "--top" => top = number("--top"),
             "--play" => play = number("--play"),
             "--seed" => seed = number("--seed") as u16,
+            "--vary" => vary = true,
             "--out" => out = args.next(),
             "--section" => section = args.next(),
             _ => path = Some(a),
         }
     }
-    let path = path.expect("usage: teampool RAW.json [--out FILE] [--section TEXT] [--top N] [--play N] [--seed S]");
+    let path =
+        path.expect("usage: teampool RAW.json [--out FILE] [--section TEXT] [--top N] [--play N] [--vary] [--seed S]");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {path}: {e}"));
     let raw: Raw =
         serde_json::from_str(&text).unwrap_or_else(|e| panic!("{path} is not what scrape_teams.py writes: {e}"));
@@ -181,13 +187,16 @@ fn main() {
     println!("wrote {out}");
 
     if play > 0 && !pool.teams.is_empty() {
-        let teams: Vec<Vec<PokemonSet>> = pool.teams.iter().map(|t| t.sets().expect("a legal team")).collect();
+        let sampler = Sampler::new(&pool).expect("the pool was just checked");
+        let how = if vary { Variation::default() } else { Variation::NONE };
         let mut rng = Rng::from_words([seed, 2, 3, 4]);
-        let mut below = |n: usize| rng.below(n as u32) as usize;
-        let (mut decisions, mut turns) = (0u64, 0u64);
+        let (mut decisions, mut turns, mut swapped, mut respread) = (0u64, 0u64, 0u64, 0u64);
         let start = Instant::now();
         for _ in 0..play {
-            let sides = [below(teams.len()), below(teams.len())];
+            let sides = [sampler.sample(&mut rng, &how), sampler.sample(&mut rng, &how)];
+            swapped += sides.iter().map(|s| s.swapped as u64).sum::<u64>();
+            respread += sides.iter().map(|s| s.respread as u64).sum::<u64>();
+            let mut below = |n: usize| rng.below(n as u32) as usize;
             // Four of the six, in a random order.
             let mut picks = [[0usize; 4]; 2];
             for pick in &mut picks {
@@ -198,7 +207,7 @@ fn main() {
                 pick.copy_from_slice(&order[..4]);
             }
             let seed = [below(65536) as u16, below(65536) as u16, below(65536) as u16, below(65536) as u16];
-            let mut b = Battle::with_rosters([&teams[sides[0]], &teams[sides[1]]], [&picks[0], &picks[1]], true, seed)
+            let mut b = Battle::with_rosters([&sides[0].team, &sides[1].team], [&picks[0], &picks[1]], true, seed)
                 .expect("a legal team starts a battle");
             while !b.ended && b.turn <= 300 {
                 let mut choice = [[vgc_engine::Choice::Pass; ACTIVE]; 2];
@@ -218,5 +227,11 @@ fn main() {
             decisions as f64 / secs,
             turns as f64 / play as f64
         );
+        if vary {
+            println!(
+                "  varied: of {} teams fielded, {swapped} Pokémon were swapped in from other teams and {respread} had their stat points moved",
+                2 * play
+            );
+        }
     }
 }

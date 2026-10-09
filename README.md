@@ -226,16 +226,35 @@ let (ours, theirs) = (pool.teams[0].sets()?, pool.teams[7].sets()?);
 let battle = Battle::with_rosters([&ours, &theirs], [&[0, 1, 2, 3], &[0, 2, 4, 5]], true, seed)?;
 ```
 
+A tournament's teams are a few hundred points in a very large space, so
+`teams::Sampler` hands them out varied, a little differently each battle:
+
+```rust
+use vgc_engine::teams::{Sampler, Variation};
+
+let sampler = Sampler::new(&pool)?;
+let drawn = sampler.sample(&mut rng, &Variation::default());   // drawn.team: six Pokémon, always legal
+```
+
+`Variation` says how much. By default a quarter of the Pokémon have some of
+their stat points moved from one stat to another they have a use for (the
+total stays the same), one team in seven has a Pokémon replaced by one from
+another team of the pool, as that team had it, and one in twenty has two
+replaced. A replacement that would break the regulation is drawn again.
+`Variation::NONE` gives the teams as they are. `teampool --play N --vary`
+plays its check with varied teams and says how many were changed.
+
 Two things to know about what comes out:
 
 - **The stat points are guesses.** An open team sheet gives species, item,
   ability, moves and nature, and never how the 66 stat points are spent.
   `teams::guess_spread` spends them by rule of thumb from the nature and the
   moves (32 in each of two stats, 2 in a third: attack and Speed for a Jolly
-  Garchomp, HP and Special Defense for a Careful Incineroar). Every team it
-  did this to is marked `spreads_guessed`. Real spreads are finer, and
-  finding better ones is a job for later; a paste that does give stat points
-  is taken at its word.
+  Garchomp, HP and Special Defense for a Careful Incineroar, HP and Speed
+  for a Whimsicott whose one attack does not make it an attacker). Every
+  team it did this to is marked `spreads_guessed`. Real spreads are finer,
+  which is one reason the sampler moves points around; a paste that does
+  give stat points is taken at its word.
 - **The scraper has not been run against the live sites from where it was
   written**, which had no route to them. It is written not to depend on how
   the paste site lays out a sheet: it gathers every short line of text the

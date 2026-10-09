@@ -476,6 +476,42 @@ pub struct ShownState {
     pub status: String,
     #[serde(skip_serializing_if = "is_default")]
     pub fainted: bool,
+    /// On the field: the move it last borrowed (Copycat's pick), until it uses another.
+    #[serde(skip_serializing_if = "is_default")]
+    pub borrowed: String,
+    /// The entry of its side's registered team ([`SideState::roster`]) it
+    /// appears to be; -1 for none. Absent: its own, once it has been seen.
+    #[serde(skip_serializing_if = "is_default")]
+    pub listed: Option<i8>,
+    /// On the field, and it may be the side's Illusion Pokémon in this shape
+    /// (see [`crate::shown::ShownMon::maybe_disguise`]).
+    #[serde(skip_serializing_if = "is_default")]
+    pub suspect: bool,
+    /// It left the field while that was still open.
+    #[serde(skip_serializing_if = "is_default")]
+    pub tainted: bool,
+}
+
+/// One Pokémon of the team a side registered: what Team Preview showed and,
+/// with open team sheets, what its sheet says.
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ListedState {
+    pub species: String,
+    /// "M", "F" or "N". Absent: the species' fixed gender, or male.
+    #[serde(skip_serializing_if = "is_default")]
+    pub gender: Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub item: String,
+    #[serde(skip_serializing_if = "is_default")]
+    pub ability: String,
+    #[serde(skip_serializing_if = "is_default")]
+    pub moves: Vec<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    pub nature: String,
+    /// Its place in [`SideState::pokemon`] if it was brought.
+    #[serde(skip_serializing_if = "is_default")]
+    pub brought: Option<u8>,
 }
 
 impl ShownState {
@@ -498,6 +534,10 @@ impl ShownState {
             bar: rec.bar,
             status: view.status,
             fainted: rec.fainted,
+            borrowed: move_name(rec.borrowed),
+            listed: Some(if rec.listed == NOT_LISTED { -1 } else { rec.listed as i8 }),
+            suspect: rec.suspect,
+            tainted: rec.tainted,
         }
     }
 
@@ -530,6 +570,14 @@ impl ShownState {
             .find(|st| st.id() == self.status)
             .ok_or_else(|| bad(format!("unknown status {}", self.status)))?;
         rec.fainted = self.fainted;
+        rec.listed = match self.listed {
+            Some(j) if (0..MAX_ROSTER as i8).contains(&j) => j as u8,
+            Some(-1) | None => NOT_LISTED,
+            Some(j) => return Err(bad(format!("no entry {j} in a registered team"))),
+        };
+        rec.borrowed = find_move_or_none(&self.borrowed)?;
+        rec.suspect = self.suspect;
+        rec.tainted = self.tainted;
         Ok(rec)
     }
 }
@@ -605,6 +653,12 @@ pub struct SideState {
     /// Bookkeeping. Absent: those that are not fainted.
     #[serde(skip_serializing_if = "is_default")]
     pub pokemon_left: Option<u8>,
+    /// The team it registered, in the order registered: what Team Preview
+    /// showed the other player, and what its sheet says if the sheets are
+    /// open ([`BattleState::open_team_sheets`]). It matters only to what each
+    /// side has been shown. Absent: the Pokémon in `pokemon`, as they are now.
+    #[serde(skip_serializing_if = "is_default")]
+    pub roster: Vec<ListedState>,
 }
 
 impl SideState {
@@ -711,6 +765,9 @@ pub struct BattleState {
     pub ended: bool,
     #[serde(skip_serializing_if = "is_default")]
     pub winner: Option<u8>,
+    /// The players have each other's team sheets (see [`Battle::with_rosters`]).
+    #[serde(skip_serializing_if = "is_default")]
+    pub open_team_sheets: bool,
     /// Whether the bookkeeping fields are filled in (an exported position). If
     /// not, `from_state` works them out: disabled moves, trapping, locked
     /// moves, cached speeds and the order effects started in.
@@ -744,6 +801,7 @@ impl Default for BattleState {
             pending: Vec::new(),
             ended: false,
             winner: None,
+            open_team_sheets: false,
             prepared: false,
             effect_order: 0,
             speed_order: Vec::new(),
@@ -826,7 +884,7 @@ const NATURES: [&str; 21] = [
     "naive", "modest", "mild", "quiet", "rash", "calm", "gentle", "sassy", "careful",
 ];
 
-fn nature_name(n: (u8, u8)) -> &'static str {
+pub(crate) fn nature_name(n: (u8, u8)) -> &'static str {
     NATURES.iter().copied().find(|name| nature(name) == Some(n)).unwrap_or("hardy")
 }
 
@@ -1184,6 +1242,18 @@ impl Battle {
                 fainted_this_turn: side.fainted_this_turn,
                 fainted_last_turn: side.fainted_last_turn,
                 pokemon_left: Some(side.pokemon_left),
+                roster: side.roster[..side.n_roster as usize]
+                    .iter()
+                    .map(|l| ListedState {
+                        species: SPECIES[l.species as usize].id.to_string(),
+                        gender: Some(l.gender.id().to_string()),
+                        item: ITEMS[l.item as usize].id.to_string(),
+                        ability: ABILITIES[l.ability as usize].id.to_string(),
+                        moves: l.moves().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
+                        nature: nature_name(l.nature).to_string(),
+                        brought: (l.brought != NOT_LISTED).then(|| side.team[l.brought as usize].position),
+                    })
+                    .collect(),
             }
         };
         let pending = self
@@ -1232,6 +1302,7 @@ impl Battle {
             pending,
             ended: self.ended,
             winner: self.winner,
+            open_team_sheets: self.open_team_sheets,
             prepared: true,
             effect_order: self.effect_order,
             speed_order: self.speed_order[..self.n_speed_order as usize].to_vec(),
@@ -1496,6 +1567,7 @@ impl Battle {
         }
         b.mid_turn = st.mid_turn.unwrap_or(st.request == Request::Switch);
         b.last_move = find_move_or_none(&st.last_move)?;
+        b.open_team_sheets = st.open_team_sheets;
 
         let mut names = Names { order: [[0, 1, 2, 3, 4, 5]; 2], n: [0; 2] };
         for (s, side) in st.sides.iter().enumerate() {
@@ -1634,10 +1706,79 @@ impl Battle {
         Ok(b)
     }
 
+    /// The team a side registered: as given, or else the Pokémon it has, as they are now.
+    fn roster_from(&mut self, s: usize, side: &SideState, names: &Names) -> Result<(), Error> {
+        let n = self.sides[s].n as usize;
+        let mut roster = [Listed::NONE; MAX_ROSTER];
+        if side.roster.is_empty() {
+            for (p, entry) in roster.iter_mut().enumerate().take(n) {
+                let idx = names.order[s][p];
+                let m = &self.sides[s].team[idx as usize];
+                *entry = Listed {
+                    species: m.set_species,
+                    gender: m.gender,
+                    item: m.item,
+                    ability: m.base_ability,
+                    n_moves: m.base_n_moves,
+                    nature: m.nature,
+                    brought: idx,
+                    ..Listed::NONE
+                };
+                for k in 0..m.base_n_moves as usize {
+                    entry.moves[k] = m.base_moves[k].id;
+                }
+            }
+            (self.sides[s].roster, self.sides[s].n_roster) = (roster, n as u8);
+            return Ok(());
+        }
+        if side.roster.len() > MAX_ROSTER {
+            return Err(bad(format!("side {}: a registered team has at most {MAX_ROSTER} Pokémon", s + 1)));
+        }
+        let mut brought = [false; MAX_TEAM];
+        for (entry, ls) in roster.iter_mut().zip(&side.roster) {
+            let species = find_species(&ls.species)?;
+            let gender = match &ls.gender {
+                Some(g) => Gender::parse(g).ok_or_else(|| bad(format!("unknown gender {g}")))?,
+                None => SPECIES[species as usize].gender.unwrap_or(Gender::M),
+            };
+            if ls.moves.len() > MAX_MOVES {
+                return Err(bad(format!("{}: a team sheet has at most {MAX_MOVES} moves", ls.species)));
+            }
+            *entry = Listed {
+                species,
+                gender,
+                item: if ls.item.is_empty() { it::NONE } else { find_item(&ls.item)? },
+                ability: if ls.ability.is_empty() { ab::NOABILITY } else { find_ability(&ls.ability)? },
+                n_moves: ls.moves.len() as u8,
+                nature: if ls.nature.is_empty() {
+                    (0, 0)
+                } else {
+                    nature(&ls.nature).ok_or_else(|| bad(format!("unknown nature {}", ls.nature)))?
+                },
+                ..Listed::NONE
+            };
+            for (k, m) in ls.moves.iter().enumerate() {
+                entry.moves[k] = find_move(m)?;
+            }
+            if let Some(p) = ls.brought {
+                if p as usize >= n || std::mem::replace(&mut brought[p as usize], true) {
+                    return Err(bad(format!(
+                        "side {}: roster entries must be brought as different Pokémon of the side",
+                        s + 1
+                    )));
+                }
+                entry.brought = names.order[s][p as usize];
+            }
+        }
+        (self.sides[s].roster, self.sides[s].n_roster) = (roster, side.roster.len() as u8);
+        Ok(())
+    }
+
     /// What each side has been shown: as given, and for a Pokémon on the field
     /// with nothing said, that it has been seen.
     fn shown_from(&mut self, st: &BattleState, names: &Names) -> Result<(), Error> {
         for (s, side) in st.sides.iter().enumerate() {
+            self.roster_from(s, side, names)?;
             self.sides[s].shown = [NOTHING_SHOWN; MAX_TEAM];
             for mon in self.sides[s].team.iter_mut() {
                 mon.live = NOTHING_SHOWN;
@@ -1645,8 +1786,16 @@ impl Battle {
             let mut taken = [false; MAX_TEAM + 1];
             for (p, ps) in side.pokemon.iter().enumerate() {
                 let idx = names.order[s][p] as usize;
+                // Said nothing of which entry of the registered team it looks like: its own.
+                let own = (0..self.sides[s].n_roster).find(|&j| self.sides[s].roster[j as usize].brought == idx as u8);
+                let listed = |shown: &ShownState, rec: &mut Shown| {
+                    if shown.listed.is_none() && rec.seen != 0 {
+                        rec.listed = own.unwrap_or(NOT_LISTED);
+                    }
+                };
                 if let Some(shown) = &ps.shown {
-                    let rec = shown.record()?;
+                    let mut rec = shown.record()?;
+                    listed(shown, &mut rec);
                     if rec.seen as usize > side.pokemon.len() || (rec.seen != 0 && taken[rec.seen as usize]) {
                         return Err(bad(format!(
                             "side {}: shown.id must number the Pokémon seen from 1, each once",
@@ -1660,7 +1809,9 @@ impl Battle {
                     if !self.sides[s].team[idx].is_active {
                         return Err(bad(format!("{}: only a Pokémon on the field has shown_now", ps.species)));
                     }
-                    self.sides[s].team[idx].live = shown.record()?;
+                    let mut rec = shown.record()?;
+                    listed(shown, &mut rec);
+                    self.sides[s].team[idx].live = rec;
                 }
             }
             // Whoever is on the field has been seen, as whoever it passes for.
@@ -1675,6 +1826,8 @@ impl Battle {
                     let free = (1..=MAX_TEAM).find(|&id| !taken[id]).unwrap_or(MAX_TEAM);
                     taken[free] = true;
                     side.shown[a].seen = free as u8;
+                    let own = (0..side.n_roster).find(|&j| side.roster[j as usize].brought == a as u8);
+                    side.shown[a].listed = own.unwrap_or(NOT_LISTED);
                 }
                 if side.shown[a].species == NO_SPECIES {
                     side.shown[a].species = side.team[a].species;

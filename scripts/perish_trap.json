@@ -1,0 +1,95 @@
+[
+ {
+  "name": "the classic: Perish Song beside a Mega Gengar, and out on the last turn",
+  "rosters": [
+   [
+    {"species": "Gengar", "item": "Gengarite", "ability": "Cursed Body", "moves": ["Perish Song", "Protect", "Icy Wind", "Mean Look"]},
+    {"species": "Politoed", "item": "Leftovers", "ability": "Damp", "moves": ["Perish Song", "Protect", "Icy Wind", "Helping Hand"]},
+    {"species": "Snorlax", "ability": "Thick Fat", "moves": ["Protect", "Body Slam", "Curse", "Yawn"]},
+    {"species": "Arcanine", "ability": "Intimidate", "moves": ["Protect", "Snarl", "Helping Hand", "Will-O-Wisp"]}
+   ],
+   [
+    {"species": "Garchomp", "ability": "Rough Skin", "moves": ["Swords Dance", "Protect", "Rock Slide", "Earthquake"]},
+    {"species": "Milotic", "ability": "Marvel Scale", "moves": ["Recover", "Protect", "Icy Wind", "Life Dew"]},
+    {"species": "Sylveon", "ability": "Pixilate", "moves": ["Calm Mind", "Protect", "Helping Hand", "Baby-Doll Eyes"]},
+    {"species": "Scizor", "ability": "Technician", "moves": ["Bullet Punch", "Protect", "Swords Dance", "U-turn"]}
+   ]
+  ],
+  "choices": [
+   ["move 2 mega, move 1", "move 1, move 3"],
+   ["move 3, move 2", "move 2, move 1"],
+   ["move 2, switch 3", "move 1, move 3"],
+   ["switch 4, move 1", "move 1, move 1"],
+   ["", "switch 3, switch 4"],
+   ["move 1, move 1", "move 1, move 3"]
+  ]
+ },
+ {
+  "name": "the ways out: a Ghost, a Shed Shell, U-turn and Soundproof; and the singers stay too long",
+  "rosters": [
+   [
+    {"species": "Gengar", "item": "Gengarite", "ability": "Cursed Body", "moves": ["Perish Song", "Protect", "Icy Wind", "Mean Look"]},
+    {"species": "Politoed", "item": "Leftovers", "ability": "Damp", "moves": ["Perish Song", "Protect", "Icy Wind", "Helping Hand"]},
+    {"species": "Snorlax", "ability": "Thick Fat", "moves": ["Protect", "Body Slam", "Curse", "Yawn"]},
+    {"species": "Arcanine", "ability": "Intimidate", "moves": ["Protect", "Snarl", "Helping Hand", "Will-O-Wisp"]}
+   ],
+   [
+    {"species": "Dragapult", "ability": "Clear Body", "moves": ["U-turn", "Protect"]},
+    {"species": "Milotic", "item": "Shed Shell", "ability": "Marvel Scale", "moves": ["Recover", "Protect", "Icy Wind", "Life Dew"]},
+    {"species": "Scizor", "ability": "Technician", "moves": ["U-turn", "Protect", "Bullet Punch", "Swords Dance"]},
+    {"species": "Kommo-o", "ability": "Soundproof", "moves": ["Protect", "Clanging Scales"]}
+   ]
+  ],
+  "choices": [
+   ["move 2 mega, move 1", "move 2, move 2"],
+   ["move 3, move 2", "switch 3, switch 4"],
+   ["move 2, move 3", "move 1 2, move 1"],
+   ["", "switch 3, pass"],
+   ["move 3, move 1", "move 2, move 1"],
+   ["switch 3, switch 4", ""]
+  ]
+ },
+ {
+  "name": "Mean Look holds one Pokémon, and lets go when its user leaves",
+  "rosters": [
+   [
+    {"species": "Umbreon", "ability": "Inner Focus", "moves": ["Mean Look", "Protect", "Snarl", "Foul Play"]},
+    {"species": "Azumarill", "ability": "Thick Fat", "moves": ["Perish Song", "Protect", "Aqua Jet", "Helping Hand"]},
+    {"species": "Snorlax", "ability": "Thick Fat", "moves": ["Protect", "Body Slam", "Curse", "Yawn"]},
+    {"species": "Arcanine", "ability": "Intimidate", "moves": ["Protect", "Snarl", "Helping Hand", "Will-O-Wisp"]}
+   ],
+   [
+    {"species": "Garchomp", "ability": "Rough Skin", "moves": ["Swords Dance", "Protect", "Rock Slide", "Earthquake"]},
+    {"species": "Milotic", "ability": "Marvel Scale", "moves": ["Recover", "Protect", "Icy Wind", "Life Dew"]},
+    {"species": "Sylveon", "ability": "Pixilate", "moves": ["Calm Mind", "Protect", "Helping Hand", "Baby-Doll Eyes"]},
+    {"species": "Scizor", "ability": "Technician", "moves": ["Bullet Punch", "Protect", "Swords Dance", "U-turn"]}
+   ]
+  ],
+  "choices": [
+   ["move 1 1, move 1", "move 1, move 3"],
+   ["move 2, move 2", "move 2, switch 3"],
+   ["switch 3, move 3 2", "move 1, move 1"],
+   ["move 1, switch 4", "switch 4, move 1"],
+   ["move 1, move 1", "move 3, move 1"]
+  ]
+ },
+ {
+  "name": "nobody leaves: all four go at the end of the same turn, and the battle with them",
+  "rosters": [
+   [
+    {"species": "Gengar", "ability": "Cursed Body", "moves": ["Perish Song", "Protect", "Icy Wind", "Mean Look"]},
+    {"species": "Politoed", "item": "Leftovers", "ability": "Damp", "moves": ["Perish Song", "Protect", "Icy Wind", "Helping Hand"]}
+   ],
+   [
+    {"species": "Garchomp", "ability": "Rough Skin", "moves": ["Swords Dance", "Protect", "Rock Slide", "Earthquake"]},
+    {"species": "Milotic", "ability": "Marvel Scale", "moves": ["Recover", "Protect", "Icy Wind", "Life Dew"]}
+   ]
+  ],
+  "choices": [
+   ["move 1, move 2", "move 1, move 1"],
+   ["move 2, move 3", "move 2, move 1"],
+   ["move 3, move 2", "move 1, move 2"],
+   ["move 2, move 3", "move 2, move 1"]
+  ]
+ }
+]

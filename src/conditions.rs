@@ -136,7 +136,7 @@ impl Battle {
     fn show_attempted(&mut self, who: Option<MonRef>) {
         if let (Eff::Move(mi), Some(who)) = (self.event.effect, who) {
             let id = self.am[mi as usize].id;
-            self.show_move(who, id);
+            self.show_move_used(who, id);
         }
     }
 
@@ -274,9 +274,8 @@ impl Battle {
                     let am = &self.am[mi as usize];
                     if !self.ignoring_item(holder) && am.id + 1 != locked && am.id != mv::STRUGGLE {
                         // Fails, and no PP is lost. Showdown writes the `move` line itself here,
-                        // and nothing tells it from any other move that failed, so the move is
-                        // shown all the same: even when this is the second turn of a move
-                        // Copycat borrowed, which is not the Pokémon's own.
+                        // and nothing tells it from any other move that failed. (This may be
+                        // the second turn of a move Copycat borrowed: see `Shown::use_move`.)
                         self.show_attempted(Some(holder));
                         return FALSE;
                     }

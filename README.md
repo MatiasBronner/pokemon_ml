@@ -238,23 +238,26 @@ What a player knows is then their own side in full and `shown` of the other;
 - **HP and status** as shown to the opponent; for a Pokémon on the bench, as
   they were when it left.
 - **Illusion**: what a disguised Pokémon shows is credited to the Pokémon it
-  passes for, and moves over to the real one if the disguise breaks.
+  passes for, and moves over to the real one if the disguise breaks. Until
+  then the record says that it cannot be trusted (see below).
 
 Nothing is worked out. Less damage than expected does not reveal an Assault
 Vest, moving first does not reveal a Choice Scarf, and a Frisk that finds
 nothing does not reveal an empty hand; that kind of inference is left to
 whoever uses the record. Other limits: PP is not counted, and a disguise that
-is never broken is never corrected. Stat stages, volatile conditions, weather
+is never broken is never corrected, only marked as doubtful. Stat stages, volatile conditions, weather
 and side conditions are public and are in the `Battle` itself, not repeated
 here, though their timers are not public (the turns a Reflect has left give
 away a Light Clay); packing all of it into one view for a policy is part of
 designing the observation, which is the next piece of work.
 
 What has been shown is part of a position: `to_state` writes it down for
-every Pokémon (`PokemonState::shown`) and `from_state` takes it back, so a
-search that starts in the middle of a battle keeps it. A position written by
-hand that says nothing about it starts with nothing shown but who is on the
-field.
+every Pokémon (`PokemonState::shown`), with the teams as registered
+(`SideState::roster`) and whether the sheets are open, and `from_state`
+takes it back, so a search that starts in the middle of a battle keeps it. A
+position written by hand that says nothing about it starts with nothing
+shown but who is on the field, and takes each side to have registered the
+Pokémon it lists.
 
 `observer::Observer` is the same bookkeeping done from the other end: it
 reads Showdown's log, as a program playing on Showdown receives it, and
@@ -262,12 +265,60 @@ returns the same `ShownSide`. The engine is checked against it (see
 [How it is checked](#how-it-is-checked)), and it is the reader a Showdown
 client will need.
 
-**Open Team Sheets.** Showdown's Champions formats ask both players for open
-team sheets in a best-of-one (they apply if both agree) and force them in a
-best-of-three. A sheet gives every Pokémon's species, item, ability, moves
-and nature. With sheets open, what stays hidden is the stat points and which
-four of the six were brought, so this record matters most where sheets are
-closed, as they are whenever either player declines.
+### Team Preview and open team sheets
+
+Some things are known before the first turn. Team Preview shows each player
+the species the other registered, and Showdown's Champions formats add open
+team sheets: both players are asked in a best-of-one (the sheets open if
+both agree), and in a best-of-three they are open regardless. A sheet gives
+every registered Pokémon's item, ability, moves and nature. It never gives
+stat points, and it does not say which four of the six are brought.
+
+`Battle::new` takes the four Pokémon each side brought and assumes nothing
+more. `Battle::with_rosters` takes the teams as registered, which of them
+each side brings, and whether the sheets are open:
+
+```rust
+let battle = Battle::with_rosters([&ours, &theirs], [&[0, 2, 3, 5], &[1, 2, 4, 5]], true, seed)?;
+let theirs = battle.shown(1);
+theirs.roster;                 // their six, in the order registered
+theirs.roster[2].species;      // Team Preview shows this much, sheets open or not
+theirs.roster[2].sheet;        // open sheets: Some(item, ability, moves, nature)
+let lead = theirs.active[0].as_ref().unwrap();
+lead.listed;                   // Some(2): the entry of the roster it appears to be
+theirs.sheet_of(lead);         // that entry's sheet
+lead.item;                     // still None: it has not shown its item, whatever the sheet says
+```
+
+The battle plays the same either way; only what is known from the start
+differs. The sheet and the record are kept apart on purpose. The sheet says
+what a Pokémon came with, the record what the battle has shown of it since
+(the Life Orb on the sheet has been knocked off; the ability has been
+swapped), and an observation can use both.
+
+### Illusion
+
+A Zoroark comes in looking like a team-mate, so on a team that has one, a
+Pokémon that appears need not be what it appears to be, and neither its
+sheet nor what was noted under its name can be taken at face value.
+
+- `ShownSide::illusion` lists the registered Pokémon that have Illusion.
+  With open sheets that is what the sheets say. With closed sheets it is the
+  Pokémon whose species can have Illusion under the regulation, which Team
+  Preview shows; this assumes the team is a legal one.
+- `ShownMon::maybe_disguise` is true for every Pokémon that may be the
+  Illusion Pokémon in disguise, or under whose name the Illusion Pokémon may
+  have acted earlier. It is false only when that is ruled out: the team has
+  no Illusion Pokémon, or that Pokémon has fainted, or it stood on the field
+  as itself beside the one in question.
+- When a disguise breaks, the Pokémon is who it is from then on, and what it
+  showed in disguise moves to its own record.
+
+The rule never calls a disguised Pokémon genuine (this is checked against
+the truth: see below), and it stops there. It does not reason from the
+sheets, as a player would on seeing "Garchomp" use a move only Zoroark's
+sheet lists. Both the sheet and what was shown are in the record for a model
+to draw that conclusion itself, like every other inference.
 
 ## How it is checked
 
@@ -377,31 +428,46 @@ Further checks:
   record of what a player knows; it only sends the log. `observer` reads
   that log and keeps its own account, and `difftest --shown` requires the
   engine's account to equal it, for both sides, at every decision of battles
-  recorded with their logs (`gen_cases.js --log`): 22,350 battles, 587,066
-  decisions, no difference. The two are written from
-  opposite ends, the engine at the place each mechanic happens and the reader
-  from the text alone, so a rule missing from either shows up. Three things
-  keep the pair from being wrong together:
+  recorded with their logs, their teams as registered and open team sheets
+  (`gen_cases.js --log --open-sheets`): 24,250 battles, 636,029 decisions,
+  no difference. Every battle is checked twice, once as recorded and once as
+  if the sheets had stayed closed (`--closed-sheets`, which keeps them from
+  both the engine and the reader). The two are written from opposite ends,
+  the engine at the place each mechanic happens and the reader from the text
+  alone, so a rule missing from either shows up. Four things keep the pair
+  from being wrong together:
   - *Who a line is about.* A line naming an ability or item mentions one or
     two Pokémon and Showdown has no single rule for which of them has it.
     `gen_cases.js --holders` asked Showdown, on every such line of about
     20,000 battles, which Pokémon really had the thing; the reader's table
     was drawn up from the answers.
-  - *Truth.* In battles without Illusion, everything the reader believes
-    about a Pokémon's moves, item and ability is compared with the real
-    Pokémon. Nothing it believed was false, with one exception that is
-    Showdown's doing (see below).
+  - *Truth.* Everything the reader believes about a Pokémon's moves, item
+    and ability is compared with the real Pokémon: in battles without
+    Illusion for every record, and in battles with it for the records not
+    marked as possibly a disguise's. Nothing it believed was false.
+  - *Who is who.* The sheets the engine gives out are compared with the ones
+    Showdown sends, and the entry a Pokémon is said to appear as with the
+    Pokémon it is. On teams that brought an Illusion Pokémon, a Pokémon
+    stood on the field in disguise at 7,218 decisions and was marked as a
+    possible disguise at every one of them. Pokémon that were themselves
+    were known to be at 21,951 and left in doubt at 28,226. (With closed
+    sheets, on teams where only Pokémon that may have Illusion had it:
+    2,341 in disguise, all marked; 7,280 known; 10,012 in doubt.) Most of
+    those teams are ones the recorder builds to be hard, with several
+    Illusion Pokémon or five Zoroark, where everything stays in doubt; on
+    ordinary teams with one Zoroark about half are known.
   - *Coverage.* The engine records something in 146 places. Every one was
-    reached in those battles, and 139 were at some point the first to reveal
+    reached in those battles, and 140 were at some point the first to reveal
     something, so that taking any of them out would have shown as a
-    difference; the other seven can only repeat what an earlier line said
-    (the move a Disable names has been used already). Every move, item and
+    difference; the other six can only repeat what an earlier line said
+    (the move a Leppa Berry tops up has been used already). Every move, item and
     ability in the game was shown somewhere, except four abilities: Battle
     Bond, Ice Face and Shields Down, which belong to formes the game lacks,
     and Stance Change, which no line names.
 
-  `difftest --shown --by-hand` also carries the record through an exported
-  position at every decision of the same battles, with no difference. Fresh
+  `difftest --shown --by-hand` also carries the record, the rosters and the
+  sheets through an exported position at every decision of the same battles,
+  with no difference. Fresh
   battles were the real test, and are the reason not to read "no difference"
   as "finished". The first 50,000 played after the rules had settled turned
   up four gaps in them, each of which now has a batch of its own in
@@ -410,7 +476,33 @@ Further checks:
   damage-halving berry gets; Poison Touch poisoning after Wandering Spirit
   had already replaced it; and a Fling whose line names no item, because the
   Lum Berry being thrown was eaten on the way. The 40,000 after that turned
-  up none.
+  up none, and the 20,000 after those one: an Uproar borrowed with Copycat
+  and then disabled, whose `cant` line made it look like the Pokémon's own.
+  That one, and a like case with Choice items that had been known and left
+  alone, are now read correctly (a move just borrowed is not taken for the
+  Pokémon's own by the next line that names it). The 20,000 after that,
+  checked with the sheets open and closed, turned up nothing.
+  Eight faults injected into the rules for team sheets and Illusion were
+  all noticed, six by the recorded battles and two by `tests/shown.rs`:
+  where the engine and the reader share a function, comparing them cannot
+  catch a fault in it, and only the check against the truth or a test can.
+- **A line of play, written out.** Random battles say that the mechanics
+  agree, not that a particular plan works. `gen_cases.js --script` plays
+  battles from a file of teams and choices in Showdown and records them like
+  any other, so the engine can be held to a line of play.
+  `scripts/perish_trap.json` has four, around the perish trap: Perish Song
+  beside a Mega Gengar whose Shadow Tag keeps the other side in for three
+  turns, with the singers leaving on the third and fourth; the ways out (a
+  Ghost, a Shed Shell, U-turn, Soundproof); Mean Look letting go when its
+  user leaves; and two against two with nobody able to leave, where all four
+  faint at once and Showdown gives the battle to the side whose Pokémon went
+  last. The engine matches each at every decision, legal choices included
+  (confirmed against Showdown's own validation with `--check-legal`), and
+  `tests/perish_trap.rs` walks through them. A batch of 600 random battles
+  on the same theme agrees too (17,625 decisions): in it 739 Pokémon fainted
+  to the count, 242 of them held in with somewhere to switch to, 78 of
+  those on a turn when a foe left the field, and 57 battles ended with both
+  sides' counts running out together.
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
@@ -452,14 +544,15 @@ scripts/setup-oracle.sh            # clone and build the pinned Showdown commit 
 scripts/fuzz.sh 2000               # 2,000 fresh battles, random seed
 TRACE=1 scripts/fuzz.sh 300 42     # also compare every RNG draw
 REBUILD=1 scripts/fuzz.sh 2000     # also rebuild the battle from its position at every decision
-SHOWN=1 scripts/fuzz.sh 2000       # also check what each side has been shown against Showdown's log
+SHOWN=1 scripts/fuzz.sh 2000       # also check what each side has been shown, with open and with closed sheets
+node oracle/gen_cases.js --script scripts/perish_trap.json --check-legal --out trap.jsonl   # battles written out
 ```
 
 The mutation test needs recorded battles to replay: the batches built around
 particular effects, and a few thousand general ones.
 
 ```sh
-scripts/targeted.sh corpus                                              # 63 batches, about 19,000 battles
+scripts/targeted.sh corpus                                              # 67 batches, about 21,000 battles
 node oracle/gen_cases.js --n 3000 --seed 9500 --out corpus/general.jsonl
 scripts/mutation_test.py corpus/*.jsonl --handlers                      # slow: a rebuild per injected bug
 ```
@@ -479,7 +572,8 @@ effects, `gen_cases.js --abilities intimidate,defiant --items whiteherb` makes
 every battle a themed one over just those.
 
 `SHOWN=1 scripts/targeted.sh corpus` records the same batches with their
-logs (about 3.5 GB) and runs `difftest --shown` on each. When that reports a
+logs and open team sheets (about 4 GB) and runs `difftest --shown` on each,
+with the sheets open and as if they had stayed closed. When that reports a
 difference it names the field, the two values and the first battle and
 decision where it happened.
 
@@ -613,12 +707,12 @@ And in what the log gives away:
   line naming the ability, unlike in Showdown's other formats.
 - Big Pecks, Clear Body and White Smoke say nothing when the drop they block
   is Octolock's.
-- A Pokémon locked in by a Choice item that is made to use another move
-  fails with a `move` line like that of any move that failed. When that is
-  the second turn of a move borrowed with Copycat (it borrows Fly, and the
-  scarf stops the descent), the log credits it with a move it does not
-  have. `shown` repeats this, since it reports what the log says; it is the
-  one thing in it known to be untrue.
+- A move borrowed with Copycat can carry on over the following turns
+  (Uproar, Fly), and if something then stops it, the line that says so reads
+  as if the move were the Pokémon's own: `|cant|p1a: A|Disable|Uproar`, or,
+  when a Choice item is what stops it, a `move` line like that of any move
+  that failed. `shown` passes over the first line that names a move just
+  borrowed.
 - When two allies swap abilities (Skill Swap on a partner), the log does not
   name the abilities. When the swap was a Wandering Spirit's, set off by its
   own partner hitting it, that much can still be read from the line, since
@@ -655,12 +749,14 @@ oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
 oracle/gen_format.js Showdown's team validator -> formats/<id>.json
 oracle/gen_teams.js  random teams with Showdown's verdict on each
 formats/             what each regulation allows (generated)
-scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, check-teams.sh, mutation_test.py
+scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, check-teams.sh, mutation_test.py,
+                     perish_trap.json (battles written out for gen_cases.js --script)
 tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
 tests/position.rs  positions written by hand: defaults, timers, switches in the middle of a turn
 tests/format.rs    legal and illegal teams, a second regulation, fixtures of teams judged by Showdown
 tests/shown.rs     what each side has been shown, as examples; a fixture of battles recorded with their logs
+tests/perish_trap.rs  the perish trap, step by step, on battles played out in Showdown from a script
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -695,7 +791,8 @@ likely first steps when speed starts to matter.
 ## What comes next
 
 1. **Team preview**: bringing six and picking four, as a decision the engine
-   asks for.
+   asks for. (The teams as registered are already there:
+   `Battle::with_rosters`.)
 2. **The observation and the action space**: one view of the battle for a
    policy (its own side, `shown` of the other, the public field) and the
    encoding of choices. What goes into it depends on the model that will

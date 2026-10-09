@@ -63,6 +63,30 @@ const ALL_MOVES = [...new Set(pool.species.flatMap(s => s.moves))].sort();
 const STATS = args.stats || null;
 // --log: keep Showdown's battle log with every decision (what `--trace` keeps, without the random draws).
 const LOG = !!args.log || TRACE;
+// --open-sheets: both players have agreed to open team sheets, so the log starts with every
+// Pokémon's item, ability and moves (`|showteam|`), as it does in a best-of-three.
+const OPEN_SHEETS = !!args['open-sheets'];
+// --script FILE: instead of random battles, play the ones written out in FILE, a JSON list of
+// { name, seed, rosters: [[set, ...], [set, ...]], picks: [[0, 1, 2, 3], [0, 1, 2, 3]], choices: [[p1, p2], ...] }.
+// A set is { species, moves, ability, item, nature, sp, gender } by name or id; `choices` are
+// Showdown's own ("move 1 2 mega, switch 3"; "" for a side that is not being asked). Each battle
+// is recorded like any other, up to the last choice given, so the engine can be held to a
+// particular line of play (scripts/perish_trap.json).
+const SCRIPTS = args.script ? JSON.parse(fs.readFileSync(args.script, 'utf8')) : null;
+function scriptedSet(set) {
+	const species = dex.species.get(set.species);
+	if (!species.exists) throw new Error(`unknown species ${set.species}`);
+	const known = (what, thing) => { if (!thing.exists) throw new Error(`unknown ${what} in a script`); return thing.id; };
+	return {
+		species: species.id,
+		moves: set.moves.map(m => known('move', dex.moves.get(m))),
+		nature: set.nature || 'Hardy',
+		sp: set.sp || [0, 0, 0, 0, 0, 0],
+		ability: set.ability ? known('ability', dex.abilities.get(set.ability)) : 'noability',
+		item: set.item ? known('item', dex.items.get(set.item)) : '',
+		gender: set.gender || species.gender || 'M',
+	};
+}
 // --holders FILE: for every kind of log line that names an ability or an item, count which of the
 // Pokémon the line mentions really has it. This is where the table in src/observer.rs comes from.
 const HOLDERS = args.holders || null;
@@ -586,15 +610,17 @@ function stackLabel() {
 
 function runCase(id) {
 	const rand = L.mulberry32((SEED * 1000003 + id) | 0);
-	const [full1, full2] = buildTeams(rand);
-	const seed = [0, 0, 0, 0].map(() => Math.floor(rand() * 65536));
-	const picks = [full1, full2].map(full => shuffled(rand, full.map((_, i) => i)).slice(0, 4));
+	const script = SCRIPTS && SCRIPTS[id];
+	const [full1, full2] = script ? script.rosters.map(r => r.map(scriptedSet)) : buildTeams(rand);
+	const seed = script ? (script.seed || [1, 2, 3, 4]) : [0, 0, 0, 0].map(() => Math.floor(rand() * 65536));
+	const picks = script ? (script.picks || [full1, full2].map(full => full.map((_, i) => i).slice(0, 4))) :
+		[full1, full2].map(full => shuffled(rand, full.map((_, i) => i)).slice(0, 4));
 	// Each battle features one modelled move on a lead, cycling through all of them.
 	const featured = ALL_MOVES[id % ALL_MOVES.length];
 	const fside = Math.floor(id / ALL_MOVES.length) % 2;
-	[full1, full2][fside][picks[fside][0]] = featuredSet(rand, featured);
+	if (!script) [full1, full2][fside][picks[fside][0]] = featuredSet(rand, featured);
 	// Likewise one modelled ability and one modelled item, on leads, so each gets its share of battles.
-	if (!PLAIN) {
+	if (!PLAIN && !script) {
 		if (pool.abilities.length) {
 			const set = [full1, full2][1 - fside][picks[1 - fside][0]];
 			[full1, full2][1 - fside][picks[1 - fside][0]] = { ...set, ability: pool.abilities[id % pool.abilities.length] };
@@ -619,6 +645,8 @@ function runCase(id) {
 	battle.setPlayer('p1', { name: 'P1', team: full1.map(toPsSet) });
 	battle.setPlayer('p2', { name: 'P2', team: full2.map(toPsSet) });
 	if (battle.requestState !== 'teampreview') throw new Error(`expected team preview, got ${battle.requestState}`);
+	// (What the server does once both players have accepted, or at once in a best-of-three.)
+	if (OPEN_SHEETS) battle.showOpenTeamSheets();
 
 	// Remember each Pokémon's pick order; Showdown reorders side.pokemon as it switches.
 	battle.sides.forEach((side, s) => picks[s].forEach((orig, k) => { side.pokemon[orig].pickIndex = k; }));
@@ -629,14 +657,23 @@ function runCase(id) {
 	for (const t of teams) for (const set of t) { bump(tally.brought.abilities, set.ability); if (set.item) bump(tally.brought.items, set.item); }
 
 	let logPos = battle.log.length;
-	const out = { id, seed, teams, initial: snapshot(battle), steps: [], truncated: false };
+	// `teams` are the four each side brought, in the order picked; `rosters` the six it
+	// registered, which Team Preview showed, with `picks[side][k]` the roster index of `teams[side][k]`.
+	const out = {
+		id, seed, teams, rosters: [full1, full2], picks, open_sheets: OPEN_SHEETS,
+		initial: snapshot(battle), steps: [], truncated: false,
+	};
+	if (script && script.name) out.name = script.name;
 	if (TRACE) { out.initial.draws = draws; draws = []; }
 	if (LOG) out.initial.log = battle.log.slice(0);
 	while (!battle.ended) {
 		if (battle.turn > MAX_TURNS) { out.truncated = true; break; }
+		if (script && out.steps.length >= script.choices.length) break;
 		const legal = battle.sides.map(side => legalOptions(battle, side));
 		if (CHECK_LEGAL) battle.sides.forEach((side, s) => checkLegal(battle, side, legal[s]));
-		const choices = legal.map((opts, s) => chooseFor(rand, opts, battle.sides[s]));
+		const choices = script ?
+			script.choices[out.steps.length].map(c => (c || 'pass, pass').split(/,\s*/)) :
+			legal.map((opts, s) => chooseFor(rand, opts, battle.sides[s]));
 		// Decide who is being asked before anyone answers: the last answer starts the next
 		// request, which would otherwise look like one this step still had to fill.
 		const asked = battle.sides.map(side => !!side.activeRequest && !side.activeRequest.wait);
@@ -658,7 +695,7 @@ function runCase(id) {
 
 const fd = fs.openSync(OUT, 'w');
 let steps = 0, truncated = 0, turns = 0;
-const ids = ONLY !== null ? [ONLY] : Array.from({ length: N }, (_, i) => i);
+const ids = ONLY !== null ? [ONLY] : Array.from({ length: SCRIPTS ? SCRIPTS.length : N }, (_, i) => i);
 for (const id of ids) {
 	const c = runCase(id);
 	steps += c.steps.length;

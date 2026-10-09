@@ -2,7 +2,7 @@
 //! fixture is a small sample; `scripts/fuzz.sh` runs the same check on
 //! thousands of freshly generated battles.
 
-use vgc_engine::replay::{Case, Outcome, check_case};
+use vgc_engine::replay::{Case, Outcome, Rebuild, check_case, check_case_with};
 use vgc_engine::{ACTIVE, Battle, Choice, PokemonSet};
 
 fn fixture() -> Vec<Case> {
@@ -26,6 +26,30 @@ fn recorded_battles_match_showdown() {
         }
     }
     assert!(decisions > 100);
+}
+
+/// The same battles with the position written down and the battle built back
+/// from it at every decision (`Battle::to_state`, `Battle::from_state`): the
+/// rebuilt battle must be in the same position and go on matching Showdown,
+/// and a battle built from the position without the simulator's bookkeeping
+/// must come to the same.
+#[test]
+fn recorded_battles_survive_being_rebuilt_at_every_decision() {
+    for c in &fixture() {
+        match check_case_with(c, Rebuild::ByHand) {
+            Outcome::Pass(_) => {}
+            Outcome::Unsupported(what) => panic!("case {} uses unsupported {what}", c.id),
+            Outcome::Fail(report) => panic!(
+                "case {}:
+{}",
+                c.id,
+                report.join(
+                    "
+"
+                )
+            ),
+        }
+    }
 }
 
 /// `joint_ok` (used to validate submitted choices) and `joint_choices` (used

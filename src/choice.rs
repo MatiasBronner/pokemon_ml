@@ -10,12 +10,10 @@ use crate::rng::Rng;
 use crate::state::*;
 
 impl Battle {
-    /// Builds a battle from the four Pokémon each side picked at team preview,
-    /// in the order picked (the first two lead), and plays the opening
-    /// switch-ins. `seed` is Showdown's four 16-bit seed words.
-    pub fn new(teams: [&[PokemonSet]; 2], seed: [u16; 4]) -> Result<Battle, Error> {
+    /// A Pokémon with nothing filled in.
+    pub(crate) fn blank_mon() -> Pokemon {
         let blank_slot = MoveSlot { id: 0, pp: 0, maxpp: 0, disabled: false, hidden: false, used: false };
-        let blank_mon = Pokemon {
+        Pokemon {
             species: 0,
             base_species: 0,
             set_species: 0,
@@ -77,9 +75,13 @@ impl Battle {
             n_damaged_by: 0,
             locked_move: NO_MOVE,
             speed: 0,
-        };
+        }
+    }
+
+    /// A battle with no Pokémon in it yet.
+    pub(crate) fn blank(seed: [u16; 4]) -> Battle {
         let blank_side = Side {
-            team: [blank_mon; MAX_TEAM],
+            team: [Battle::blank_mon(); MAX_TEAM],
             n: 0,
             order: [0, 1, 2, 3, 4, 5],
             pokemon_left: 0,
@@ -90,7 +92,7 @@ impl Battle {
             slot_conds: [SlotConds::new(SlotCond::FIRST); ACTIVE],
         };
         let nobody = MonRef { side: 0, idx: 0 };
-        let mut b = Battle {
+        Battle {
             rng: Rng::from_words(seed),
             sides: [blank_side; 2],
             field: Field {
@@ -124,7 +126,79 @@ impl Battle {
             active_target: None,
             speed_order: [0; 4],
             n_speed_order: 0,
-        };
+        }
+    }
+
+    /// A Pokémon as it is at the start of a battle, from the set it was brought as.
+    /// Registers the events its ability and item listen to.
+    pub(crate) fn new_mon(&mut self, set: &PokemonSet, position: usize) -> Result<Pokemon, Error> {
+        let sp = SPECIES.get(set.species as usize).ok_or_else(|| Error::BadTeam("unknown species".into()))?;
+        if sp.illegal {
+            return Err(Error::Unsupported(format!("{} is not in Champions", sp.name)));
+        }
+        if set.moves.is_empty() || set.moves.len() > MAX_MOVES {
+            return Err(Error::BadTeam(format!("{} needs 1 to {MAX_MOVES} moves", sp.name)));
+        }
+        if set.stat_points.iter().any(|&p| p > 32) || set.stat_points.iter().map(|&p| p as u32).sum::<u32>() > 66 {
+            return Err(Error::BadTeam(format!("{}: at most 32 stat points per stat and 66 in total", sp.name)));
+        }
+        let ability = ABILITIES.get(set.ability as usize).ok_or_else(|| Error::BadTeam("unknown ability".into()))?;
+        if !ability.supported {
+            return Err(Error::Unsupported(format!("ability {}", ability.name)));
+        }
+        let item = ITEMS.get(set.item as usize).ok_or_else(|| Error::BadTeam("unknown item".into()))?;
+        if !item.supported {
+            return Err(Error::Unsupported(format!("item {}", item.name)));
+        }
+        self.event_mask |= ability.events | ability.events_pre | item.events | item.events_pre;
+        self.event_mask_pre |= ability.events_pre | item.events_pre;
+        let mut mon = Battle::blank_mon();
+        // `canMegaEvo`: holding the Mega Stone of this very species.
+        if let Some(&(_, mega)) = item.mega.iter().find(|&&(from, _)| from == set.species) {
+            let mega_ability = &ABILITIES[SPECIES[mega as usize].ability0 as usize];
+            if !mega_ability.supported {
+                return Err(Error::Unsupported(format!(
+                    "{} (its ability, {}, is not modelled)",
+                    SPECIES[mega as usize].name, mega_ability.name
+                )));
+            }
+            self.event_mask |= mega_ability.events | mega_ability.events_pre;
+            self.event_mask_pre |= mega_ability.events_pre;
+            mon.can_mega = mega;
+        }
+        mon.species = set.species;
+        mon.base_species = set.species;
+        mon.set_species = set.species;
+        mon.nature = set.nature;
+        mon.stat_points = set.stat_points;
+        mon.types = sp.types;
+        mon.added_type = Type::None;
+        mon.gender = set.gender;
+        mon.ability = set.ability;
+        mon.base_ability = set.ability;
+        mon.item = set.item;
+        mon.fainted = false;
+        mon.position = position as u8;
+        // Champions stats: base + stat points + 75 for HP, + 20 otherwise.
+        mon.stats = calc_stats(set.species, set.nature, set.stat_points);
+        mon.hp = mon.stats[0];
+        mon.speed = mon.stats[5] as i32;
+        for (k, &id) in set.moves.iter().enumerate() {
+            let d = MOVES.get(id as usize).ok_or_else(|| Error::BadTeam("unknown move".into()))?;
+            if !d.supported {
+                return Err(Error::Unsupported(format!("move {}", d.name)));
+            }
+            mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false, hidden: false, used: false };
+        }
+        mon.n_moves = set.moves.len() as u8;
+        Ok(mon)
+    }
+
+    /// Builds a battle from the four Pokémon each side picked at team preview,
+    /// in the order picked (the first two lead), and plays the opening
+    /// switch-ins. `seed` is Showdown's four 16-bit seed words.
+    pub fn new(teams: [&[PokemonSet]; 2], seed: [u16; 4]) -> Result<Battle, Error> {
+        let mut b = Battle::blank(seed);
         for (s, team) in teams.iter().enumerate() {
             if team.len() < ACTIVE || team.len() > MAX_TEAM {
                 return Err(Error::BadTeam(format!(
@@ -134,72 +208,7 @@ impl Battle {
                 )));
             }
             for (i, set) in team.iter().enumerate() {
-                let sp = SPECIES.get(set.species as usize).ok_or_else(|| Error::BadTeam("unknown species".into()))?;
-                if sp.illegal {
-                    return Err(Error::Unsupported(format!("{} is not in Champions", sp.name)));
-                }
-                if set.moves.is_empty() || set.moves.len() > MAX_MOVES {
-                    return Err(Error::BadTeam(format!("{} needs 1 to {MAX_MOVES} moves", sp.name)));
-                }
-                if set.stat_points.iter().any(|&p| p > 32)
-                    || set.stat_points.iter().map(|&p| p as u32).sum::<u32>() > 66
-                {
-                    return Err(Error::BadTeam(format!(
-                        "{}: at most 32 stat points per stat and 66 in total",
-                        sp.name
-                    )));
-                }
-                let ability =
-                    ABILITIES.get(set.ability as usize).ok_or_else(|| Error::BadTeam("unknown ability".into()))?;
-                if !ability.supported {
-                    return Err(Error::Unsupported(format!("ability {}", ability.name)));
-                }
-                let item = ITEMS.get(set.item as usize).ok_or_else(|| Error::BadTeam("unknown item".into()))?;
-                if !item.supported {
-                    return Err(Error::Unsupported(format!("item {}", item.name)));
-                }
-                b.event_mask |= ability.events | ability.events_pre | item.events | item.events_pre;
-                b.event_mask_pre |= ability.events_pre | item.events_pre;
-                let mut mon = blank_mon;
-                // `canMegaEvo`: holding the Mega Stone of this very species.
-                if let Some(&(_, mega)) = item.mega.iter().find(|&&(from, _)| from == set.species) {
-                    let mega_ability = &ABILITIES[SPECIES[mega as usize].ability0 as usize];
-                    if !mega_ability.supported {
-                        return Err(Error::Unsupported(format!(
-                            "{} (its ability, {}, is not modelled)",
-                            SPECIES[mega as usize].name, mega_ability.name
-                        )));
-                    }
-                    b.event_mask |= mega_ability.events | mega_ability.events_pre;
-                    b.event_mask_pre |= mega_ability.events_pre;
-                    mon.can_mega = mega;
-                }
-                mon.species = set.species;
-                mon.base_species = set.species;
-                mon.set_species = set.species;
-                mon.nature = set.nature;
-                mon.stat_points = set.stat_points;
-                mon.types = sp.types;
-                mon.added_type = Type::None;
-                mon.gender = set.gender;
-                mon.ability = set.ability;
-                mon.base_ability = set.ability;
-                mon.item = set.item;
-                mon.fainted = false;
-                mon.position = i as u8;
-                // Champions stats: base + stat points + 75 for HP, + 20 otherwise.
-                mon.stats = calc_stats(set.species, set.nature, set.stat_points);
-                mon.hp = mon.stats[0];
-                mon.speed = mon.stats[5] as i32;
-                for (k, &id) in set.moves.iter().enumerate() {
-                    let d = MOVES.get(id as usize).ok_or_else(|| Error::BadTeam("unknown move".into()))?;
-                    if !d.supported {
-                        return Err(Error::Unsupported(format!("move {}", d.name)));
-                    }
-                    mon.moves[k] = MoveSlot { id, pp: d.pp, maxpp: d.pp, disabled: false, hidden: false, used: false };
-                }
-                mon.n_moves = set.moves.len() as u8;
-                b.sides[s].team[i] = mon;
+                b.sides[s].team[i] = b.new_mon(set, i)?;
             }
             b.sides[s].n = team.len() as u8;
             b.sides[s].pokemon_left = team.len() as u8;

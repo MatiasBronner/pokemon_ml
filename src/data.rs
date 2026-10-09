@@ -175,7 +175,7 @@ pub const SPE: usize = 4;
 pub const ACC: usize = 5;
 pub const EVA: usize = 6;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Secondary {
     /// Percent chance; 0 means "always" (no `chance` in Showdown).
     pub chance: u16,

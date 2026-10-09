@@ -9,10 +9,8 @@ matches Showdown before anything is trained on it.
 **Status: every move, ability and held item a Champions Pokémon can have is
 modelled**: all 510 moves in the Champions learnsets, 225 abilities, 85 held
 items and 82 Mega Evolutions, each checked against Showdown as described
-below. Any team that is legal in the format can be played. What the engine
-does not do yet is start from the middle of a battle, which a bot needs in
-order to search from a live game; see
-[What is and is not modelled](#what-is-and-is-not-modelled).
+below. Any team that is legal in the format can be played, from turn 1 or
+[from any position in the middle of a battle](#starting-from-the-middle-of-a-battle).
 
 ## Quick start
 
@@ -57,6 +55,77 @@ A set built with `from_names` has no ability and no item until you add them,
 and takes the species' fixed gender or male. The engine does not check that a
 species can legally have an ability, move or item; neither does Showdown's
 simulator (its team validator does that separately).
+
+## Starting from the middle of a battle
+
+A bot searching from a live game does not start at turn 1. `Battle::from_state`
+builds a battle from a description of the position, and `Battle::to_state`
+writes one down:
+
+```rust
+use vgc_engine::position::{BattleState, CondState, PokemonState, SideState};
+
+let mon = |species: &str, moves: &[&str]| PokemonState::new(species, moves);
+let mut incineroar = mon("Incineroar", &["Fake Out", "Flare Blitz", "Parting Shot", "Protect"]).ability("Intimidate");
+incineroar.hp_percent = Some(38.0);
+incineroar.boosts[0] = -1;
+let garchomp = mon("Garchomp", &["Earthquake", "Rock Slide", "Protect"])
+    .item("Choice Scarf")
+    .volatile(CondState::choice_lock("Rock Slide"));
+let mut ours = SideState::new(vec![incineroar, garchomp, mon("Milotic", &["Scald", "Recover"]).status("par")]);
+ours.conditions.push(CondState::new("tailwind").turns(1));
+let theirs = SideState::new(vec![/* the first two are on the field, the rest on the bench */]);
+
+let state = BattleState {
+    turn: 6,
+    sides: [ours, theirs],
+    weather: Some(CondState::new("raindance").turns(2)),
+    ..Default::default()
+};
+let battle = Battle::from_state(&state)?;       // waiting for turn 6's choices
+```
+
+Every field has a default, so a description only says what differs from
+"nothing has happened": HP (exact or as a percentage), status and its
+counters, stat stages, PP, current item, ability, types and forme, volatile
+conditions with their timers (Taunt, Encore, a substitute's HP, a Choice
+lock), side conditions, weather, terrain and Trick Room with the turns left,
+who has fainted. `BattleState` is plain serde data: `to_json` and `from_json`
+carry it across a process boundary, which is how a Python bot will hand over
+a position. `cargo run --release --example position` builds one and does a
+one-ply search from it; `src/position.rs` documents every field.
+
+Three kinds of position can be described:
+
+- **The start of a turn** (`request: Move`, the default).
+- **Replacing the fainted at the end of a turn** (`request: Switch`): mark
+  them `fainted`.
+- **A switch in the middle of a turn** (after U-turn, Eject Button,
+  Emergency Exit): set `switch_flag` on the Pokémon leaving and list the
+  moves still to come in `pending`.
+
+What to know before relying on it:
+
+- **Exported positions are exact.** `from_state(to_state(b))` continues as `b`
+  would, random numbers included. An exported position carries the
+  simulator's bookkeeping (which moves the coming request disables, cached
+  speeds, the order effects started in) and says so with `prepared: true`.
+- **Hand-written positions leave the bookkeeping out**, and `from_state`
+  works it out: disabled moves, trapping and locked moves come out as the
+  engine would have had them. Two things cannot be known from outside and get
+  a neutral default: the order in which effects started, with a flag Showdown
+  keeps per field condition (both only settle ties between simultaneous
+  effects), and the state of the random number generator (give a `seed`).
+- **After editing an exported position**, set `prepared = false` (or call
+  `without_bookkeeping()`), or the stale bookkeeping is believed.
+- **Hidden information is yours to fill in.** A position has no "unknown":
+  every Pokémon needs a species, moves and stats. Sampling the opponent's
+  unrevealed moves, items, spreads and bench from a prior is not here yet.
+- A Pokémon in the middle of a battle is taken to have been on the field for
+  a turn and to have moved (so Fake Out is not offered); say `move_actions:
+  Some(0)` and `active_turns: Some(0)` for one that has just come in.
+
+How this is checked is under [How it is checked](#how-it-is-checked).
 
 ## How it is checked
 
@@ -133,6 +202,22 @@ Two further checks:
   Imprison has sealed every move of a side's last active Pokémon, Showdown
   still lists the moves, and wants the forced Struggle spelled as a use of
   the first one, target included. `legal_choices` spells it that way.)
+- **Positions.** `difftest --by-hand` replays the recorded battles and at
+  every decision writes the position down (through JSON), builds a battle
+  back from it and requires the two to be the same data, field for field,
+  apart from scratch space. It then carries on with the rebuilt battle, which
+  must keep matching Showdown to the end, so every one of those decisions was
+  also the start of a battle begun in the middle. That holds for all of
+  them: about 144,000 battles, 3.06 million decisions. At each
+  decision it also strips the bookkeeping from the position, rebuilds from
+  that, and requires what `from_state` works out (disabled moves, trapping,
+  locked moves, who is to be replaced) to be what the engine had. Seven
+  faults injected into the export and rebuild code (a counter not restored, a
+  source forgotten, the event masks left empty) were all noticed. For
+  positions nobody would write on purpose, `tests/position.rs` throws random
+  conditions onto recorded positions; of 60,000, `from_state` refused about
+  one in six (a Choice lock that names no move) and every one it accepted
+  could be played on without the engine tripping.
 - **Does the comparison have teeth?** `scripts/mutation_test.py` injects one
   small bug at a time (Life Orb's multiplier off by 1/4096, Intimidate
   lowering by two stages, Mold Breaker ignored, Sitrus Berry restoring a third) and
@@ -168,6 +253,7 @@ the kind of error most likely to remain.
 scripts/setup-oracle.sh            # clone and build the pinned Showdown commit (needs Node 22+)
 scripts/fuzz.sh 2000               # 2,000 fresh battles, random seed
 TRACE=1 scripts/fuzz.sh 300 42     # also compare every RNG draw
+REBUILD=1 scripts/fuzz.sh 2000     # also rebuild the battle from its position at every decision
 ```
 
 The mutation test needs recorded battles to replay: the batches built around
@@ -265,9 +351,10 @@ between two legal Champions teams.
 
 Not modelled:
 
-- **Starting from the middle of a battle.** `Battle::new` builds turn 1 from
-  two teams. Setting up an arbitrary position (HP, boosts, conditions with
-  their timers, what has been revealed) is the next piece of work.
+- **Hidden information.** A position
+  ([above](#starting-from-the-middle-of-a-battle)) has to say everything
+  about both sides. Sampling what a player has not been shown is the next
+  piece of work.
 - Team preview: the engine starts from the four Pokémon each side picked, in
   the order picked.
 - Anything Champions does not have: Terastallization, Z-moves, Dynamax, and
@@ -314,6 +401,7 @@ src/items.rs       item callbacks
 src/conditions.rs  callbacks of statuses, volatiles, weather, terrain and side conditions
 src/movecbs.rs     script callbacks of moves (onTry, onHit, basePowerCallback, ...)
 src/choice.rs      Battle::new, legal choices, submitting choices
+src/position.rs    a position as data: Battle::to_state, Battle::from_state, JSON
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
 src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
@@ -326,6 +414,7 @@ oracle/gen_cases.js  Showdown battles -> recorded cases (JSON lines)
 scripts/             setup-oracle.sh, fuzz.sh, targeted.sh, mutation_test.py
 tests/parity.rs    fixture of recorded battles, choice-validation checks
 tests/effects.rs   a few abilities and items checked directly, as API examples
+tests/position.rs  positions written by hand: defaults, timers, switches in the middle of a turn
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -358,9 +447,10 @@ likely first steps when speed starts to matter.
 
 ## What comes next
 
-1. **Building a `Battle` from an arbitrary mid-battle state**, which a bot
-   needs to search from a live game, and sampling hidden information (the
-   opponent's unrevealed moves, items, abilities and bench) into it.
+1. **Sampling hidden information** into a position: the opponent's
+   unrevealed moves, items, abilities, spreads and bench, drawn from a prior
+   (usage statistics, or the bot's own model) and consistent with what has
+   been seen.
 2. **Python bindings and batched stepping** for training.
 3. **Speed.** The per-Pokémon listener cache described above, then
    profiling.

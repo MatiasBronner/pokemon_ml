@@ -151,6 +151,17 @@ impl<K: Copy + PartialEq, const N: usize> CondList<K, N> {
     pub(crate) fn clear(&mut self) {
         self.len = 0;
     }
+    /// The conditions, for editing in place.
+    pub(crate) fn as_mut_slice(&mut self) -> &mut [Cond<K>] {
+        let n = self.len as usize;
+        &mut self.items[..n]
+    }
+    /// Blank the unused storage, so that two lists holding the same conditions are the same data.
+    pub(crate) fn tidy(&mut self, blank: K) {
+        for i in self.len as usize..N {
+            self.items[i] = Cond::new(blank);
+        }
+    }
     /// Remove every condition `pred` picks and return them, both lists keeping their order.
     pub(crate) fn take_where(&mut self, pred: impl Fn(K) -> bool) -> Self {
         let mut taken = Self { len: 0, items: self.items };
@@ -180,7 +191,7 @@ pub type SlotConds = CondList<SlotCond, { crate::data::N_SLOT_CONDS }>;
 pub type PseudoWeathers = CondList<Pseudo, { crate::data::N_PSEUDO }>;
 
 /// Conditions on the whole field (Showdown's `Field`).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Field {
     /// `kind` is `Weather::None` when there is no weather.
     pub weather: Cond<Weather>,
@@ -189,15 +200,17 @@ pub struct Field {
 }
 
 /// `Pokemon#trapped`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Trapped {
+    #[default]
     No,
     Yes,
     /// Trapped by something the player has not been shown yet (Shadow Tag).
     Hidden,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pokemon {
     /// Current species (index into `data::SPECIES`); changes on Mega Evolution.
     pub species: u16,
@@ -335,7 +348,7 @@ pub(crate) struct DamagedBy {
 
 pub(crate) const NO_DAMAGED_BY: DamagedBy = DamagedBy { idx: 0, slot: 0, damage: 0, this_turn: false };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Side {
     pub team: [Pokemon; MAX_TEAM],
     /// Number of Pokémon brought.
@@ -354,11 +367,13 @@ pub struct Side {
     pub slot_conds: [SlotConds; ACTIVE],
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Request {
     /// The battle is running or over; nobody is being asked anything.
     None,
     /// Both sides choose moves or switches for the turn.
+    #[default]
     Move,
     /// One or both sides replace fainted Pokémon.
     Switch,
@@ -473,7 +488,7 @@ pub(crate) enum ActKind {
     Residual,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Action {
     pub kind: ActKind,
     pub order: u32,
@@ -522,7 +537,7 @@ impl Action {
 
 pub(crate) const QUEUE_CAP: usize = 16;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Queue {
     pub len: u8,
     pub items: [Action; QUEUE_CAP],
@@ -729,7 +744,7 @@ pub(crate) enum Imm {
 
 /// The event being run (Showdown's `battle.event`), including the values that
 /// travel with it as its relay variable.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Event {
     /// `None` outside any event.
     pub id: Option<Ev>,
@@ -791,7 +806,7 @@ pub(crate) enum IgnoreImm {
 }
 
 /// Per-target results of a move (`Pokemon#getMoveHitData`).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct HitData {
     pub crit: bool,
     pub type_mod: i8,
@@ -802,7 +817,7 @@ pub(crate) const MAX_SECS: usize = 3;
 
 /// The mutable per-use copy of a move (Showdown's `ActiveMove`). Handlers
 /// change its type, flags, secondaries and so on while it is being used.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ActiveMove {
     pub id: u16,
     pub typ: Type,
@@ -948,7 +963,7 @@ impl ActiveMove {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct FaintEntry {
     pub target: MonRef,
     pub source: Option<MonRef>,
@@ -958,7 +973,7 @@ pub(crate) struct FaintEntry {
 /// Active-move slots kept per action; nested move use (a bounced move) takes another slot.
 pub(crate) const AM_CAP: usize = 6;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Battle {
     pub rng: Rng,
     pub sides: [Side; 2],

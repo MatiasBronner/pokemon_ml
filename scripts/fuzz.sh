@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Plays random battles in Showdown and checks the engine reproduces every one.
 #
-#   scripts/fuzz.sh [battles] [seed]          compare state after every decision
-#   TRACE=1 scripts/fuzz.sh [battles] [seed]  also compare every RNG draw (slower, large files)
+#   scripts/fuzz.sh [battles] [seed]            compare state after every decision
+#   TRACE=1 scripts/fuzz.sh [battles] [seed]    also compare every RNG draw (slower, large files)
+#   REBUILD=1 scripts/fuzz.sh [battles] [seed]  also rebuild the battle from its exported position at every decision
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,5 +23,5 @@ if [ -n "${TRACE:-}" ]; then
   cargo run --quiet --release --features trace --bin difftest -- "$OUT"
 else
   node oracle/gen_cases.js --n "$N" --seed "$SEED" --out "$OUT" --stats oracle/last_fuzz_stats.json
-  cargo run --quiet --release --bin difftest -- "$OUT"
+  cargo run --quiet --release --bin difftest -- "$OUT" ${REBUILD:+--by-hand}
 fi

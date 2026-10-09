@@ -4,3 +4,4 @@
 /oracle/last_fuzz_stats.json
 *.jsonl
 !/tests/fixtures/*.jsonl
+/target-trace

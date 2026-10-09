@@ -274,6 +274,9 @@ function snapshot(battle) {
 				move_result: [p.moveThisTurnResult, p.moveLastTurnResult].map(resultCode).join(''),
 				base_species: p.baseSpecies.id,
 				can_mega: p.canMegaEvo ? PS.toID(p.canMegaEvo) : '',
+				last_move: p.lastMove ? p.lastMove.id : '',
+				move_actions: Math.min(p.activeMoveActions, 255),
+				newly_switched: !!p.newlySwitched,
 			})),
 		})),
 	};
@@ -292,7 +295,13 @@ function condDetail(id, state) {
 function volDetail(id, state) {
 	switch (id) {
 	case 'stall': return state.counter || 0;
-	case 'choicelock': return state.move || 0;
+	case 'choicelock': case 'encore': case 'disable': return state.move || 0;
+	case 'substitute': return state.hp;
+	case 'dragoncheer': return state.hasDragonType ? 1 : 0;
+	case 'partiallytrapped': return state.boundDivisor;
+	case 'stockpile': return `${state.layers}/${state.def}/${state.spd}`;
+	case 'leechseed': return 'p1a p1b p2a p2b'.split(' ').indexOf(state.sourceSlot);
+	case 'helpinghand': return Math.round(Math.log(state.multiplier) / Math.log(1.5));
 	case 'confusion': return state.time || 0;
 	case 'metronome': return `${state.lastMove || '-'}/${state.numConsecutive || 0}`;
 	default: return 0;
@@ -326,8 +335,14 @@ function legalOptions(battle, side) {
 		if (p.fainted) return ['pass'];
 		const opts = [];
 		const moves = p.getMoves();
-		// No usable move left: any move choice becomes Struggle.
-		if (!moves.length) opts.push('move 1');
+		// No usable move left: any move choice Showdown accepts becomes Struggle. It lists
+		// Struggle itself, except to a side's last active Pokémon with moves sealed by a
+		// foe's Imprison: that one is shown its real moves and must spell out a use of one.
+		if (!moves.length) {
+			const shown = a.moves[0];
+			const loc = CHOOSABLE.has(shown.target) && [1, 2, -1, -2].find(l => battle.validTargetLoc(l, p, shown.target));
+			opts.push(loc ? `move 1 ${loc}` : 'move 1');
+		}
 		for (const mega of (p.canMegaEvo && moves.length ? ['', ' mega'] : [''])) {
 			moves.forEach((m, j) => {
 				if (m.disabled) return;
@@ -369,7 +384,8 @@ function checkLegal(battle, side, legal) {
 			// Out of usable moves: Showdown takes any move slot it listed and turns it into Struggle.
 			// (It also ignores a Mega flag on that Struggle, so `move 1 mega` is not listed.)
 			got = accepted.filter(o => !o.startsWith('move'));
-			if (accepted.some(o => o.startsWith('move'))) got.push('move 1');
+			const first = accepted.find(o => o.startsWith('move'));
+			if (first) got.push(first);
 		}
 		want = want.slice().sort(); got = got.slice().sort();
 		if (want.join('|') !== got.join('|')) {

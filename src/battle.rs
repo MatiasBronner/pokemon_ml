@@ -103,6 +103,10 @@ impl std::error::Error for Error {}
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Tgt {
     Mon(MonRef),
+    /// Showdown's `null`: the hit landed on a substitute. Nothing more happens
+    /// to the target, but the move still counts as having hit.
+    Sub,
+    /// Showdown's `false`.
     Gone,
 }
 
@@ -447,6 +451,8 @@ impl Battle {
             Imm::Trapped => self.type_allows(r, 6),
             Imm::Weather(Weather::Sandstorm) => self.type_allows(r, 8),
             Imm::Weather(_) => true,
+            // The volatile called `trapped` shares its name with the immunity Ghosts have.
+            Imm::Vol(VolKind::Trapped) => self.type_allows(r, 6),
             Imm::Vol(_) => true,
         };
         if !natural {
@@ -776,6 +782,25 @@ impl Battle {
         self.queue.as_slice().iter().any(|a| a.kind == ActKind::Move && a.mon == Some(r))
     }
 
+    /// The move `r` is still due to use this turn (`willMove(r)?.moveid`).
+    pub(crate) fn queued_move(&self, r: MonRef) -> Option<u16> {
+        if self.mon(r).fainted {
+            return None;
+        }
+        self.queue.as_slice().iter().find(|a| a.kind == ActKind::Move && a.mon == Some(r)).map(|a| a.move_id)
+    }
+
+    /// `BattleQueue#changeAction` to a move with no target given: everything
+    /// the Pokémon had queued is dropped (a pending Mega Evolution included)
+    /// and the new move goes where it would have sorted.
+    pub(crate) fn change_action(&mut self, r: MonRef, move_id: u16) {
+        self.queue.cancel(r);
+        let s = self.action_speed(r);
+        self.mon_mut(r).speed = s;
+        let a = self.resolve_move(r, move_id, 0);
+        self.insert_choice(a);
+    }
+
     // ------------------------------------------------------------- switching
 
     /// `Pokemon#clearVolatile` (the Champions version).
@@ -783,8 +808,17 @@ impl Battle {
         let m = self.mon_mut(r);
         m.boosts = [0; 7];
         m.ability = m.base_ability;
+        // Linked volatiles (`trapped` and `trapper`) release their other halves.
+        let trapped_by = self.vols(r).get(VolKind::Trapped).and_then(|v| v.source);
+        let was_trapper = self.vols(r).has(VolKind::Trapper);
         if let Some(list) = self.vols_mut(r) {
             list.clear();
+        }
+        if trapped_by.is_some() {
+            self.unlink_volatile(r, VolKind::Trapped, trapped_by);
+        }
+        if was_trapper {
+            self.unlink_volatile(r, VolKind::Trapper, None);
         }
         let m = self.mon_mut(r);
         if include_switch_flags {
@@ -794,6 +828,8 @@ impl Battle {
         m.move_last_turn = Res::Undef;
         m.was_attacked = false;
         m.last_attack_damage = 0;
+        m.last_move = NO_MOVE;
+        m.newly_switched = true;
         let base = m.base_species;
         self.set_species(r, base);
     }
@@ -894,6 +930,7 @@ impl Battle {
             let m = self.mon_mut(incoming);
             m.is_active = true;
             m.active_turns = 0;
+            m.active_move_actions = 0;
         }
         self.new_ability_state(incoming);
         let has_item = self.mon(incoming).item != it::NONE;
@@ -1347,8 +1384,59 @@ impl Battle {
             return false;
         }
         self.single_event(Ev::End, Eff::Vol(kind), Some(r), Some(r), None, Eff::None, Res::Undef);
+        let link = self.vols(r).get(kind).and_then(|v| v.source);
         self.drop_vol(r, kind);
+        self.unlink_volatile(r, kind, link);
         true
+    }
+
+    /// `Pokemon#addVolatile(status, source, effect, linkedStatus)` for the one
+    /// linked pair there is: `trapped` on the target and `trapper` on the
+    /// Pokémon holding it there. Each ends when the last Pokémon it is linked
+    /// to loses its half. The links are not stored: a `trapped` is linked to
+    /// its source, a `trapper` to everyone whose `trapped` names it.
+    pub(crate) fn add_trapped(&mut self, r: MonRef, source: MonRef, source_effect: Eff) -> Res {
+        if self.mon(source).hp == 0 {
+            return FALSE;
+        }
+        let result = self.add_volatile(r, VolKind::Trapped, Some(source), source_effect);
+        if result != TRUE {
+            return result;
+        }
+        if !self.vols(source).has(VolKind::Trapper) {
+            self.add_volatile(source, VolKind::Trapper, Some(r), source_effect);
+        }
+        TRUE
+    }
+
+    /// `Pokemon#removeLinkedVolatiles`, after `r` lost `kind` (whose source was `link`).
+    fn unlink_volatile(&mut self, r: MonRef, kind: VolKind, link: Option<MonRef>) {
+        match kind {
+            VolKind::Trapped => {
+                // Its trapper is released once it holds nobody else.
+                let Some(source) = link else {
+                    return;
+                };
+                if self.vols(source).has(VolKind::Trapper) && !self.anyone_trapped_by(source) {
+                    self.remove_volatile(source, VolKind::Trapper);
+                }
+            }
+            VolKind::Trapper => {
+                // Everyone it was holding goes free.
+                let (actives, n) = self.all_active(true);
+                for &other in &actives[..n] {
+                    if self.vols(other).get(VolKind::Trapped).is_some_and(|v| v.source == Some(r)) {
+                        self.remove_volatile(other, VolKind::Trapped);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn anyone_trapped_by(&self, source: MonRef) -> bool {
+        let (actives, n) = self.all_active(true);
+        actives[..n].iter().any(|&o| self.vols(o).get(VolKind::Trapped).is_some_and(|v| v.source == Some(source)))
     }
 
     // ------------------------------------------------- field and side conditions
@@ -1730,8 +1818,11 @@ impl Battle {
         if !m.is_active {
             return true;
         }
-        // Gastro Acid and Neutralizing Gas are not modelled.
-        false
+        if ABILITIES[m.ability as usize].flags & AF_CANTSUPPRESS != 0 {
+            return false;
+        }
+        // (Neutralizing Gas, the other way to lose an ability, is not in Champions.)
+        self.vols(r).has(VolKind::Gastroacid)
     }
 
     /// `Pokemon#hasAbility`.
@@ -2103,6 +2194,7 @@ impl Battle {
                 {
                     let turn = self.turn;
                     let m = self.mon_mut(r);
+                    m.newly_switched = false;
                     m.move_last_turn = m.move_this_turn;
                     m.move_this_turn = Res::Undef;
                     if turn != 1 {
@@ -2110,10 +2202,20 @@ impl Battle {
                     }
                     for k in 0..m.n_moves as usize {
                         m.moves[k].disabled = false;
+                        m.moves[k].hidden = false;
                     }
                 }
                 self.run_event(Ev::DisableMove, Some(r), None, Eff::None, Res::Undef);
-                // (Moves that disable themselves are not modelled.)
+                // Moves that disable themselves (Fake Out after the first turn).
+                for k in 0..self.mon(r).n_moves as usize {
+                    let id = self.mon(r).moves[k].id;
+                    if MOVES[id as usize].events & Ev::DisableMove.bit() != 0 {
+                        let saved = self.am_len;
+                        let mi = self.new_am(id);
+                        self.single_event(Ev::DisableMove, Eff::Move(mi), None, Some(r), None, Eff::None, Res::Undef);
+                        self.am_len = saved;
+                    }
+                }
                 self.mon_mut(r).trapped = Trapped::No;
                 self.run_event(Ev::TrapPokemon, Some(r), None, Eff::None, Res::Undef);
                 if self.type_allows(r, 6) {

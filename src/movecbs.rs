@@ -39,21 +39,309 @@ impl Battle {
         let e = self.event;
         let id = self.am[mi as usize].id;
         match (id, ev) {
-            // ---- Protect, Detect
+            // ---- Protect, Detect and the other moves that fail more often when repeated
             // onPrepareHit(pokemon)
-            (mv::PROTECT | mv::DETECT, Ev::PrepareHit) => {
+            (
+                mv::PROTECT | mv::DETECT | mv::ENDURE | mv::BANEFULBUNKER | mv::KINGSSHIELD | mv::SPIKYSHIELD,
+                Ev::PrepareHit,
+            ) => {
                 if !self.will_act() {
                     return FALSE;
                 }
                 self.run_event(Ev::StallMove, e.target, None, Eff::None, Res::Undef)
             }
             // onHit(pokemon)
-            (mv::PROTECT | mv::DETECT, Ev::Hit) => {
+            (
+                mv::PROTECT | mv::DETECT | mv::ENDURE | mv::BANEFULBUNKER | mv::KINGSSHIELD | mv::SPIKYSHIELD,
+                Ev::Hit,
+            ) => {
                 if let Some(t) = e.target {
                     self.add_volatile(t, VolKind::Stall, None, Eff::None);
                 }
                 Res::Undef
             }
+
+            // ---- Wide Guard, Quick Guard
+            // onTry(): fails if nothing else is left to act this turn.
+            (mv::WIDEGUARD | mv::QUICKGUARD, Ev::Try) => Res::Bool(self.will_act()),
+            // onHitSide(side, source): counts as a use of Protect for the user's next one.
+            (mv::WIDEGUARD | mv::QUICKGUARD, Ev::HitSide) => {
+                if let Some(source) = e.source {
+                    self.add_volatile(source, VolKind::Stall, None, Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Fake Out, First Impression: only on the user's first turn out.
+            // onTry(source)
+            (mv::FAKEOUT | mv::FIRSTIMPRESSION, Ev::Try) => {
+                if e.target.is_some_and(|source| self.mon(source).active_move_actions > 1) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onDisableMove(pokemon)
+            (mv::FAKEOUT | mv::FIRSTIMPRESSION, Ev::DisableMove) => {
+                if let Some(pokemon) = e.target {
+                    if self.mon(pokemon).active_move_actions > 0 {
+                        self.disable_slots_where(pokemon, |s| s.id == id);
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Follow Me, Rage Powder: onTry(source). Fail in singles only.
+            (mv::FOLLOWME | mv::RAGEPOWDER, Ev::Try) => TRUE,
+
+            // ---- Helping Hand: onTryHit(target). The ally must still have a move to make.
+            (mv::HELPINGHAND, Ev::TryHit) => {
+                if e.target.is_some_and(|t| !self.mon(t).newly_switched && !self.will_move(t)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Disable: onTryHit(target). The target must have used a move.
+            (mv::DISABLE, Ev::TryHit) => {
+                if e.target.is_some_and(|t| matches!(self.mon(t).last_move, NO_MOVE | mv::STRUGGLE)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ============================================ moves that set up a volatile
+            // ---- Leech Seed: onTryImmunity(target). Grass types are immune.
+            (mv::LEECHSEED, Ev::TryImmunity) => Res::Bool(e.target.is_some_and(|t| !self.has_type(t, Type::Grass))),
+
+            // ---- Magnet Rise: onTry(source, target, move)
+            (mv::MAGNETRISE, Ev::Try) => {
+                if let Some(target) = e.source {
+                    if self.has_vol_named(target, "smackdown") || self.has_vol_named(target, "ingrain") {
+                        return FALSE;
+                    }
+                }
+                if self.field.pseudo.has(Pseudo::Gravity) {
+                    return Res::Null;
+                }
+                Res::Undef
+            }
+
+            // ---- No Retreat: onTry(source, target, move). Fails if already used;
+            // a Pokémon trapped by something else only gets the boosts.
+            (mv::NORETREAT, Ev::Try) => {
+                let Some(source) = e.target else {
+                    return Res::Undef;
+                };
+                if self.vols(source).has(VolKind::Noretreat) {
+                    return FALSE;
+                }
+                if self.vols(source).has(VolKind::Trapped) {
+                    self.am[mi as usize].no_volatile = true;
+                }
+                Res::Undef
+            }
+
+            // ---- Octolock: onTryImmunity(target). Ghosts cannot be trapped.
+            (mv::OCTOLOCK, Ev::TryImmunity) => Res::Bool(e.target.is_some_and(|t| self.type_allows(t, 6))),
+
+            // ---- Electrify: onTryHit(target). The target must still have a move to make.
+            (mv::ELECTRIFY, Ev::TryHit) => {
+                if e.target.is_some_and(|t| !self.will_move(t) && self.mon(t).active_turns > 0) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Gastro Acid: onTryHit(target). Some abilities cannot be suppressed.
+            (mv::GASTROACID, Ev::TryHit) => {
+                if e.target.is_some_and(|t| ABILITIES[self.mon(t).ability as usize].flags & AF_CANTSUPPRESS != 0) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Lock-On
+            // onTryHit(target, source)
+            (mv::LOCKON, Ev::TryHit) => {
+                if e.source.is_some_and(|s| self.vols(s).has(VolKind::Lockon)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onHit(target, source)
+            (mv::LOCKON, Ev::Hit) => {
+                if let (Some(target), Some(source)) = (e.target, e.source) {
+                    self.add_volatile(source, VolKind::Lockon, Some(target), Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Perish Song: onHitField(target, source, move). Everyone who hears it.
+            (mv::PERISHSONG, Ev::HitField) => {
+                let me = Eff::Move(mi);
+                let mut result = false;
+                let (actives, n) = self.all_active(false);
+                for &pokemon in &actives[..n] {
+                    // Out of reach, or deaf to it (Soundproof answers `null`).
+                    let unreachable = self.run_event(Ev::Invulnerability, Some(pokemon), e.source, me, Res::Undef)
+                        == FALSE
+                        || self.run_event(Ev::TryHit, Some(pokemon), e.source, me, Res::Undef) == Res::Null;
+                    if unreachable {
+                        result = true;
+                    } else if !self.vols(pokemon).has(VolKind::Perishsong) {
+                        self.add_volatile(pokemon, VolKind::Perishsong, None, Eff::None);
+                        result = true;
+                    }
+                }
+                if !result {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Yawn: onTryHit(target). Not on something that cannot fall asleep.
+            (mv::YAWN, Ev::TryHit) => {
+                let Some(target) = e.target else {
+                    return Res::Undef;
+                };
+                if self.mon(target).status != Status::None
+                    || !self.run_status_immunity(target, Imm::Status(Status::Slp))
+                {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Stockpile, Spit Up, Swallow
+            // onTry(source): three layers at most.
+            (mv::STOCKPILE, Ev::Try) => {
+                if e.target.is_some_and(|s| self.vols(s).get(VolKind::Stockpile).is_some_and(|v| v.data >= 3)) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onTry(source): needs something stockpiled.
+            (mv::SPITUP | mv::SWALLOW, Ev::Try) => {
+                Res::Bool(e.target.is_some_and(|s| self.vols(s).has(VolKind::Stockpile)))
+            }
+            // basePowerCallback(pokemon)
+            (mv::SPITUP, Ev::BasePowerCallback) => {
+                match e.target.and_then(|p| self.vols(p).get(VolKind::Stockpile)).map(|v| v.data) {
+                    Some(layers) if layers > 0 => Res::Num(layers as i32 * 100),
+                    _ => FALSE,
+                }
+            }
+            // onAfterMove(pokemon)
+            (mv::SPITUP, Ev::AfterMove) => {
+                if let Some(pokemon) = e.target {
+                    self.remove_volatile(pokemon, VolKind::Stockpile);
+                }
+                Res::Undef
+            }
+            // onHit(pokemon): a quarter, half or all of its HP.
+            (mv::SWALLOW, Ev::Hit) => {
+                let Some(pokemon) = e.target else {
+                    return Res::Undef;
+                };
+                let layers = self.vols(pokemon).get(VolKind::Stockpile).map_or(1, |v| v.data.clamp(1, 3));
+                let part = [1024, 2048, 4096][layers as usize - 1];
+                let amount = crate::battle::modify(self.mon(pokemon).max_hp() as u32, part);
+                let success = self.heal(amount as i32, None, None, Eff::None).truthy();
+                self.remove_volatile(pokemon, VolKind::Stockpile);
+                if success { TRUE } else { Res::NotFail }
+            }
+
+            // ---- Destiny Bond: onPrepareHit(pokemon). Fails if it is still in effect from last time.
+            (mv::DESTINYBOND, Ev::PrepareHit) => {
+                Res::Bool(e.target.is_some_and(|p| !self.remove_volatile(p, VolKind::Destinybond)))
+            }
+
+            // ---- Sparkling Aria: onAfterMove(source, target, move). Cures the burns of
+            // those it hit; its secondary only marks them.
+            (mv::SPARKLINGARIA, Ev::AfterMove) => {
+                let Some(source) = e.target else {
+                    return Res::Undef;
+                };
+                let am = self.am[mi as usize];
+                if self.mon(source).fainted || !am.has_hit_targets || am.has_sheer_force {
+                    let (actives, n) = self.all_active(true);
+                    for &pokemon in &actives[..n] {
+                        self.drop_vol(pokemon, VolKind::Sparklingaria);
+                    }
+                    return Res::Undef;
+                }
+                let n = am.n_hit_targets as usize;
+                for &pokemon in &am.hit_targets[..n] {
+                    if pokemon != source
+                        && self.mon(pokemon).is_active
+                        && (self.remove_volatile(pokemon, VolKind::Sparklingaria) || n > 1)
+                        && self.mon(pokemon).status == Status::Brn
+                    {
+                        self.cure_status(pokemon);
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Block, Mean Look: onHit(target, source, move)
+            (mv::BLOCK | mv::MEANLOOK, Ev::Hit) => match (e.target, e.source) {
+                (Some(target), Some(source)) => self.add_trapped(target, source, Eff::Move(mi)),
+                _ => Res::Undef,
+            },
+            // ---- Jaw Lock: onHit(target, source, move). Both are trapped.
+            (mv::JAWLOCK, Ev::Hit) => {
+                if let (Some(target), Some(source)) = (e.target, e.source) {
+                    self.add_trapped(source, target, Eff::Move(mi));
+                    self.add_trapped(target, source, Eff::Move(mi));
+                }
+                Res::Undef
+            }
+            // ---- Spirit Shackle: its secondary's onHit(target, source, move)
+            (mv::SPIRITSHACKLE, Ev::SecondaryHit) => {
+                if let (Some(target), Some(source)) = (e.target, e.source) {
+                    if self.mon(source).is_active {
+                        self.add_trapped(target, source, Eff::Move(mi));
+                    }
+                }
+                Res::Undef
+            }
+            // ---- Throat Chop: its secondary's onHit(target)
+            (mv::THROATCHOP, Ev::SecondaryHit) => {
+                if let Some(target) = e.target {
+                    self.add_volatile(target, VolKind::Throatchop, None, Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Substitute
+            // onTryHit(source): fails with a substitute already up, or without the HP to make one.
+            (mv::SUBSTITUTE, Ev::TryHit) => {
+                let Some(source) = e.target else {
+                    return Res::Undef;
+                };
+                let m = self.mon(source);
+                if self.vols(source).has(VolKind::Substitute) || m.hp as u32 * 4 <= m.max_hp() as u32 || m.max_hp() == 1
+                {
+                    return Res::NotFail;
+                }
+                Res::Undef
+            }
+            // onHit(target): the substitute costs a quarter of the user's HP.
+            (mv::SUBSTITUTE, Ev::Hit) => {
+                if let Some(target) = e.target {
+                    let cost = self.mon(target).max_hp() as i32 / 4;
+                    self.direct_damage(cost, target, e.source, Eff::Move(mi));
+                }
+                Res::Undef
+            }
+
+            // ---- Attract: onTryImmunity(target, source)
+            (mv::ATTRACT, Ev::TryImmunity) => match (e.target, e.source) {
+                (Some(t), Some(s)) => {
+                    Res::Bool(crate::conditions::opposite_genders(self.mon(t).gender, self.mon(s).gender))
+                }
+                _ => FALSE,
+            },
 
             // ---- Aurora Veil: onTry(). Only in snow.
             (mv::AURORAVEIL, Ev::Try) => Res::Bool(self.is_weather(Weather::Snowscape)),

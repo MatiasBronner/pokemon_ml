@@ -237,6 +237,8 @@ pub struct MoveData {
     pub ignore_immunity: bool,
     /// A protecting move, whose success rate drops with consecutive use.
     pub stalling_move: bool,
+    /// Removes Protect and its relatives from the target before hitting (Feint).
+    pub breaks_protect: bool,
     /// Struggle's recoil: a quarter of the user's max HP, not blockable.
     pub struggle_recoil: bool,
     /// Bit set of the events this move has a script callback of its own for

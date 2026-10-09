@@ -64,7 +64,7 @@ impl HitEff {
             boosts: am.boosts,
             boost_order: d.boost_order,
             status: d.status,
-            volatile: d.volatile,
+            volatile: if am.no_volatile { None } else { d.volatile },
             side_condition: d.side_condition,
             slot_condition: d.slot_condition,
             pseudo_weather: d.pseudo_weather,
@@ -153,6 +153,8 @@ impl Battle {
     /// all, PP), for a move chosen as this turn's action.
     pub(crate) fn run_move(&mut self, a: &Action) {
         let pokemon = a.mon.unwrap();
+        let m = self.mon_mut(pokemon);
+        m.active_move_actions = m.active_move_actions.saturating_add(1);
         let d = &MOVES[a.move_id as usize];
         let target = self.get_target(pokemon, d.target, a.target_loc, a.orig_target);
         let mi = self.new_am(a.move_id);
@@ -172,8 +174,15 @@ impl Battle {
             self.mon_mut(pokemon).move_this_turn = FALSE;
             return;
         }
+        // `Pokemon#moveUsed`.
+        self.mon_mut(pokemon).last_move = a.move_id;
+        self.mon_mut(pokemon).last_move_loc = a.target_loc;
         self.use_move(mi, pokemon, target, Eff::None);
         let mv = self.active_move.unwrap_or(mi);
+        if self.move_has_cb(mv, Ev::AfterMove) {
+            let me = Eff::Move(mv);
+            self.single_event(Ev::AfterMove, me, None, Some(pokemon), target, me, Res::Undef);
+        }
         self.run_event(Ev::AfterMove, Some(pokemon), target, Eff::Move(mv), Res::Undef);
         self.faint_messages(false, false, true);
         self.check_win(None);
@@ -228,10 +237,17 @@ impl Battle {
         self.run_event(Ev::ModifyType, Some(pokemon), target, me, Res::Undef);
         // A handler can veto the move here (Gravity grounding a flying move).
         let modified = self.run_event(Ev::ModifyMove, Some(pokemon), target, me, Res::Undef);
+        if !modified.truthy() {
+            // A veto leaves Showdown holding `false` in place of the move; its
+            // target then never equals the base target, so one more random
+            // target is drawn (as for a move with no target type) before giving up.
+            self.get_random_target(pokemon, Target::Normal);
+            return FALSE;
+        }
         if base_target != self.am[m].target {
             target = self.get_random_target(pokemon, self.am[m].target);
         }
-        if !modified.truthy() || self.mon(pokemon).fainted {
+        if self.mon(pokemon).fainted {
             return FALSE;
         }
         let Some(chosen) = target else {
@@ -527,7 +543,28 @@ impl Battle {
             return self.spread_done(user, mi, n, failure);
         }
 
-        // Steps 5 and 6 (breaking protection, stealing boosts): no modelled move does either.
+        // Step 5: breaking protection (Feint).
+        if self.am[m].d().breaks_protect {
+            for &t in &targets[..n] {
+                let mut broke = false;
+                for name in
+                    ["banefulbunker", "burningbulwark", "kingsshield", "obstruct", "protect", "silktrap", "spikyshield"]
+                {
+                    if let Some(k) = VolKind::named(name) {
+                        broke |= self.remove_volatile(t, k);
+                    }
+                }
+                for name in ["craftyshield", "matblock", "quickguard", "wideguard"] {
+                    if let Some(k) = SideCond::named(name) {
+                        broke |= self.remove_side_condition(t.side as usize, k);
+                    }
+                }
+                if broke {
+                    self.drop_vol(t, VolKind::Stall);
+                }
+            }
+        }
+        // Step 6 (stealing boosts): no modelled move does.
 
         // Step 7: the hits themselves.
         let dmg = self.move_hit_loop(&targets[..n], user, mi);
@@ -684,7 +721,7 @@ impl Battle {
     }
 
     /// `BattleActions#applyRecoilDamage`.
-    fn apply_recoil(&mut self, dealt: u32, mi: u8, user: MonRef) {
+    pub(crate) fn apply_recoil(&mut self, dealt: u32, mi: u8, user: MonRef) {
         let d = self.am[mi as usize].d();
         if d.struggle_recoil {
             let r = round_div(self.mon(user).max_hp() as u32, 1, 4).max(1);
@@ -717,7 +754,7 @@ impl Battle {
         if eff.primary {
             let first = match targets[0] {
                 Tgt::Mon(t) => Some(t),
-                Tgt::Gone => None,
+                _ => None,
             };
             let ev = if on_field && !is_self {
                 Some(Ev::TryHitField)
@@ -748,7 +785,11 @@ impl Battle {
             }
         }
         for i in 0..n {
-            if targets[i] != Tgt::Gone && is_secondary && !eff.has_self {
+            if damage[i] == HIT_SUBSTITUTE {
+                damage[i] = TRUE;
+                targets[i] = Tgt::Sub;
+            }
+            if matches!(targets[i], Tgt::Mon(_)) && is_secondary && !eff.has_self {
                 damage[i] = TRUE;
             }
             if !damage[i].truthy() {
@@ -856,12 +897,14 @@ impl Battle {
     /// `BattleActions#secondaries`.
     fn secondaries(&mut self, targets: &Targets, n: usize, user: MonRef, mi: u8, is_self: bool) {
         for i in 0..n {
-            let Tgt::Mon(t) = targets[i] else {
+            if targets[i] == Tgt::Gone {
                 continue;
-            };
+            }
             let count = self.am[mi as usize].n_secs as usize;
             let mut keep: u8 = (1u8 << count) - 1;
-            if self.listens(Ev::ModifySecondaries) {
+            // Behind a substitute there is no target for anyone to shield:
+            // the secondaries are still rolled, and only their effects on the user happen.
+            if let (Tgt::Mon(t), true) = (targets[i], self.listens(Ev::ModifySecondaries)) {
                 let mut e = Event::new(Ev::ModifySecondaries, Some(t), Some(user), Eff::Move(mi));
                 e.secs = keep;
                 keep = self.run_event_ex(e, Res::Undef, false, false).1.secs;
@@ -874,7 +917,7 @@ impl Battle {
                 // The roll happens even when the secondary is guaranteed.
                 let roll = self.rand(100, "secondary effect");
                 if sec.chance == 0 || roll < sec.chance as u32 {
-                    let mut one: Targets = [Tgt::Mon(t), Tgt::Gone, Tgt::Gone];
+                    let mut one: Targets = [targets[i], Tgt::Gone, Tgt::Gone];
                     self.spread_move_hit(&mut one, 1, user, mi, HitEff::of_secondary(&sec, k), true, is_self);
                 }
             }
@@ -991,6 +1034,12 @@ impl Battle {
     }
 
     /// `BattleActions#getDamage` followed by the Champions `modifyDamage`.
+    /// `getDamage` for the move itself, as a condition calls it (Substitute).
+    pub(crate) fn move_damage(&mut self, user: MonRef, target: MonRef, mi: u8) -> Res {
+        let eff = HitEff::of_move(&self.am[mi as usize]);
+        self.get_damage(user, target, mi, &eff)
+    }
+
     fn get_damage(&mut self, user: MonRef, target: MonRef, mi: u8, eff: &HitEff) -> Res {
         if !eff.primary {
             // Secondaries and self effects carry no type and no base power.

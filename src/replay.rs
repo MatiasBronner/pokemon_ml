@@ -92,6 +92,13 @@ pub struct MonSnap {
     /// Id of the Mega the Pokémon can still become; empty if none.
     #[serde(default)]
     pub can_mega: Option<String>,
+    /// Id of the move last used since coming in; empty if none.
+    #[serde(default)]
+    pub last_move: Option<String>,
+    #[serde(default)]
+    pub move_actions: Option<u8>,
+    #[serde(default)]
+    pub newly_switched: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -207,6 +214,13 @@ fn mon_snap(b: &Battle, side: usize, pos: usize) -> MonSnap {
         } else {
             SPECIES[m.can_mega as usize].id.to_string()
         }),
+        last_move: Some(if m.last_move == crate::state::NO_MOVE {
+            String::new()
+        } else {
+            MOVES[m.last_move as usize].id.to_string()
+        }),
+        move_actions: Some(m.active_move_actions),
+        newly_switched: Some(m.newly_switched),
     }
 }
 
@@ -243,7 +257,13 @@ fn vol_snap(v: &crate::state::Volatile) -> String {
     let detail = match v.kind {
         VolKind::Stall => v.data.to_string(),
         VolKind::Confusion => v.data.to_string(),
-        VolKind::Choicelock if v.data > 0 => MOVES[v.data as usize - 1].id.to_string(),
+        VolKind::Choicelock | VolKind::Encore | VolKind::Disable if v.data > 0 => {
+            MOVES[v.data as usize - 1].id.to_string()
+        }
+        VolKind::Helpinghand | VolKind::Substitute => v.data.to_string(),
+        VolKind::Dragoncheer | VolKind::Partiallytrapped => v.data.to_string(),
+        VolKind::Stockpile => format!("{}/{}/{}", v.data, v.st.a, v.st.b),
+        VolKind::Leechseed => v.source_slot.to_string(),
         VolKind::Metronome => {
             let last = if v.data > 0 { MOVES[v.data as usize - 1].id } else { "-" };
             format!("{last}/{}", v.st.a)
@@ -352,6 +372,9 @@ pub fn diff(b: &Battle, want: &Snap) -> Vec<String> {
             check_opt!("can mega evolve", can_mega);
             if w.active {
                 check_opt!("move results", move_result);
+                check_opt!("last move", last_move);
+                check_opt!("move actions since switching in", move_actions);
+                check_opt!("newly switched", newly_switched);
                 check_opt!("trapped", trapped);
                 check_opt!("ability effect order", ability_order);
                 check_opt!("item effect order", item_order);

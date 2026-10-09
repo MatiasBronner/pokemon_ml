@@ -134,7 +134,10 @@ impl Battle {
 
     /// Callbacks of volatile conditions. `holder` has the volatile.
     pub(crate) fn vol_cb(&mut self, kind: VolKind, ev: Ev, pre: Pre, holder: MonRef) -> Res {
-        debug_assert!(pre == Pre::On, "no body for {kind:?} {ev:?} {pre:?}");
+        if pre != Pre::On {
+            return self.vol_cb_prefixed(kind, ev, pre, holder);
+        }
+        let e = self.event;
         match (kind, ev) {
             (VolKind::Flinch, Ev::BeforeMove) => {
                 self.run_event(Ev::Flinch, Some(holder), None, Eff::None, Res::Undef);
@@ -150,6 +153,7 @@ impl Battle {
                 if self.bypasses_protect(mi, source, target, true) {
                     return Res::Undef;
                 }
+                self.protect_unlocks(source);
                 Res::NotFail
             }
 
@@ -245,12 +249,7 @@ impl Battle {
                 if self.ignoring_item(holder) {
                     return Res::Undef;
                 }
-                let m = self.mon_mut(holder);
-                for k in 0..m.n_moves as usize {
-                    if m.moves[k].id + 1 != locked {
-                        m.moves[k].disabled = true;
-                    }
-                }
+                self.disable_slots_where(holder, |s| s.id + 1 != locked);
                 Res::Undef
             }
 
@@ -307,8 +306,859 @@ impl Battle {
                 let n = self.vols(holder).get(VolKind::Metronome).map_or(0, |v| v.st.a).clamp(0, 5);
                 self.chain_modify(MODS[n as usize], 4096)
             }
+
+            // ---- Follow Me / Rage Powder draw the foes' single-target moves (see `vol_cb_prefixed`).
+            (VolKind::Followme | VolKind::Ragepowder, Ev::Start) => Res::Undef,
+
+            // ---- Helping Hand. `data` counts how many times it has been given this turn.
+            (VolKind::Helpinghand, Ev::Start) => {
+                if let Some(v) = self.vol_mut(holder, VolKind::Helpinghand) {
+                    v.data = 1;
+                }
+                Res::Undef
+            }
+            (VolKind::Helpinghand, Ev::Restart) => {
+                if let Some(v) = self.vol_mut(holder, VolKind::Helpinghand) {
+                    v.data += 1;
+                }
+                Res::Undef
+            }
+            // onBasePower(basePower): 1.5 for each Helping Hand.
+            (VolKind::Helpinghand, Ev::BasePower) => {
+                let n = self.vols(holder).get(VolKind::Helpinghand).map_or(1, |v| v.data.clamp(1, 8)) as u32;
+                self.chain_modify(3u32.pow(n), 2u32.pow(n))
+            }
+
+            // ---- Endure
+            (VolKind::Endure, Ev::Start) => Res::Undef,
+            // onDamage(damage, target, source, effect)
+            (VolKind::Endure, Ev::Damage) => {
+                let hp = self.mon(holder).hp as i32;
+                if matches!(e.effect, Eff::Move(_)) && e.relay.num() >= hp {
+                    return Res::Num(hp - 1);
+                }
+                Res::Undef
+            }
+
+            // ---- Baneful Bunker / King's Shield / Spiky Shield: Protect, with a
+            // penalty for moves that make contact.
+            (VolKind::Banefulbunker | VolKind::Kingsshield | VolKind::Spikyshield, Ev::Start) => Res::Undef,
+            // onTryHit(target, source, move)
+            (VolKind::Banefulbunker | VolKind::Kingsshield | VolKind::Spikyshield, Ev::TryHit) => {
+                let (Eff::Move(mi), Some(source)) = (e.effect, e.source) else {
+                    return Res::Undef;
+                };
+                let target = e.target.unwrap_or(holder);
+                // King's Shield lets status moves through.
+                if self.bypasses_protect(mi, source, target, kind != VolKind::Kingsshield) {
+                    return Res::Undef;
+                }
+                self.protect_unlocks(source);
+                if self.makes_contact(mi) {
+                    match kind {
+                        VolKind::Banefulbunker => {
+                            let saved = self.am_len;
+                            let bunker = self.new_am(mv::BANEFULBUNKER);
+                            self.try_set_status(source, Status::Psn, Some(target), Eff::Move(bunker));
+                            self.am_len = saved;
+                        }
+                        VolKind::Kingsshield => {
+                            let saved = self.am_len;
+                            let shield = self.new_am(mv::KINGSSHIELD);
+                            self.boost1(ATK, -1, Some(source), Some(target), Eff::Move(shield));
+                            self.am_len = saved;
+                        }
+                        _ => {
+                            let d = div1(self.mon(source).max_hp() as u32, 8);
+                            self.damage(d, Some(source), Some(target), Eff::None);
+                        }
+                    }
+                }
+                Res::NotFail
+            }
+            // onHit only reacts to Z-Moves and Max Moves.
+            (VolKind::Banefulbunker | VolKind::Kingsshield | VolKind::Spikyshield, Ev::Hit) => Res::Undef,
+
+            // ---- Taunt
+            // onStart(target): a Pokémon that has already moved this turn is taunted for an extra turn.
+            (VolKind::Taunt, Ev::Start) => {
+                if self.mon(holder).active_turns > 0 && !self.will_move(holder) {
+                    if let Some(v) = self.vol_mut(holder, VolKind::Taunt) {
+                        v.duration += 1;
+                    }
+                }
+                Res::Undef
+            }
+            (VolKind::Taunt, Ev::End) => Res::Undef,
+            // onDisableMove(pokemon)
+            (VolKind::Taunt, Ev::DisableMove) => {
+                self.disable_moves_where(holder, |d| d.category == Category::Status && d.id != "mefirst");
+                Res::Undef
+            }
+            // onBeforeMove(attacker, defender, move)
+            (VolKind::Taunt, Ev::BeforeMove) => {
+                if let Eff::Move(mi) = e.effect {
+                    let am = &self.am[mi as usize];
+                    if am.category == Category::Status && am.d().id != "mefirst" {
+                        return FALSE;
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Encore. `data` is the move the holder is held to (table index plus one).
+            // onStart(target)
+            (VolKind::Encore, Ev::Start) => {
+                let last = self.mon(holder).last_move;
+                if last == NO_MOVE {
+                    return FALSE;
+                }
+                let pp = self.move_slot(holder, last).map(|s| s.pp);
+                if MOVES[last as usize].flags & F_FAILENCORE != 0 || pp.is_none_or(|pp| pp == 0) {
+                    return FALSE;
+                }
+                if let Some(v) = self.vol_mut(holder, VolKind::Encore) {
+                    v.data = last + 1;
+                }
+                match self.queued_move(holder) {
+                    // Already moved this turn: the Encore lasts a turn longer.
+                    None => {
+                        if let Some(v) = self.vol_mut(holder, VolKind::Encore) {
+                            v.duration += 1;
+                        }
+                    }
+                    // Still to move with something else: its action is replaced.
+                    Some(chosen) => {
+                        if chosen != last && !self.has_item(holder, it::MENTALHERB) {
+                            self.change_action(holder, last);
+                        }
+                    }
+                }
+                Res::Undef
+            }
+            // onResidual(target): ends when the move runs out of PP.
+            (VolKind::Encore, Ev::Residual) => {
+                let locked = self.vols(holder).get(VolKind::Encore).map_or(0, |v| v.data);
+                let pp = if locked == 0 { None } else { self.move_slot(holder, locked - 1).map(|s| s.pp) };
+                if pp.is_none_or(|pp| pp == 0) {
+                    self.remove_volatile(holder, VolKind::Encore);
+                }
+                Res::Undef
+            }
+            (VolKind::Encore, Ev::End) => Res::Undef,
+            // onDisableMove(pokemon)
+            (VolKind::Encore, Ev::DisableMove) => {
+                let locked = self.vols(holder).get(VolKind::Encore).map_or(0, |v| v.data);
+                if locked == 0 || self.move_slot(holder, locked - 1).is_none() {
+                    return Res::Undef;
+                }
+                self.disable_slots_where(holder, |s| s.id != locked - 1);
+                Res::Undef
+            }
+
+            // ---- Disable. `data` is the disabled move (table index plus one).
+            // onStart(pokemon, source, effect)
+            (VolKind::Disable, Ev::Start) => {
+                // The turn it lands on counts if the holder has yet to move, or is moving right now.
+                let moving_now = self.active_pokemon == Some(holder) && self.active_move.is_some();
+                if self.will_move(holder) || moving_now {
+                    if let Some(v) = self.vol_mut(holder, VolKind::Disable) {
+                        v.duration -= 1;
+                    }
+                }
+                let last = self.mon(holder).last_move;
+                if last == NO_MOVE {
+                    return FALSE;
+                }
+                if self.move_slot(holder, last).is_some_and(|s| s.pp == 0) {
+                    return FALSE;
+                }
+                if let Some(v) = self.vol_mut(holder, VolKind::Disable) {
+                    v.data = last + 1;
+                }
+                Res::Undef
+            }
+            (VolKind::Disable, Ev::End) => Res::Undef,
+            // onBeforeMove(attacker, defender, move)
+            (VolKind::Disable, Ev::BeforeMove) => {
+                let locked = self.vols(holder).get(VolKind::Disable).map_or(0, |v| v.data);
+                if let Eff::Move(mi) = e.effect {
+                    let am = &self.am[mi as usize];
+                    if am.id + 1 == locked && am.flags & F_CANTUSETWICE == 0 {
+                        return FALSE;
+                    }
+                }
+                Res::Undef
+            }
+            // onDisableMove(pokemon)
+            (VolKind::Disable, Ev::DisableMove) => {
+                let locked = self.vols(holder).get(VolKind::Disable).map_or(0, |v| v.data);
+                self.disable_slots_where(holder, |s| s.id + 1 == locked);
+                Res::Undef
+            }
+
+            // ---- Torment: the same move cannot be chosen twice in a row.
+            (VolKind::Torment, Ev::Start | Ev::End) => Res::Undef,
+            // onDisableMove(pokemon)
+            (VolKind::Torment, Ev::DisableMove) => {
+                let last = self.mon(holder).last_move;
+                if last != NO_MOVE && last != mv::STRUGGLE {
+                    self.disable_slots_where(holder, |s| s.id == last);
+                }
+                Res::Undef
+            }
+
+            // ---- Imprison works on the foes (see `vol_cb_prefixed`).
+            (VolKind::Imprison, Ev::Start) => Res::Undef,
+
+            // ---- Attract
+            // onStart(pokemon, source, effect)
+            (VolKind::Attract, Ev::Start) => {
+                let Some(source) = e.source else {
+                    return FALSE;
+                };
+                if !opposite_genders(self.mon(holder).gender, self.mon(source).gender) {
+                    return FALSE;
+                }
+                // (The Attract event only has Destiny Knot listening, which is not in Champions.)
+                Res::Undef
+            }
+            // onUpdate(pokemon): ends when the Pokémon it is attracted to leaves.
+            (VolKind::Attract, Ev::Update) => {
+                let source = self.vols(holder).get(VolKind::Attract).and_then(|v| v.source);
+                if source.is_some_and(|s| !self.mon(s).is_active) {
+                    self.remove_volatile(holder, VolKind::Attract);
+                }
+                Res::Undef
+            }
+            // onBeforeMove(pokemon, target, move)
+            (VolKind::Attract, Ev::BeforeMove) => {
+                if self.chance(1, 2, "attract") {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            (VolKind::Attract, Ev::End) => Res::Undef,
+
+            // ---- Heal Block
+            // onStart(pokemon, source)
+            (VolKind::Healblock, Ev::Start) => {
+                if let Some(source) = e.source {
+                    self.mon_mut(source).move_this_turn = TRUE;
+                }
+                Res::Undef
+            }
+            // onDisableMove(pokemon)
+            (VolKind::Healblock, Ev::DisableMove) => {
+                self.disable_moves_where(holder, |d| d.flags & F_HEAL != 0);
+                Res::Undef
+            }
+            // onBeforeMove(pokemon, target, move) and onModifyMove(move, pokemon)
+            (VolKind::Healblock, Ev::BeforeMove | Ev::ModifyMove) => {
+                if self.event_move_flags() & F_HEAL != 0 {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            (VolKind::Healblock, Ev::End) => Res::Undef,
+            // onTryHeal(damage, target, source, effect): nothing heals. (Its special
+            // message for Pollen Puff aimed at an ally does not change the outcome.)
+            (VolKind::Healblock, Ev::TryHeal) => {
+                if self.eff_is_named(e.effect, "pollenpuff") && e.source.is_some_and(|s| s != holder) {
+                    let m = self.mon(holder);
+                    if m.hp != m.max_hp() {
+                        return Res::Null;
+                    }
+                }
+                FALSE
+            }
+            // onRestart(target, source, effect)
+            (VolKind::Healblock, Ev::Restart) => {
+                if self.eff_is_named(e.effect, "psychicnoise") {
+                    return Res::Undef;
+                }
+                if let Some(source) = e.source {
+                    if !self.mon(source).move_this_turn.truthy() {
+                        self.mon_mut(source).move_this_turn = FALSE;
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Substitute. `data` is the HP the substitute has left.
+            // onStart(target, source, effect)
+            (VolKind::Substitute, Ev::Start) => {
+                let hp = self.mon(holder).max_hp() / 4;
+                if let Some(v) = self.vol_mut(holder, VolKind::Substitute) {
+                    v.data = hp;
+                }
+                // A substitute frees its maker from Wrap and the like, without the usual ending.
+                if let Some(k) = VolKind::named("partiallytrapped") {
+                    self.drop_vol(holder, k);
+                }
+                Res::Undef
+            }
+            // onTryPrimaryHit(target, source, move): the substitute takes the hit.
+            (VolKind::Substitute, Ev::TryPrimaryHit) => {
+                let (Eff::Move(mi), Some(source)) = (e.effect, e.source) else {
+                    return Res::Undef;
+                };
+                let target = holder;
+                let am = &self.am[mi as usize];
+                if target == source || am.flags & F_BYPASSSUB != 0 || am.infiltrates {
+                    return Res::Undef;
+                }
+                let r = self.move_damage(source, target, mi);
+                if !r.hit() {
+                    // No damage to deal (a status move, an immunity): the move fails.
+                    return Res::Null;
+                }
+                let left = self.vols(target).get(VolKind::Substitute).map_or(0, |v| v.data) as i32;
+                let damage = r.num().min(left);
+                if let Some(v) = self.vol_mut(target, VolKind::Substitute) {
+                    v.data = (left - damage) as u16;
+                }
+                if left - damage <= 0 {
+                    self.remove_volatile(target, VolKind::Substitute);
+                }
+                if damage > 0 {
+                    self.apply_recoil(damage as u32, mi, source);
+                }
+                let drain = self.am[mi as usize].d().drain;
+                if drain.0 > 0 {
+                    let amount = (damage as u32 * drain.0 as u32).div_ceil(drain.1 as u32);
+                    self.heal(amount as i32, Some(source), Some(target), Eff::Drain);
+                }
+                let me = Eff::Move(mi);
+                self.single_event(Ev::AfterSubDamage, me, None, Some(target), Some(source), me, Res::Num(damage));
+                self.run_event(Ev::AfterSubDamage, Some(target), Some(source), me, Res::Num(damage));
+                HIT_SUBSTITUTE
+            }
+            (VolKind::Substitute, Ev::End) => Res::Undef,
+
+            // ---- Aqua Ring, Ingrain: onResidual(pokemon) heals 1/16.
+            (VolKind::Aquaring | VolKind::Ingrain, Ev::Start) => Res::Undef,
+            (VolKind::Aquaring | VolKind::Ingrain, Ev::Residual) => {
+                let amount = div1(self.mon(holder).max_hp() as u32, 16);
+                self.heal(amount, None, None, Eff::None);
+                Res::Undef
+            }
+            // Ingrain: onTrapPokemon(pokemon), and onDragOut(pokemon) refuses to be forced out.
+            (VolKind::Ingrain, Ev::TrapPokemon) => {
+                self.try_trap(holder, false);
+                Res::Undef
+            }
+            (VolKind::Ingrain, Ev::DragOut) => Res::Null,
+
+            // ---- Leech Seed: drains into whoever stands where its user stood.
+            (VolKind::Leechseed, Ev::Start) => Res::Undef,
+            // onResidual(pokemon)
+            (VolKind::Leechseed, Ev::Residual) => {
+                let slot = self.vols(holder).get(VolKind::Leechseed).map_or(NO_SLOT, |v| v.source_slot);
+                let Some(target) = self.at_slot(slot) else {
+                    return Res::Undef;
+                };
+                if self.mon(target).fainted || self.mon(target).hp == 0 {
+                    return Res::Undef;
+                }
+                let d = div1(self.mon(holder).max_hp() as u32, 8);
+                let dealt = self.damage(d, Some(holder), Some(target), Eff::None);
+                if dealt.truthy() {
+                    self.heal(dealt.num(), Some(target), Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Focus Energy, Dragon Cheer: mutually exclusive critical-hit boosts.
+            (VolKind::Focusenergy, Ev::Start) => {
+                if self.vols(holder).has(VolKind::Dragoncheer) {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onModifyCritRatio(critRatio)
+            (VolKind::Focusenergy, Ev::ModifyCritRatio) => Res::Num(e.relay.num() + 2),
+            // onStart(target, source, effect). `data` is whether the holder was a Dragon when cheered.
+            (VolKind::Dragoncheer, Ev::Start) => {
+                if self.vols(holder).has(VolKind::Focusenergy) {
+                    return FALSE;
+                }
+                let dragon = self.has_type(holder, Type::Dragon);
+                if let Some(v) = self.vol_mut(holder, VolKind::Dragoncheer) {
+                    v.data = dragon as u16;
+                }
+                Res::Undef
+            }
+            (VolKind::Dragoncheer, Ev::ModifyCritRatio) => {
+                let dragon = self.vols(holder).get(VolKind::Dragoncheer).is_some_and(|v| v.data != 0);
+                Res::Num(e.relay.num() + if dragon { 2 } else { 1 })
+            }
+
+            // ---- Magnet Rise (the levitation itself is in `is_grounded`)
+            (VolKind::Magnetrise, Ev::Start | Ev::End) => Res::Undef,
+            // onImmunity(type) answers for the Ground type, which nothing asks it about.
+            (VolKind::Magnetrise, Ev::Immunity) => Res::Undef,
+
+            // ---- Minimize: moves that punish it never miss and hit twice as hard.
+            // onRestart: () => null
+            (VolKind::Minimize, Ev::Restart) => Res::Null,
+            // onAccuracy(accuracy, target, source, move)
+            (VolKind::Minimize, Ev::Accuracy) => {
+                if self.event_move_flags() & F_MINIMIZE != 0 {
+                    return TRUE;
+                }
+                e.relay
+            }
+
+            // ---- No Retreat, and the "trapped" of Block, Mean Look and Jaw Lock
+            (VolKind::Noretreat | VolKind::Trapped, Ev::Start) => Res::Undef,
+            // onTrapPokemon(pokemon)
+            (VolKind::Noretreat | VolKind::Trapped, Ev::TrapPokemon) => {
+                self.try_trap(holder, false);
+                Res::Undef
+            }
+
+            // ---- Octolock
+            (VolKind::Octolock, Ev::Start) => Res::Undef,
+            // onResidual(pokemon)
+            (VolKind::Octolock, Ev::Residual) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                if let Some(s) = source {
+                    let m = self.mon(s);
+                    if !m.is_active || m.hp == 0 || m.active_turns == 0 {
+                        self.drop_vol(holder, kind);
+                        return Res::Undef;
+                    }
+                }
+                let saved = self.am_len;
+                let octolock = self.new_am(mv::OCTOLOCK);
+                let mut b = [0i8; 7];
+                b[DEF] = -1;
+                b[SPD] = -1;
+                self.boost(b, Some(holder), source, Eff::Move(octolock));
+                self.am_len = saved;
+                Res::Undef
+            }
+            // onTrapPokemon(pokemon)
+            (VolKind::Octolock, Ev::TrapPokemon) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                if source.is_some_and(|s| self.mon(s).is_active) {
+                    self.try_trap(holder, false);
+                }
+                Res::Undef
+            }
+
+            // ---- Power Trick: Attack and Defense change places, and back again when it ends.
+            (VolKind::Powertrick, Ev::Start | Ev::Copy | Ev::End) => {
+                self.mon_mut(holder).stats.swap(ATK + 1, DEF + 1);
+                Res::Undef
+            }
+            // onRestart(pokemon)
+            (VolKind::Powertrick, Ev::Restart) => {
+                self.remove_volatile(holder, VolKind::Powertrick);
+                Res::Undef
+            }
+
+            // ---- Smack Down: only sticks to something that was off the ground.
+            // onStart(pokemon)
+            (VolKind::Smackdown, Ev::Start) => {
+                let mut applies = self.has_type(holder, Type::Flying)
+                    || self.has_ability(holder, ab::LEVITATE)
+                    || self.has_ability(holder, ab::EELEVATE);
+                if self.has_item(holder, it::IRONBALL)
+                    || self.has_vol_named(holder, "ingrain")
+                    || self.field.pseudo.has(Pseudo::Gravity)
+                {
+                    applies = false;
+                }
+                applies |= self.smack_out_of_the_air(holder);
+                for id in ["magnetrise", "telekinesis"] {
+                    if let Some(k) = VolKind::named(id) {
+                        applies |= self.drop_vol(holder, k);
+                    }
+                }
+                if !applies {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+            // onRestart(pokemon)
+            (VolKind::Smackdown, Ev::Restart) => {
+                self.smack_out_of_the_air(holder);
+                Res::Undef
+            }
+
+            // ---- Salt Cure
+            (VolKind::Saltcure, Ev::Start | Ev::End) => Res::Undef,
+            // onResidual(pokemon)
+            (VolKind::Saltcure, Ev::Residual) => {
+                let weak = self.has_type(holder, Type::Water) || self.has_type(holder, Type::Steel);
+                let d = div1(self.mon(holder).max_hp() as u32, if weak { 8 } else { 16 });
+                self.damage(d, None, None, Eff::None);
+                Res::Undef
+            }
+
+            // ---- Syrup Bomb
+            (VolKind::Syrupbomb, Ev::Start | Ev::End) => Res::Undef,
+            // onUpdate(pokemon): ends when its user leaves.
+            (VolKind::Syrupbomb, Ev::Update) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                if source.is_some_and(|s| !self.mon(s).is_active) {
+                    self.remove_volatile(holder, kind);
+                }
+                Res::Undef
+            }
+            // onResidual(pokemon)
+            (VolKind::Syrupbomb, Ev::Residual) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                self.boost1(SPE, -1, Some(holder), source, Eff::None);
+                Res::Undef
+            }
+
+            // ---- Throat Chop: no sound moves.
+            (VolKind::Throatchop, Ev::Start | Ev::End) => Res::Undef,
+            // onDisableMove(pokemon)
+            (VolKind::Throatchop, Ev::DisableMove) => {
+                self.disable_moves_where(holder, |d| d.flags & F_SOUND != 0);
+                Res::Undef
+            }
+            // onBeforeMove(pokemon, target, move) and onModifyMove(move, pokemon, target)
+            (VolKind::Throatchop, Ev::BeforeMove | Ev::ModifyMove) => {
+                if self.event_move_flags() & F_SOUND != 0 {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // ---- Charge: the next Electric move is doubled.
+            (VolKind::Charge, Ev::Start | Ev::Restart | Ev::End) => Res::Undef,
+            // onBasePower(basePower, attacker, defender, move)
+            (VolKind::Charge, Ev::BasePower) => {
+                if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].typ == Type::Electric) {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            // onMoveAborted(pokemon, target, move) and onAfterMove(pokemon, target, move)
+            (VolKind::Charge, Ev::MoveAborted | Ev::AfterMove) => {
+                if let Eff::Move(mi) = e.effect {
+                    let am = &self.am[mi as usize];
+                    if am.typ == Type::Electric && am.id != mv::CHARGE {
+                        self.remove_volatile(holder, VolKind::Charge);
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Destiny Bond: until the holder's next move, whoever knocks it out goes down too.
+            (VolKind::Destinybond, Ev::Start) => Res::Undef,
+            // onFaint(target, source, effect)
+            (VolKind::Destinybond, Ev::Faint) => {
+                let Some(source) = e.source else {
+                    return Res::Undef;
+                };
+                if self.is_ally(holder, source) {
+                    return Res::Undef;
+                }
+                if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].flags & F_FUTUREMOVE == 0) {
+                    self.faint(source, None, Eff::None);
+                }
+                Res::Undef
+            }
+            // onBeforeMove(pokemon, target, move)
+            (VolKind::Destinybond, Ev::BeforeMove) => {
+                if matches!(e.effect, Eff::Move(mi) if self.am[mi as usize].id == mv::DESTINYBOND) {
+                    return Res::Undef;
+                }
+                self.remove_volatile(holder, VolKind::Destinybond);
+                Res::Undef
+            }
+            // onMoveAborted(pokemon, target, move)
+            (VolKind::Destinybond, Ev::MoveAborted) => {
+                self.remove_volatile(holder, VolKind::Destinybond);
+                Res::Undef
+            }
+
+            // ---- Electrify: the holder's move this turn becomes Electric.
+            (VolKind::Electrify, Ev::Start) => Res::Undef,
+            // onModifyType(move)
+            (VolKind::Electrify, Ev::ModifyType) => {
+                if let Eff::Move(mi) = e.effect {
+                    if self.am[mi as usize].id != mv::STRUGGLE {
+                        self.am[mi as usize].typ = Type::Electric;
+                    }
+                }
+                Res::Undef
+            }
+
+            // ---- Gastro Acid (what it suppresses is in `ignoring_ability`)
+            // onStart(pokemon): the ability gets to say goodbye first.
+            (VolKind::Gastroacid, Ev::Start) => {
+                let ability = self.mon(holder).ability;
+                self.single_event(
+                    Ev::End,
+                    Eff::Ability(ability),
+                    Some(holder),
+                    Some(holder),
+                    Some(holder),
+                    Eff::Vol(kind),
+                    Res::Undef,
+                );
+                Res::Undef
+            }
+            // onCopy(pokemon)
+            (VolKind::Gastroacid, Ev::Copy) => {
+                if ABILITIES[self.mon(holder).ability as usize].flags & AF_CANTSUPPRESS != 0 {
+                    self.remove_volatile(holder, kind);
+                }
+                Res::Undef
+            }
+
+            // ---- Perish Song: the holder faints when the count runs out.
+            // onEnd(target)
+            (VolKind::Perishsong, Ev::End) => {
+                self.faint(holder, None, Eff::None);
+                Res::Undef
+            }
+            // onResidual only announces the count.
+            (VolKind::Perishsong, Ev::Residual) => Res::Undef,
+
+            // ---- Yawn: asleep at the end of the next turn.
+            (VolKind::Yawn, Ev::Start) => Res::Undef,
+            // onEnd(target)
+            (VolKind::Yawn, Ev::End) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                self.try_set_status(holder, Status::Slp, source, Eff::None);
+                Res::Undef
+            }
+
+            // ---- Glaive Rush: until the holder's next move, everything hits it, twice as hard.
+            (VolKind::Glaiverush, Ev::Start) => Res::Undef,
+            // onAccuracy()
+            (VolKind::Glaiverush, Ev::Accuracy) => TRUE,
+            // onBeforeMove(pokemon)
+            (VolKind::Glaiverush, Ev::BeforeMove) => {
+                self.remove_volatile(holder, kind);
+                Res::Undef
+            }
+
+            // ---- Stockpile. `data` is the number of layers; `st.a` and `st.b` are
+            // minus the Defense and Sp. Def stages it actually managed to raise.
+            // onStart(target) and onRestart(target)
+            (VolKind::Stockpile, Ev::Start | Ev::Restart) => {
+                if ev == Ev::Restart && self.vols(holder).get(kind).is_some_and(|v| v.data >= 3) {
+                    return FALSE;
+                }
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    if ev == Ev::Start {
+                        v.data = 1;
+                        v.st.a = 0;
+                        v.st.b = 0;
+                    } else {
+                        v.data += 1;
+                    }
+                }
+                let before = self.mon(holder).boosts;
+                let mut b = [0i8; 7];
+                b[DEF] = 1;
+                b[SPD] = 1;
+                self.boost(b, Some(holder), Some(holder), Eff::None);
+                let after = self.mon(holder).boosts;
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    if before[DEF] != after[DEF] {
+                        v.st.a -= 1;
+                    }
+                    if before[SPD] != after[SPD] {
+                        v.st.b -= 1;
+                    }
+                }
+                Res::Undef
+            }
+            // onEnd(target): the stages it raised come back off.
+            (VolKind::Stockpile, Ev::End) => {
+                let (def, spd) = self.vols(holder).get(kind).map_or((0, 0), |v| (v.st.a, v.st.b));
+                if def != 0 || spd != 0 {
+                    let mut b = [0i8; 7];
+                    b[DEF] = def as i8;
+                    b[SPD] = spd as i8;
+                    self.boost(b, Some(holder), Some(holder), Eff::None);
+                }
+                Res::Undef
+            }
+
+            // ---- Wrap, Fire Spin and the other binding moves. `data` is the damage divisor.
+            // onStart(pokemon, source)
+            (VolKind::Partiallytrapped, Ev::Start) => {
+                let band = e.source.is_some_and(|s| self.has_item(s, it::BINDINGBAND));
+                if let Some(v) = self.vol_mut(holder, kind) {
+                    v.data = if band { 6 } else { 8 };
+                }
+                Res::Undef
+            }
+            // onResidual(pokemon)
+            (VolKind::Partiallytrapped, Ev::Residual) => {
+                let (source, divisor) = self.vols(holder).get(kind).map_or((None, 8), |v| (v.source, v.data.max(1)));
+                if let Some(s) = source {
+                    let m = self.mon(s);
+                    if !m.is_active || m.hp == 0 || m.active_turns == 0 {
+                        self.drop_vol(holder, kind);
+                        return Res::Undef;
+                    }
+                }
+                let d = div1(self.mon(holder).max_hp() as u32, divisor as u32);
+                self.damage(d, None, None, Eff::None);
+                Res::Undef
+            }
+            (VolKind::Partiallytrapped, Ev::End) => Res::Undef,
+            // onTrapPokemon(pokemon)
+            (VolKind::Partiallytrapped, Ev::TrapPokemon) => {
+                let source = self.vols(holder).get(kind).and_then(|v| v.source);
+                if source.is_some_and(|s| self.mon(s).is_active) {
+                    self.try_trap(holder, false);
+                }
+                Res::Undef
+            }
             _ => unreachable!("no body for {kind:?} {ev:?}"),
         }
+    }
+
+    /// Callbacks a volatile has on events about other Pokémon (`onFoe...`).
+    /// `holder` has the volatile; the event's target is the other Pokémon.
+    fn vol_cb_prefixed(&mut self, kind: VolKind, ev: Ev, pre: Pre, holder: MonRef) -> Res {
+        let e = self.event;
+        match (kind, ev, pre) {
+            // onFoeRedirectTarget(target, source, source2, move): `source` is the Pokémon using the move.
+            (VolKind::Followme | VolKind::Ragepowder, Ev::RedirectTarget, Pre::Foe) => {
+                let (Some(user), Eff::Move(mi)) = (e.target, e.effect) else {
+                    return Res::Undef;
+                };
+                if kind == VolKind::Ragepowder && !self.run_status_immunity(user, Imm::Powder) {
+                    return Res::Undef;
+                }
+                let loc = self.loc_of(user, holder);
+                if self.valid_target_loc(loc, user, self.am[mi as usize].target) {
+                    return Res::Mon(holder);
+                }
+                Res::Undef
+            }
+
+            // Imprison: the foes cannot choose or use any move its user knows.
+            // onFoeDisableMove(pokemon)
+            (VolKind::Imprison, Ev::DisableMove, Pre::Foe) => {
+                let (Some(pokemon), Some(source)) = (e.target, self.vols(holder).get(kind).and_then(|v| v.source))
+                else {
+                    return Res::Undef;
+                };
+                let known = self.mon(source).moves;
+                let n = self.mon(source).n_moves as usize;
+                self.disable_slots_hidden_where(pokemon, |s| {
+                    s.id != mv::STRUGGLE && known[..n].iter().any(|k| k.id == s.id)
+                });
+                Res::Undef
+            }
+            // onFoeBeforeMove(attacker, defender, move)
+            (VolKind::Imprison, Ev::BeforeMove, Pre::Foe) => {
+                let (Eff::Move(mi), Some(source)) = (e.effect, self.vols(holder).get(kind).and_then(|v| v.source))
+                else {
+                    return Res::Undef;
+                };
+                let id = self.am[mi as usize].id;
+                if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {
+                    return FALSE;
+                }
+                Res::Undef
+            }
+
+            // Minimize, Glaive Rush: onSourceModifyDamage. The holder is the one being hit.
+            (VolKind::Minimize, Ev::ModifyDamage, Pre::Source) => {
+                if self.event_move_flags() & F_MINIMIZE != 0 {
+                    return self.chain_modify(2, 1);
+                }
+                Res::Undef
+            }
+            (VolKind::Glaiverush, Ev::ModifyDamage, Pre::Source) => self.chain_modify(2, 1),
+
+            // Lock-On: the holder's moves cannot miss the Pokémon it locked on to.
+            // onSourceInvulnerability(target, source, move) and onSourceAccuracy(accuracy, target, source, move)
+            (VolKind::Lockon, Ev::Invulnerability | Ev::Accuracy, Pre::Source) => {
+                let locked = self.vols(holder).get(kind).and_then(|v| v.source);
+                if matches!(e.effect, Eff::Move(_)) && e.source == Some(holder) && e.target == locked {
+                    return if ev == Ev::Accuracy { TRUE } else { Res::Num(0) };
+                }
+                Res::Undef
+            }
+            _ => unreachable!("no body for {kind:?} {ev:?} {pre:?}"),
+        }
+    }
+
+    /// Smack Down's check for a target in the air mid-move (Fly, Bounce): it
+    /// comes down and loses its turn. Those moves are not modelled yet.
+    fn smack_out_of_the_air(&mut self, r: MonRef) -> bool {
+        let mut hit = false;
+        for id in ["fly", "bounce"] {
+            if let Some(k) = VolKind::named(id) {
+                hit |= self.remove_volatile(r, k);
+            }
+        }
+        if hit {
+            self.cancel_move(r);
+            if let Some(k) = VolKind::named("twoturnmove") {
+                self.remove_volatile(r, k);
+            }
+        }
+        hit
+    }
+
+    /// `Battle#getAtSlot`: whoever is in a field position now.
+    pub(crate) fn at_slot(&self, slot: u8) -> Option<MonRef> {
+        if slot == NO_SLOT {
+            return None;
+        }
+        Some(self.active((slot / 2) as usize, (slot % 2) as usize))
+    }
+
+    /// What every Protect-like condition does to an attacker it stops: a
+    /// rampage (Outrage and the like) on its last turn ends without confusing.
+    pub(crate) fn protect_unlocks(&mut self, source: MonRef) {
+        if let Some(k) = VolKind::named("lockedmove") {
+            if self.vols(source).get(k).is_some_and(|v| v.duration == 2) {
+                self.drop_vol(source, k);
+            }
+        }
+    }
+
+    /// The move slot holding `move_id`, if the Pokémon knows it (`Pokemon#getMoveData`).
+    pub(crate) fn move_slot(&self, r: MonRef, move_id: u16) -> Option<&MoveSlot> {
+        let m = self.mon(r);
+        m.moves[..m.n_moves as usize].iter().find(|s| s.id == move_id)
+    }
+
+    /// `Pokemon#disableMove` for every move slot matching `pred`.
+    pub(crate) fn disable_slots_where(&mut self, r: MonRef, pred: impl Fn(&MoveSlot) -> bool) {
+        let m = self.mon_mut(r);
+        for k in 0..m.n_moves as usize {
+            if pred(&m.moves[k]) {
+                m.moves[k].disabled = true;
+                m.moves[k].hidden = false;
+            }
+        }
+    }
+
+    /// `Pokemon#disableMove(id, true)`: disabled without its player being told,
+    /// unless something else has disabled the move openly already.
+    pub(crate) fn disable_slots_hidden_where(&mut self, r: MonRef, pred: impl Fn(&MoveSlot) -> bool) {
+        let m = self.mon_mut(r);
+        for k in 0..m.n_moves as usize {
+            if pred(&m.moves[k]) && !m.moves[k].disabled {
+                m.moves[k].disabled = true;
+                m.moves[k].hidden = true;
+            }
+        }
+    }
+
+    /// `Pokemon#disableMove` for every move whose data matches `pred`.
+    pub(crate) fn disable_moves_where(&mut self, r: MonRef, pred: impl Fn(&MoveData) -> bool) {
+        self.disable_slots_where(r, |s| pred(&MOVES[s.id as usize]));
     }
 
     /// `durationCallback` of the conditions that have one: how long the
@@ -318,11 +1168,22 @@ impl Battle {
         eff: Eff,
         _target: Option<MonRef>,
         source: Option<MonRef>,
-        _source_effect: Eff,
+        source_effect: Eff,
     ) -> u8 {
         let holds = |b: &Battle, item: u16| source.is_some_and(|s| b.has_item(s, item));
         // (The Persistent ability, which lengthens some of these, is not in Champions.)
         match eff {
+            // durationCallback(target, source): 4 or 5 turns of damage.
+            // (Grip Claw, which would make it 7, is not in Champions.)
+            Eff::Vol(VolKind::Partiallytrapped) => self.rand_range(5, 7, "binding move turns") as u8,
+            // durationCallback(target, source, effect): two turns from Psychic Noise.
+            Eff::Vol(VolKind::Healblock) => {
+                if self.eff_is_named(source_effect, "psychicnoise") {
+                    2
+                } else {
+                    5
+                }
+            }
             // durationCallback(source, effect): 8 turns with the matching rock.
             Eff::Weather(Weather::Raindance) => {
                 if holds(self, it::DAMPROCK) {
@@ -375,6 +1236,26 @@ impl Battle {
     pub(crate) fn side_cb(&mut self, kind: SideCond, ev: Ev, pre: Pre, side: usize) -> Res {
         let e = self.event;
         match (kind, ev, pre) {
+            // ---- Wide Guard, Quick Guard: one-turn protection for the whole side.
+            (SideCond::Wideguard | SideCond::Quickguard, Ev::SideStart, Pre::On) => Res::Undef,
+            // onTryHit(target, source, move)
+            (SideCond::Wideguard | SideCond::Quickguard, Ev::TryHit, Pre::On) => {
+                let (Some(target), Some(source), Eff::Move(mi)) = (e.target, e.source, e.effect) else {
+                    return Res::Undef;
+                };
+                let am = &self.am[mi as usize];
+                let covered = if kind == SideCond::Wideguard {
+                    matches!(am.target, Target::AllAdjacent | Target::AllAdjacentFoes)
+                } else {
+                    am.priority > 0
+                };
+                if !covered || self.bypasses_protect(mi, source, target, true) {
+                    return Res::Undef;
+                }
+                self.protect_unlocks(source);
+                Res::NotFail
+            }
+
             // ---- Spikes, Toxic Spikes: layers
             // onSideStart(side)
             (SideCond::Spikes | SideCond::Toxicspikes, Ev::SideStart, Pre::On) => {
@@ -533,6 +1414,7 @@ impl Battle {
                 self.am_len = saved;
                 Res::Undef
             }
+
             _ => unreachable!("no body for {kind:?} {ev:?} {pre:?}"),
         }
     }
@@ -677,12 +1559,7 @@ impl Battle {
             // onDisableMove(pokemon)
             (Pseudo::Gravity, Ev::DisableMove) => {
                 if let Some(pokemon) = e.target {
-                    let m = self.mon_mut(pokemon);
-                    for k in 0..m.n_moves as usize {
-                        if MOVES[m.moves[k].id as usize].flags & F_GRAVITY != 0 {
-                            m.moves[k].disabled = true;
-                        }
-                    }
+                    self.disable_moves_where(pokemon, |d| d.flags & F_GRAVITY != 0);
                 }
                 Res::Undef
             }
@@ -936,4 +1813,9 @@ impl Battle {
         let roll = self.rand(16, "confusion damage roll");
         (dmg.wrapping_mul(100 - roll) / 100).max(1) as i32
     }
+}
+
+/// Attract only works between a male and a female.
+pub(crate) fn opposite_genders(a: Gender, b: Gender) -> bool {
+    matches!((a, b), (Gender::M, Gender::F) | (Gender::F, Gender::M))
 }

@@ -97,6 +97,8 @@ struct Spot {
     overridden: bool,
     /// Its move went ahead of its bracket, and said so (Quick Claw, Quick Draw, Custap Berry).
     quick: bool,
+    /// It has been seen to lose an item since it came in (Unburden asks).
+    lost_item: bool,
 }
 
 impl Spot {
@@ -115,6 +117,7 @@ impl Spot {
             reordered: None,
             overridden: false,
             quick: false,
+            lost_item: false,
         }
     }
 
@@ -610,14 +613,18 @@ impl Follower {
     fn their_index(&self, pos: usize) -> usize {
         let opp = 1 - self.side;
         let s = &self.reader.sides[opp];
-        let entry = |p: usize| s.active[p].as_ref().filter(|l| !l.gone).map(|l| l.entry);
-        // (The one that came in second is the one taken for the copy.)
-        let later = self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay;
-        match s.active[pos].as_ref().map(|l| l.entry) {
-            Some(e) if later && entry(pos) == Some(e) && entry(1 - pos) == Some(e) => s.team.len().min(MAX_TEAM - 1),
-            Some(e) => e.min(MAX_TEAM - 1),
-            None => MAX_TEAM - 1,
-        }
+        let Some(here) = s.active[pos].as_ref() else {
+            return MAX_TEAM - 1;
+        };
+        let copy = match s.active[1 - pos].as_ref() {
+            Some(other) if other.entry == here.entry && !here.gone => {
+                // The one that has fainted was the Pokémon itself. Of two still standing,
+                // the one that came in second is taken for the copy.
+                other.gone || self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+            }
+            _ => false,
+        };
+        if copy { s.team.len().min(MAX_TEAM - 1) } else { here.entry.min(MAX_TEAM - 1) }
     }
 
     // ------------------------------------------------------------ the log
@@ -663,8 +670,20 @@ impl Follower {
         if !(kind == "-curestatus" && parts.contains(&"[msg]")) {
             self.roused = None;
         }
+        let held = |me: &Follower| -> [Option<ItemShown>; 4] {
+            std::array::from_fn(|k| me.reader.live_record(k / 2, k % 2).map(|rec| rec.item))
+        };
+        let before = held(self);
         self.reader.line(line)?;
+        let after = held(self);
         self.track(kind, &parts, from)?;
+        if !matches!(kind, "switch" | "drag" | "replace" | "swap") {
+            for k in 0..4 {
+                if before[k] != after[k] && matches!(after[k], Some(ItemShown::Lost(_))) {
+                    self.spots[k / 2][k % 2].lost_item = true;
+                }
+            }
+        }
         let at = self.begun.len();
         for (side, listed, doubt, item, lost) in self.reader.item_notes.drain(..) {
             self.items.push((at, Event::Item { side: side as u8, listed, doubt, item, lost }));
@@ -1016,6 +1035,9 @@ impl Follower {
                             aimed.extend(list.split(',').filter_map(|who| {
                                 Some((Follower::side_of(who)?, if who.ends_with('b') { 1 } else { 0 }))
                             }));
+                        } else if matches!(MOVES[used as usize].target, Target::All | Target::FoeSide) {
+                            // A move on the whole field, or on the other side of it.
+                            aimed.extend([(1 - side, 0), (1 - side, 1)]);
                         } else if let Some(target) = fourth {
                             aimed.push(target);
                         } else if let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
@@ -1064,7 +1086,8 @@ impl Follower {
             "cant" => {
                 if !arg(3).starts_with("ability: ") {
                     self.spot(side, pos).vols.retain(|v| {
-                        !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge | VolKind::Glaiverush)
+                        v.ends != Ends::Move
+                            && !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge)
                             && !CHARGING.contains(&v.kind)
                     });
                 }
@@ -1286,7 +1309,9 @@ impl Follower {
             "-damage" if from == "confusion" => {
                 // It hurt itself in place of moving: a move it was charging is off.
                 self.spot(side, pos).vols.retain(|v| {
-                    !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge) && !CHARGING.contains(&v.kind)
+                    v.ends != Ends::Move
+                        && !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge)
+                        && !CHARGING.contains(&v.kind)
                 });
             }
             "-heal" => {
@@ -1621,6 +1646,10 @@ impl Follower {
             }
             m.position = k as u8;
             m.is_active = k < ACTIVE && mon.active && !mon.fainted;
+            if m.is_active && m.ability == ab::UNBURDEN && m.item == it::NONE && self.spots[me][k].lost_item {
+                // Unburden is at work, which the engine keeps as a condition of its own.
+                b.vols[me][k].push(Cond::new(VolKind::Unburden));
+            }
             m.switch_flag = k < ACTIVE && req.asked == Asked::Switch && req.force[k];
             if k < ACTIVE && mon.reviving && !b.sides[me].slot_conds[k].has(SlotCond::Revivalblessing) {
                 b.sides[me].slot_conds[k].push(Cond::new(SlotCond::Revivalblessing));

@@ -720,27 +720,6 @@ impl Speeds {
 
     /// Takes in what the engine noted since the last decision, and the battle as it now stands.
     pub(crate) fn digest(&mut self, events: &[Event], b: &Battle) {
-        if std::env::var("SPEED_DEBUG").is_ok() {
-            for e in events {
-                match e {
-                    Event::Start { me, rest, n_rest, named, seen, .. } => eprintln!(
-                        "DBG {:?} turn {} start {:?} named {} | rest {:?} | seen {:?}",
-                        self.watcher,
-                        b.turn,
-                        (me.r.side, me.r.idx, me.order, me.priority, me.frac, me.speed, me.move_id, me.encored),
-                        named,
-                        rest[..*n_rest as usize]
-                            .iter()
-                            .map(|q| (q.r.side, q.r.idx, q.order, q.priority, q.frac, q.speed, q.move_id))
-                            .collect::<Vec<_>>(),
-                        seen.iter()
-                            .map(|s| (s.r.side, s.r.idx, s.present, s.listed, s.doubt, s.species, s.stage, s.ability))
-                            .collect::<Vec<_>>()
-                    ),
-                    other => eprintln!("DBG {:?} {other:?}", self.watcher),
-                }
-            }
-        }
         // Which Pokémon's Speed was not its own when each event happened.
         let mut swapped_at = Vec::with_capacity(events.len());
         for (j, event) in events.iter().enumerate() {

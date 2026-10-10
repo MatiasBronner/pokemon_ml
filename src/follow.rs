@@ -206,6 +206,15 @@ impl Spot {
             None => self.vols.push(Vol { kind: VolKind::Stall, ends: Ends::After(2), data: 3, duration: 0, source: 0 }),
         }
     }
+
+    /// Brought down to earth, by Smack Down or by Gravity: out of the air if it had flown
+    /// or bounced up there, and that move is off; and out of a Magnet Rise. (A move it is
+    /// charging on the ground, Sky Attack say, goes on.)
+    fn grounded(&mut self) {
+        let airborne = |v: &Vol| matches!(v.kind, VolKind::Fly | VolKind::Bounce);
+        let up = self.vols.iter().any(airborne);
+        self.vols.retain(|v| !airborne(v) && v.kind != VolKind::Magnetrise && !(up && v.kind == VolKind::Twoturnmove));
+    }
 }
 
 /// The two-turn moves' own conditions, by the move's id.
@@ -1668,10 +1677,7 @@ impl Follower {
                         )
                     });
                 } else if name == "gravity" {
-                    // Brought down to earth.
-                    self.spot(side, pos).vols.retain(|v| {
-                        !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove | VolKind::Magnetrise)
-                    });
+                    self.spot(side, pos).grounded();
                 } else if matches!(name.as_str(), "spite" | "eeriespell" | "leppaberry") && side == self.side {
                     // PP taken from one of its moves, or given back.
                     let n: u8 = arg(5).parse().unwrap_or(if name == "leppaberry" { 10 } else { 0 });
@@ -1840,14 +1846,7 @@ impl Follower {
                         spot.overridden = Some(at);
                     }
                     if kind == VolKind::Smackdown {
-                        // Knocked out of the air, and out of the move or the Magnet Rise that
-                        // took it there.
-                        spot.vols.retain(|v| {
-                            !matches!(
-                                v.kind,
-                                VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove | VolKind::Magnetrise
-                            )
-                        });
+                        spot.grounded();
                     }
                 }
             }

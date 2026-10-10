@@ -133,8 +133,8 @@ def update(model, optimizer, roll, config):
 
 @torch.no_grad()
 def play_baseline(env, model, kind, games, device, greedy=False):
-    """The share of games `model` wins against a player that needs no model ("random" or
-    "greedy"), over at least `games` games. It takes the first side of even-numbered games and
+    """The share of games `model` wins against a player that needs no model ("random",
+    "greedy" or "lookahead"), over at least `games` games. It takes the first side of even-numbered games and
     the second of odd ones. Ties count as half."""
     model.eval()
     side = torch.arange(env.envs) % 2

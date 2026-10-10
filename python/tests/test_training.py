@@ -106,3 +106,44 @@ def test_a_short_run_learns_to_beat_the_random_player(pool):
     after = ppo.play_baseline(rival(101), model, "random", 300, "cpu")
     assert 0.35 < before < 0.65, before
     assert after > before + 0.1, (before, after)
+
+
+def test_ratings_are_recovered_from_results():
+    from pokemon_ml.league import earlier, expected, fit
+    truth = {"000000": 0.0, "000025": 120.0, "000050": 310.0, "greedy": 200.0}
+    names = list(truth)
+    results = [(a, b, expected(truth[a], truth[b]), 2000) for k, a in enumerate(names) for b in names[:k]]
+    fitted = fit(results)
+    assert all(abs(fitted[name] - truth[name]) < 3 for name in names), fitted
+    # One that wins everything is rated above the rest, and stays finite.
+    fitted = fit(results + [("000075", "000050", 1.0, 300)])
+    assert 310 < fitted["000075"] < 3000
+    # Each new version plays the one before it, then twice as far back each time, and the first.
+    names = [f"{25 * k:06d}" for k in range(12)]
+    assert earlier(names, 3) == ["000275", "000250", "000200", "000000"]
+    assert earlier(names[:1], 3) == ["000000"] and earlier([], 3) == []
+
+
+def test_training_puts_versions_aside_and_rates_them(pool, tmp_path):
+    import json
+    from pokemon_ml import league, train
+    torch.set_num_threads(2)
+    run = str(tmp_path / "run")
+    args = ["--pool", pool, "--run", run, "--envs", "32", "--steps", "16", "--minibatch", "512", "--threads", "2",
+            "--width", "32", "--layers", "1", "--heads", "2", "--ff", "64", "--eval-every", "1", "--eval-games", "40",
+            "--device", "cpu"]
+    train.main(args + ["--updates", "2"])
+    assert league.snapshots(run) == ["000000", "000001", "000002"]
+    saved = json.load(open(f"{run}/ratings.json"))
+    assert saved["ratings"]["000000"] == 0 and set(league.SCRIPTED) <= set(saved["ratings"])
+    log = [json.loads(line) for line in open(f"{run}/log.jsonl")]
+    assert all(k in log[-1] for k in ("rating", "vs_random", "vs_greedy", "vs_lookahead"))
+    # The same command carries on, and the new version meets the old ones.
+    train.main(args + ["--updates", "3"])
+    assert league.snapshots(run)[-1] == "000003"
+    met = {(a, b) for a, b, _, _ in league.Ratings(run).results}
+    assert ("000003", "000002") in met and ("000003", "000000") in met
+    # A network against a copy of itself wins about half the time.
+    net = league.load_snapshot(run, "000003", "cpu")
+    share, played = league.play_models(Env(pool, envs=64, seed=5, threads=2), net, net, 400, "cpu")
+    assert played >= 400 and 0.4 < share < 0.6, share

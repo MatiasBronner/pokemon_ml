@@ -586,7 +586,8 @@ pub fn observe_battle(
         tok.fainted = m.fainted;
         tok.active = m.is_active && !m.fainted;
         tok.hp = m.hp as f32 / m.max_hp().max(1) as f32;
-        tok.status = m.status;
+        // (A status a fainted Pokémon had is neither here nor there.)
+        tok.status = if m.fainted { Status::None } else { m.status };
         // (The count starts over whenever it comes in.)
         tok.tox = if m.is_active && m.status == Status::Tox { m.tox_stage } else { 0 };
         // Its stats as its player is told them: its own, for the forme it is in. What a

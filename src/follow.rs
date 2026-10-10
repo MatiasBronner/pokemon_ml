@@ -229,6 +229,25 @@ struct Req {
     force: [bool; ACTIVE],
 }
 
+/// One of the follower's own Pokémon at one moment: what settles how fast it moves.
+#[derive(Clone, Debug)]
+struct OwnNow {
+    seen: Seen,
+    /// Its ability, or the ones it may have.
+    abilities: Vec<u16>,
+    item: u16,
+    /// Its Speed stat.
+    stat: u16,
+}
+
+impl OwnNow {
+    /// What `f` makes of it, if that is the same whichever ability it has.
+    fn agreed<T: PartialEq + Copy>(&self, f: impl Fn(u16) -> Option<T>) -> Option<T> {
+        let first = f(*self.abilities.first()?)?;
+        self.abilities.iter().all(|&a| f(a) == Some(first)).then_some(first)
+    }
+}
+
 /// A queued move that has begun since the last decision.
 #[derive(Clone, Debug)]
 struct Begun {
@@ -239,13 +258,15 @@ struct Begun {
     named: u16,
     /// It had begun a move already this turn (Instruct).
     again: bool,
+    /// All that has been said of it is that its user is asleep.
+    asleep: bool,
     reordered: Option<usize>,
     overridden: bool,
     quick: bool,
     seen: [Seen; 4],
     field: FieldSeen,
-    /// The follower's own two at that moment: which stay, and the Speed the queue sorted it by.
-    own: [(u32, Option<i32>); ACTIVE],
+    /// The follower's own two at that moment: which stay, and what it knew of each.
+    own: [(u32, Option<OwnNow>); ACTIVE],
 }
 
 /// What a move in progress has set up that a `-fail` line takes back.
@@ -263,6 +284,8 @@ struct Mover {
     /// Where it aimed, if at one position.
     target: Option<(usize, usize)>,
     undo: Option<Undo>,
+    /// Its move is one that protects, which works less often in a row.
+    stalling: bool,
 }
 
 /// Follows one player's side of a battle on Showdown. See the module notes.
@@ -294,8 +317,8 @@ pub struct Follower {
     /// Items seen to change hands since the last decision, each with how many moves had begun by then.
     items: Vec<(usize, Event)>,
     mover: Option<Mover>,
-    /// The moves chosen with the last reply, by team index.
-    chosen: Vec<(usize, u16)>,
+    /// The moves chosen with the last reply, by team index, and where each was aimed.
+    chosen: Vec<(usize, u16, i8)>,
     /// Round has been used this turn, as of this many moves begun.
     round: Option<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
@@ -585,12 +608,15 @@ impl Follower {
     /// Two on the field can go by one name (an Illusion beside the Pokémon it
     /// copies); the second then gets a number past all the others.
     fn their_index(&self, pos: usize) -> usize {
-        let s = &self.reader.sides[1 - self.side];
-        let entry = |p: usize| s.active[p].as_ref().map(|l| l.entry);
-        match (entry(pos), pos) {
-            (Some(e), 1) if entry(0) == Some(e) => s.team.len().min(MAX_TEAM - 1),
-            (Some(e), _) => e.min(MAX_TEAM - 1),
-            (None, _) => MAX_TEAM - 1,
+        let opp = 1 - self.side;
+        let s = &self.reader.sides[opp];
+        let entry = |p: usize| s.active[p].as_ref().filter(|l| !l.gone).map(|l| l.entry);
+        // (The one that came in second is the one taken for the copy.)
+        let later = self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay;
+        match s.active[pos].as_ref().map(|l| l.entry) {
+            Some(e) if later && entry(pos) == Some(e) && entry(1 - pos) == Some(e) => s.team.len().min(MAX_TEAM - 1),
+            Some(e) => e.min(MAX_TEAM - 1),
+            None => MAX_TEAM - 1,
         }
     }
 
@@ -620,7 +646,18 @@ impl Follower {
                     "move" => None,
                     _ => Some(arg(4)).filter(|m| !m.is_empty() && !m.starts_with('[')).and_then(|m| move_id(&to_id(m))),
                 };
-                self.begin(side, pos, named.unwrap_or(NO_MOVE));
+                // A sleeping Pokémon that goes on to use Sleep Talk has both lines for the one move.
+                let named = named.unwrap_or(NO_MOVE);
+                let stay = self.spots[side][pos].stay;
+                match self.begun.last_mut() {
+                    Some(last) if kind == "move" && last.asleep && last.stay == stay => {
+                        (last.named, last.asleep) = (named, false);
+                    }
+                    _ => {
+                        self.begin(side, pos, named);
+                        self.begun.last_mut().unwrap().asleep = kind == "cant" && arg(3) == "slp";
+                    }
+                }
             }
         }
         if !(kind == "-curestatus" && parts.contains(&"[msg]")) {
@@ -683,8 +720,8 @@ impl Follower {
         }
     }
 
-    /// The Speed the queue sorts the follower's own Pokémon at `pos` by, as things stand.
-    fn own_speed(&self, pos: usize, field: &FieldSeen) -> Option<i32> {
+    /// What the follower knows of its own Pokémon at `pos` that settles how fast it moves.
+    fn own_now(&self, pos: usize) -> Option<OwnNow> {
         let req = self.req.as_ref()?;
         let own = self.own.get(self.own_at[pos])?;
         let mon = req.mons.iter().find(|m| m.name == own.name)?;
@@ -694,13 +731,8 @@ impl Follower {
         seen.doubt = live.transformed;
         let set = &self.team[own.entry];
         // The species it is now: its own, or the Mega it has just become.
-        let species = if is_mega(live.species)
-            && SPECIES[live.species as usize].base_species == SPECIES[set.species as usize].base_species
-        {
-            live.species
-        } else {
-            mon.species
-        };
+        let same = SPECIES[live.species as usize].base_species == SPECIES[set.species as usize].base_species;
+        let species = if is_mega(live.species) && same { live.species } else { mon.species };
         let rec = &live.rec;
         let item = match rec.item {
             ItemShown::Holds(item) => item,
@@ -708,21 +740,20 @@ impl Follower {
             ItemShown::Unknown => mon.item,
         };
         let stat = calc_stats(species, set.nature, set.stat_points)[5];
+        let mut abilities = Vec::new();
         if rec.ability != UNKNOWN && (rec.ability_changed || is_mega(species)) {
-            return speed::own_speed(&seen, rec.ability, item, stat, field);
+            abilities.push(rec.ability);
+        } else if !rec.ability_changed {
+            abilities.push(mon.ability);
+        } else {
+            // Its ability has been traded for its partner's and the log does not say which
+            // is which now: either, then, which is good enough where both come to the same.
+            for p in 0..ACTIVE {
+                let partner = self.own.get(self.own_at[p])?;
+                abilities.push(req.mons.iter().find(|m| m.name == partner.name)?.ability);
+            }
         }
-        if !rec.ability_changed {
-            return speed::own_speed(&seen, mon.ability, item, stat, field);
-        }
-        // Its ability has been traded for its partner's and the log does not say which is
-        // which now. Good enough if it comes to the same Speed either way.
-        let mut speeds = (0..ACTIVE).filter_map(|p| {
-            let partner = self.own.get(self.own_at[p])?;
-            let ability = req.mons.iter().find(|m| m.name == partner.name)?.ability;
-            Some(speed::own_speed(&seen, ability, item, stat, field))
-        });
-        let first = speeds.next()??;
-        speeds.all(|other| other == Some(first)).then_some(first)
+        Some(OwnNow { seen, abilities, item, stat })
     }
 
     /// A queued move of whoever is at a position begins.
@@ -736,7 +767,7 @@ impl Follower {
             // It woke up to move: the queue was sorted while it slept.
             seen[2 * side + pos].status = status;
         }
-        let own = std::array::from_fn(|p| (self.spots[self.side][p].stay, self.own_speed(p, &field)));
+        let own = std::array::from_fn(|p| (self.spots[self.side][p].stay, self.own_now(p)));
         if named == mv::ROUND {
             // The first Round of a turn calls the next one forward.
             match self.round {
@@ -754,6 +785,7 @@ impl Follower {
             r: MonRef { side: 0, idx: 0 },
             named,
             again: spot.begun > 0,
+            asleep: false,
             reordered: spot.reordered,
             overridden: spot.overridden,
             quick: spot.quick,
@@ -791,6 +823,17 @@ impl Follower {
         {
             self.own_at[pos] = idx;
         }
+    }
+
+    /// Where the Pokémon a line names stands: its side and position.
+    fn place_of(&self, who: &str) -> Option<(usize, usize)> {
+        let o = ident(who)?;
+        // (A Pokémon that has fainted where it stood is named without its position.)
+        let fallen = |p: &usize| {
+            let live = self.reader.sides[o.side].active[*p].as_ref();
+            live.is_some_and(|l| l.gone && self.reader.sides[o.side].team[l.entry].name == o.name)
+        };
+        o.pos.or((0..ACTIVE).find(fallen)).map(|p| (o.side, p))
     }
 
     fn side_of(who: &str) -> Option<usize> {
@@ -922,7 +965,7 @@ impl Follower {
         let Some(pos) = id.pos else {
             return Ok(());
         };
-        let other = |i: usize| ident(arg(i)).and_then(|o| o.pos.map(|p| (o.side, p)));
+        let (third, fourth) = (self.place_of(arg(3)), self.place_of(arg(4)));
         let of =
             parts.iter().find_map(|p| p.strip_prefix("[of] ")).and_then(ident).and_then(|o| o.pos.map(|p| (o.side, p)));
         match kind {
@@ -968,13 +1011,29 @@ impl Follower {
                     if from != "lockedmove" && side == self.side {
                         // One PP, in case it leaves the field before the next request says so;
                         // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
-                        let pressed = other(4).is_some_and(|(s, p)| {
-                            s != side && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
-                        });
+                        let mut aimed: Vec<(usize, usize)> = Vec::new();
+                        if let Some(list) = parts.iter().find_map(|p| p.strip_prefix("[spread] ")) {
+                            aimed.extend(list.split(',').filter_map(|who| {
+                                Some((Follower::side_of(who)?, if who.ends_with('b') { 1 } else { 0 }))
+                            }));
+                        } else if let Some(target) = fourth {
+                            aimed.push(target);
+                        } else if let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
+                            && loc > 0
+                        {
+                            aimed.push((1 - side, loc as usize - 1));
+                        }
+                        let pressed = aimed
+                            .iter()
+                            .filter(|&&(s, p)| {
+                                s != side
+                                    && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
+                            })
+                            .count() as u8;
                         if let Some(own) = self.own.get_mut(self.own_at[pos]) {
                             let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
                             if let Some(slot) = known.iter_mut().find(|s| s.0 == used) {
-                                slot.1 = slot.1.saturating_sub(1 + pressed as u8);
+                                slot.1 = slot.1.saturating_sub(1 + pressed);
                             }
                         }
                     }
@@ -999,7 +1058,8 @@ impl Follower {
                     }
                     _ => {}
                 }
-                self.mover = Some(Mover { side, pos, stay, target: other(4), undo });
+                let stalling = MOVES[used as usize].stalling_move;
+                self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling });
             }
             "cant" => {
                 if !arg(3).starts_with("ability: ") {
@@ -1018,6 +1078,10 @@ impl Follower {
                         Some(Undo::Slot(s, p, cond)) => self.field.sides[s].slots[p].retain(|c| c.0 != cond),
                         None => {}
                     }
+                    if mover.stalling {
+                        // A protecting move that fails ends the run.
+                        self.spots[side][pos].remove(VolKind::Stall);
+                    }
                 }
             }
             "-boost" | "-unboost" | "-setboost" => {
@@ -1035,12 +1099,21 @@ impl Follower {
             "-clearnegativeboost" => self.spot(side, pos).boosts.iter_mut().for_each(|b| *b = (*b).max(0)),
             "-invertboost" => self.spot(side, pos).boosts.iter_mut().for_each(|b| *b = -*b),
             "-copyboost" => {
-                if let Some((s, p)) = other(3) {
+                if let Some((s, p)) = third {
                     self.spots[side][pos].boosts = self.spots[s][p].boosts;
+                    if from.ends_with("Psych Up") {
+                        // What it had done for its critical hits goes too, for whatever the other has.
+                        for kind in [VolKind::Focusenergy, VolKind::Dragoncheer] {
+                            self.spots[side][pos].remove(kind);
+                            if self.spots[s][p].has(kind) {
+                                self.spots[side][pos].add(kind, Ends::Said);
+                            }
+                        }
+                    }
                 }
             }
             "-swapboost" => {
-                if let Some((s, p)) = other(3) {
+                if let Some((s, p)) = third {
                     let stats: Vec<usize> = match arg(4) {
                         "" => (0..7).collect(),
                         list if list.starts_with('[') => (0..7).collect(),
@@ -1053,7 +1126,7 @@ impl Follower {
                 }
             }
             "-transform" => {
-                if let Some((s, p)) = other(3) {
+                if let Some((s, p)) = third {
                     let theirs = self.spots[s][p].clone();
                     let species = self.reader.sides[s].active[p].as_ref().map(|l| l.species);
                     let spot = self.spot(side, pos);
@@ -1125,7 +1198,13 @@ impl Follower {
                 let name = effect_id(effect);
                 let begun = self.begun.len();
                 if effect == "trapped" {
-                    let source = self.mover.as_ref().map_or(0, |m| m.stay);
+                    // Kept there by whoever is moving; or, if that is itself (Jaw Lock holds
+                    // both), by the one it moved on.
+                    let source = match &self.mover {
+                        Some(m) if (m.side, m.pos) == (side, pos) => m.target.map_or(0, |(s, p)| self.spots[s][p].stay),
+                        Some(m) => m.stay,
+                        None => 0,
+                    };
                     let spot = self.spot(side, pos);
                     if spot.add(VolKind::Trapped, Ends::Said) {
                         spot.vols.last_mut().unwrap().source = source;
@@ -1176,7 +1255,7 @@ impl Follower {
             }
             "-waiting" => {
                 // A Pledge waits for its partner, which goes next.
-                if let Some((s, p)) = other(3) {
+                if let Some((s, p)) = third {
                     let begun = self.begun.len();
                     let spot = self.spot(s, p);
                     spot.reordered = Some(spot.reordered.map_or(begun, |t| t.min(begun)));
@@ -1704,17 +1783,16 @@ impl Follower {
         )
     }
 
-    /// Ten times the priority the follower's own Pokémon had for a move it
-    /// chose this turn, with what its item or ability does within the bracket.
-    fn own_priority(&self, begun: &Begun, chosen: u16) -> Option<(i32, i8)> {
+    /// Where within its bracket the follower's own Pokémon's move went this
+    /// turn: settled when it was chosen, by its item or ability.
+    fn own_frac(&self, begun: &Begun, chosen: u16) -> Option<i8> {
         let mut b = *self.turn_start.as_ref()?;
         if begun.named == NO_MOVE || !b.mon(begun.r).is_active {
             return None;
         }
         let a = b.resolve_move(begun.r, chosen, 0);
         // A Quick Claw is rolled for, and says so when it works; what always holds a move back does not.
-        let frac = a.frac.min(0) + begun.quick as i8;
-        Some((10 * a.move_priority as i32 + frac as i32, frac))
+        Some(a.frac.min(0) + begun.quick as i8)
     }
 
     /// A move as it stood in the queue when the `at`th of this stretch began.
@@ -1736,13 +1814,23 @@ impl Follower {
             // Its own choice it knows, where the reply was made here; otherwise an Encore
             // leaves the move it queued in doubt.
             match self.chosen.iter().find(|c| c.0 == s.r.idx as usize) {
-                Some(&(_, chosen)) => q.move_id = chosen,
+                Some(&(_, chosen, _)) => q.move_id = chosen,
                 None if s.overridden => q.order = 3,
                 None => {}
             }
-            let speed = self.begun[at].own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1);
-            match (speed, self.own_priority(s, q.move_id)) {
-                (Some(speed), Some((priority, frac))) => (q.speed, q.priority, q.frac) = (speed, priority, frac),
+            // Speed and priority as they stood when the `at`th began: the queue is sorted
+            // again after every move, with whatever has changed (a Mega's new ability, say).
+            let then = &self.begun[at];
+            let now = then.own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1.as_ref());
+            let speed = now.and_then(|n| n.agreed(|a| speed::own_speed(&n.seen, a, n.item, n.stat, &then.field)));
+            let began = self.turn_start.as_ref().map(|b| b.mon(s.r).ability);
+            let priority = now
+                .zip(began)
+                .and_then(|(n, began)| n.agreed(|a| speed::own_priority(&n.seen, a, began, &then.field, q.move_id)));
+            match (speed, priority, self.own_frac(s, q.move_id)) {
+                (Some(speed), Some(priority), Some(frac)) => {
+                    (q.speed, q.priority, q.frac) = (speed, priority + frac as i32, frac)
+                }
                 _ => q.order = 0,
             }
         }
@@ -1843,7 +1931,7 @@ impl Follower {
             if !b.legal_choices(self.side, pos).contains(&choice) {
                 return err(format!("action {action} is not open to position {pos}"));
             }
-            if let Choice::Move { slot, .. } = choice {
+            if let Choice::Move { slot, target, .. } = choice {
                 let r = b.active(self.side, pos);
                 let m = b.mon(r);
                 let id = if m.locked_move != NO_MOVE {
@@ -1853,7 +1941,7 @@ impl Follower {
                 } else {
                     m.moves[slot as usize].id
                 };
-                self.chosen.push((r.idx as usize, id));
+                self.chosen.push((r.idx as usize, id, target));
             }
             out.push(choice.to_showdown());
         }

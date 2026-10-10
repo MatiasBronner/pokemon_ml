@@ -587,6 +587,14 @@ pub(crate) fn own_speed(s: &Seen, ability: u16, item: u16, stat: u16, field: &Fi
     mods(s, &known, field, &belief).map(|m| m.speed(stat as u32, class))
 }
 
+/// Ten times the priority a move has from a Pokémon, worked out by its own
+/// side from what it knows (its ability now, and the one it began the turn
+/// with). `None` where [`priority`] cannot say.
+pub(crate) fn own_priority(s: &Seen, ability: u16, at_start: u16, field: &FieldSeen, move_id: u16) -> Option<i32> {
+    let known = Know::Is(if s.gastro_acid { ab::NOABILITY } else { ability });
+    priority(s, &known, &Know::Is(at_start), field, move_id)
+}
+
 /// Ten times the priority `move_id` has from this Pokémon, as far as the
 /// watcher can tell; `None` if an ability it has not shown could change it.
 /// `at_start` is the ability it began the turn with: where a move goes
@@ -712,6 +720,27 @@ impl Speeds {
 
     /// Takes in what the engine noted since the last decision, and the battle as it now stands.
     pub(crate) fn digest(&mut self, events: &[Event], b: &Battle) {
+        if std::env::var("SPEED_DEBUG").is_ok() {
+            for e in events {
+                match e {
+                    Event::Start { me, rest, n_rest, named, seen, .. } => eprintln!(
+                        "DBG {:?} turn {} start {:?} named {} | rest {:?} | seen {:?}",
+                        self.watcher,
+                        b.turn,
+                        (me.r.side, me.r.idx, me.order, me.priority, me.frac, me.speed, me.move_id, me.encored),
+                        named,
+                        rest[..*n_rest as usize]
+                            .iter()
+                            .map(|q| (q.r.side, q.r.idx, q.order, q.priority, q.frac, q.speed, q.move_id))
+                            .collect::<Vec<_>>(),
+                        seen.iter()
+                            .map(|s| (s.r.side, s.r.idx, s.present, s.listed, s.doubt, s.species, s.stage, s.ability))
+                            .collect::<Vec<_>>()
+                    ),
+                    other => eprintln!("DBG {:?} {other:?}", self.watcher),
+                }
+            }
+        }
         // Which Pokémon's Speed was not its own when each event happened.
         let mut swapped_at = Vec::with_capacity(events.len());
         for (j, event) in events.iter().enumerate() {

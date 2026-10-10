@@ -1178,6 +1178,13 @@ pub struct FollowTally {
     /// Observations compared, and how many differed anywhere.
     pub observations: usize,
     pub wrong: usize,
+    /// The same for the observations a network acts on: the ones where the player has
+    /// more than one thing it can do. (The rest are a side waiting for the other to
+    /// send in a replacement, or with one legal action.)
+    pub choices: usize,
+    pub wrong_choices: usize,
+    /// The first difference of each battle that has one.
+    pub first_wrong: Vec<String>,
     /// By feature: how often it differed, and one place it did.
     pub by_feature: std::collections::BTreeMap<String, (usize, String)>,
     /// Observations passed over: a move was disabled by something the player has not
@@ -1420,6 +1427,7 @@ pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
         followers[side].trust_item_clause(clause && once);
     }
     let mut decisions = 0;
+    let mut differed = false;
     let mut compare = |game: &Game, followers: &[Follower; 2], step: usize| -> Result<(), String> {
         let (mut f, mut i, mut m) = (
             [vec![0f32; OBS_F], vec![0f32; OBS_F]],
@@ -1440,6 +1448,10 @@ pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
             let mut note = |name: String, a: String, b: String| {
                 if verbose {
                     println!("{at}: {name}: the game has {a}, the follower {b}");
+                }
+                if !differed {
+                    differed = true;
+                    tally.first_wrong.push(format!("{at}: {name}: the game has {a}, the follower {b}"));
                 }
                 let entry = tally.by_feature.entry(name).or_insert((0, String::new()));
                 entry.0 += 1;
@@ -1463,6 +1475,13 @@ pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
                 note("legal actions".to_string(), format!("{a} set"), format!("{b} set"));
             }
             tally.wrong += wrong as usize;
+            if i[0][OBS_I - crate::obs::INFO + 3] != 0 {
+                tally.choices += 1;
+                tally.wrong_choices += wrong as usize;
+                if wrong && verbose {
+                    println!("{at}: (the player has a choice to make here)");
+                }
+            }
         }
         Ok(())
     };
@@ -1499,10 +1518,14 @@ pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
             let choices = [parse(&step.choices[0])?, parse(&step.choices[1])?];
             // What the game takes as actions, each follower must turn back into Showdown's words.
             for side in 0..2 {
+                let action = |pos: usize| game.action_of(side, choices[side][pos]).ok_or("a choice with no action");
                 if hidden_disable(&game, side) {
+                    // (What was chosen is still what its follower goes on from.)
+                    if let (Some(first), Some(second)) = (action(0).ok(), action(1).ok()) {
+                        let _ = followers[side].choice([first, second]);
+                    }
                     continue;
                 }
-                let action = |pos: usize| game.action_of(side, choices[side][pos]).ok_or("a choice with no action");
                 let reply = followers[side].choice([action(0)?, action(1)?])?;
                 if Choice::parse_side(&reply) != Some(choices[side]) {
                     return Err(format!(

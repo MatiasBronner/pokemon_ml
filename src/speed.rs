@@ -487,6 +487,11 @@ fn know(s: &Seen, listed: &Listed, open: bool) -> Know {
     know_of(s.ability, s.ability_changed, s.species, listed, open)
 }
 
+/// Whether, for all that has been shown, a Pokémon may have `ability`.
+pub(crate) fn may_have(s: &Seen, listed: &Listed, open: bool, ability: u16) -> bool {
+    know(s, listed, open).could_be(ability)
+}
+
 /// The same from the three things it rests on: the ability shown, whether it has been replaced, and the species.
 fn know_of(ability: u16, changed: bool, species: u16, listed: &Listed, open: bool) -> Know {
     if ability != UNKNOWN {
@@ -588,10 +593,11 @@ pub(crate) fn own_speed(
     stat: u16,
     field: &FieldSeen,
 ) -> Option<i32> {
-    let class = class_of(item);
+    let ability = if s.gastro_acid { ab::NOABILITY } else { ability };
+    // (Its own Klutz it knows about: the item then does nothing for its Speed.)
+    let class = if ability == ab::KLUTZ { 0 } else { class_of(item) };
     let mut belief = Belief { bits: [[0; CLASSES]; NATURES] };
     belief.bits[1][class] = 1;
-    let ability = if s.gastro_acid { ab::NOABILITY } else { ability };
     // Whether Unburden is at work its own side can tell, where a watcher has to pass.
     let mut seen = *s;
     seen.item = ItemShown::Unknown;

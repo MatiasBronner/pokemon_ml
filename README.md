@@ -385,6 +385,20 @@ Pokémon is kept from, a disabled move or being trapped, is given as
 Showdown gives it: with the Pokémon's choices, when it has a choice to
 make.
 
+With closed sheets, one thing a player can work out for itself is worked
+out for it. A move of its own that it is told it cannot choose, with nothing
+on show to account for that, has been sealed by the other side's Imprison:
+so the Pokémon with Imprison up knows that move, and its token lists the
+move from then on, used or not, on the field or off it
+(`Battle::sealed_moves`). The same goes for a move stopped in the act
+(`cant|…|move: Imprison|Protect`). Showdown tells a player which of its
+moves are sealed for all but the last of its Pokémon to choose, and the
+simulator and the client keep to that; where two opposing Pokémon have
+Imprison up, or the one that has may be an Illusion, nothing is concluded.
+Nothing of the kind is needed for abilities that trap. Under both
+regulations here the only one is Mega Gengar's Shadow Tag, and a Mega's
+ability is known to everyone the moment it Mega Evolves.
+
 ### What the order of moves shows
 
 A player never sees the other side's Speed, but sees who moves first and

@@ -402,6 +402,11 @@ pub(crate) struct Listed {
     /// Its team index if it was brought, else `NOT_LISTED`. (The engine's own
     /// knowledge: nothing that is shown depends on it.)
     pub brought: u8,
+    /// Moves the other side has worked out it knows without seeing it use them,
+    /// when the sheets are closed: ones of their own that its Imprison sealed
+    /// (see [`Battle::sealed_moves`]).
+    pub told: [u16; MAX_MOVES],
+    pub n_told: u8,
 }
 
 impl Side {
@@ -428,10 +433,26 @@ impl Listed {
         n_moves: 0,
         nature: (0, 0),
         brought: NOT_LISTED,
+        told: [NO_MOVE; MAX_MOVES],
+        n_told: 0,
     };
 
     pub(crate) fn moves(&self) -> &[u16] {
         &self.moves[..self.n_moves as usize]
+    }
+
+    pub(crate) fn told(&self) -> &[u16] {
+        &self.told[..self.n_told as usize]
+    }
+
+    /// Notes a move it has been worked out to know. Whether that is news.
+    pub(crate) fn tell(&mut self, move_id: u16) -> bool {
+        if self.told().contains(&move_id) || self.n_told as usize >= MAX_MOVES {
+            return false;
+        }
+        self.told[self.n_told as usize] = move_id;
+        self.n_told += 1;
+        true
     }
 }
 

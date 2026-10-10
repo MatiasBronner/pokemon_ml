@@ -447,6 +447,11 @@ pub struct ListedMon {
     pub gender: String,
     /// Its team sheet, when the sheets are open.
     pub sheet: Option<Sheet>,
+    /// With closed sheets: moves its opponent has worked out it knows without
+    /// seeing it use them, as ids. They are moves of the opponent's own that its
+    /// Imprison sealed, which is something only that player is told.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub told: Vec<String>,
 }
 
 /// What an open team sheet says of one Pokémon besides its species: all but its stat points.
@@ -504,6 +509,7 @@ pub(crate) fn roster_shown(roster: &[Listed], open: bool) -> Vec<ListedMon> {
             moves: l.moves().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
             nature: crate::position::nature_name(l.nature).to_string(),
         }),
+        told: l.told().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
     };
     roster.iter().map(listed).collect()
 }
@@ -545,6 +551,85 @@ impl ShownMon {
 }
 
 impl Battle {
+    /// The roster entry of the one Pokémon of `side` on the field with Imprison up, if
+    /// what it seals can be put down to it: there is just the one, it is who it looks
+    /// like, and its moves are its own.
+    pub(crate) fn imprisoner(&self, side: usize) -> Option<usize> {
+        let s = &self.sides[side];
+        let mut found = None;
+        for pos in 0..ACTIVE.min(s.n as usize) {
+            let r = self.active(side, pos);
+            if self.has_live(r) && !self.mon(r).fainted && self.vols(r).has(VolKind::Imprison) {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(r);
+            }
+        }
+        let m = self.mon(found?);
+        let rec = &m.live;
+        let own = !m.transformed && !rec.suspect && !rec.tainted && (rec.listed as usize) < s.n_roster as usize;
+        own.then_some(rec.listed as usize)
+    }
+
+    /// What `viewer`'s side can work out about the other's moves from its own move
+    /// request, when the sheets are closed: a move of its own that it is told it
+    /// cannot choose, with nothing in plain sight to account for that, has been
+    /// sealed by an opposing Imprison, and whoever has Imprison up knows the move.
+    /// Each with that Pokémon's roster entry.
+    ///
+    /// A player is told so for all but the last of its Pokémon to choose (Showdown
+    /// keeps that one in the dark). And it is only put down to Imprison where no
+    /// other condition on the Pokémon could be behind it, whichever move that
+    /// condition bars: nothing here depends on what is not on show.
+    /// `strict`: this is the game itself, which can check the conclusion.
+    pub(crate) fn sealed_moves(&self, viewer: usize, strict: bool) -> Vec<(usize, u16)> {
+        let mut out = Vec::new();
+        if self.open_team_sheets || self.request != Request::Move {
+            return out;
+        }
+        let Some(entry) = self.imprisoner(1 - viewer) else { return out };
+        let gravity = self.field.pseudo.has(Pseudo::Gravity);
+        for pos in 0..ACTIVE.min(self.sides[viewer].n as usize) {
+            let r = self.active(viewer, pos);
+            let (m, vols) = (self.mon(r), self.vols(r));
+            if !m.is_active || m.fainted || m.locked_move != NO_MOVE || !self.usable_moves(r) {
+                continue;
+            }
+            // What bars one move in particular, whichever it is.
+            let held = [VolKind::Disable, VolKind::Encore, VolKind::Torment].iter().any(|&k| vols.has(k))
+                || ITEMS[m.item as usize].flags & IF_CHOICE != 0;
+            if held {
+                continue;
+            }
+            let last = crate::obs::last_to_choose(self, viewer, pos);
+            for slot in &m.moves[..m.n_moves as usize] {
+                let d = &MOVES[slot.id as usize];
+                let told = slot.disabled && slot.pp > 0 && !(slot.hidden && last);
+                let accounted = (vols.has(VolKind::Taunt) && d.category == Category::Status)
+                    || (vols.has(VolKind::Healblock) && d.flags & F_HEAL != 0)
+                    || (vols.has(VolKind::Throatchop) && d.flags & F_SOUND != 0)
+                    || (gravity && d.flags & F_GRAVITY != 0)
+                    || d.events & Ev::DisableMove.bit() != 0
+                    || d.flags & F_CANTUSETWICE != 0;
+                if told && !accounted {
+                    debug_assert!(!strict || slot.hidden, "{} is barred, and not by Imprison", d.name);
+                    out.push((entry, slot.id));
+                }
+            }
+        }
+        out
+    }
+
+    /// At a move request: each side notes what [`Battle::sealed_moves`] tells it.
+    pub(crate) fn note_sealed(&mut self) {
+        for viewer in 0..2 {
+            for (entry, sealed) in self.sealed_moves(viewer, true) {
+                self.sides[1 - viewer].roster[entry].tell(sealed);
+            }
+        }
+    }
+
     /// The team index of the Pokémon `r` passes for (itself, unless Illusion says otherwise).
     pub(crate) fn shown_as(&self, r: MonRef) -> usize {
         let m = self.mon(r);

@@ -1415,6 +1415,28 @@ impl Follower {
                 self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling, shield });
             }
             "cant" => {
+                if arg(3) == "move: Imprison"
+                    && side == self.side
+                    && !self.open()
+                    && let Some(sealed) = move_id(&to_id(arg(4)))
+                {
+                    // One of its own was stopped by an Imprison: whoever has that up knows
+                    // the move. (If just one of them has, and its moves are its own.)
+                    let opp = 1 - side;
+                    let up: Vec<usize> = (0..ACTIVE)
+                        .filter(|&p| self.present(opp, p) && self.spots[opp][p].has(VolKind::Imprison))
+                        .collect();
+                    let entry =
+                        match (up.as_slice(), self.reader.sides[opp].active.get(up.first().copied().unwrap_or(0))) {
+                            (&[_], Some(Some(live))) if !live.transformed && !live.rec.suspect && !live.rec.tainted => {
+                                Some(live.rec.listed as usize)
+                            }
+                            _ => None,
+                        };
+                    if let Some(listed) = entry.and_then(|e| self.reader.sides[opp].roster.get_mut(e)) {
+                        listed.tell(sealed);
+                    }
+                }
                 if !arg(3).starts_with("ability: ") {
                     // (Out of PP for Destiny Bond itself: the one already up is left standing.)
                     let again = arg(3) == "nopp" && to_id(arg(4)) == "destinybond";
@@ -1915,7 +1937,18 @@ impl Follower {
         }
         self.req = Some(req);
         self.spots.iter_mut().flatten().for_each(|spot| (spot.ability_touched, spot.item_since) = (false, None));
-        let b = self.rebuild()?;
+        let mut b = self.rebuild()?;
+        // What this request says of the other side's moves: one of its own that is barred
+        // for no reason on show has been sealed by an Imprison, whose user knows it.
+        let mut news = false;
+        for (entry, sealed) in b.sealed_moves(self.side, false) {
+            if let Some(listed) = self.reader.sides[1 - self.side].roster.get_mut(entry) {
+                news |= listed.tell(sealed);
+            }
+        }
+        if news {
+            b = self.rebuild()?;
+        }
         self.digest(&b);
         if b.request == Request::Move {
             self.turn_start = Some(b);

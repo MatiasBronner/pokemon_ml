@@ -239,6 +239,8 @@ struct OwnNow {
     /// Its ability, or the ones it may have.
     abilities: Vec<u16>,
     item: u16,
+    /// It has lost an item since it came in.
+    lost_item: bool,
     /// Its Speed stat.
     stat: u16,
 }
@@ -324,6 +326,8 @@ pub struct Follower {
     chosen: Vec<(usize, u16, i8)>,
     /// By side: it has Mega Evolved.
     megaed: [bool; 2],
+    /// Pokémon of the other side whose number changed since the last decision (a disguise dropped): from, to.
+    renumbered: Vec<(usize, usize)>,
     /// Round has been used this turn, as of this many moves begun.
     round: Option<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
@@ -520,6 +524,7 @@ impl Follower {
             mover: None,
             chosen: Vec::new(),
             megaed: [false; 2],
+            renumbered: Vec::new(),
             round: None,
             roused: None,
             started: false,
@@ -677,7 +682,17 @@ impl Follower {
             std::array::from_fn(|k| me.reader.live_record(k / 2, k % 2).map(|rec| rec.item))
         };
         let before = held(self);
+        let unmasked = match who {
+            Some((side, pos)) if kind == "replace" && side != self.side => Some((pos, self.their_index(pos))),
+            _ => None,
+        };
         self.reader.line(line)?;
+        if let Some((pos, was)) = unmasked {
+            let now = self.their_index(pos);
+            if now != was {
+                self.renumbered.push((was, now));
+            }
+        }
         let after = held(self);
         self.track(kind, &parts, from)?;
         if !matches!(kind, "switch" | "drag" | "replace" | "swap") {
@@ -775,7 +790,7 @@ impl Follower {
                 abilities.push(req.mons.iter().find(|m| m.name == partner.name)?.ability);
             }
         }
-        Some(OwnNow { seen, abilities, item, stat })
+        Some(OwnNow { seen, abilities, item, lost_item: self.spots[self.side][pos].lost_item, stat })
     }
 
     /// A queued move of whoever is at a position begins.
@@ -789,7 +804,14 @@ impl Follower {
             // It woke up to move: the queue was sorted while it slept.
             seen[2 * side + pos].status = status;
         }
-        let own = std::array::from_fn(|p| (self.spots[self.side][p].stay, self.own_now(p)));
+        let roused = self.roused.filter(|&(s, p, _)| (s, p) == (side, pos) && s == self.side);
+        let own = std::array::from_fn(|p| {
+            let mut now = self.own_now(p);
+            if let (Some((_, _, status)), Some(now)) = (roused.filter(|r| r.1 == p), now.as_mut()) {
+                now.seen.status = status;
+            }
+            (self.spots[self.side][p].stay, now)
+        });
         if named == mv::ROUND {
             // The first Round of a turn calls the next one forward.
             match self.round {
@@ -1858,7 +1880,8 @@ impl Follower {
             // again after every move, with whatever has changed (a Mega's new ability, say).
             let then = &self.begun[at];
             let now = then.own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1.as_ref());
-            let speed = now.and_then(|n| n.agreed(|a| speed::own_speed(&n.seen, a, n.item, n.stat, &then.field)));
+            let speed =
+                now.and_then(|n| n.agreed(|a| speed::own_speed(&n.seen, a, n.item, n.lost_item, n.stat, &then.field)));
             let began = self.turn_start.as_ref().map(|b| b.mon(s.r).ability);
             let priority = now
                 .zip(began)
@@ -1911,7 +1934,11 @@ impl Follower {
                 named: self.begun[i].named,
             });
         }
-        self.speeds.as_mut().unwrap().digest(&events, b);
+        let speeds = self.speeds.as_mut().unwrap();
+        for (from, to) in self.renumbered.drain(..) {
+            speeds.renumber(1 - self.side, from, to);
+        }
+        speeds.digest(&events, b);
         self.begun.clear();
         self.items.clear();
         if b.request == Request::Move {

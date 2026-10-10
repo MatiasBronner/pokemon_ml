@@ -578,13 +578,28 @@ fn mods(s: &Seen, known: &Know, field: &FieldSeen, belief: &Belief) -> Option<Mo
 
 /// The Speed the queue sorts a Pokémon by, worked out by its own side from what
 /// it knows of it (ability, item and Speed stat) and what is in plain sight.
-/// `None` if something here does not model is at work (see [`mods`]).
-pub(crate) fn own_speed(s: &Seen, ability: u16, item: u16, stat: u16, field: &FieldSeen) -> Option<i32> {
+/// `lost_item`: it has lost an item since it came in, which is when Unburden
+/// starts. `None` if something this does not model is at work (see [`mods`]).
+pub(crate) fn own_speed(
+    s: &Seen,
+    ability: u16,
+    item: u16,
+    lost_item: bool,
+    stat: u16,
+    field: &FieldSeen,
+) -> Option<i32> {
     let class = class_of(item);
     let mut belief = Belief { bits: [[0; CLASSES]; NATURES] };
     belief.bits[1][class] = 1;
-    let known = Know::Is(if s.gastro_acid { ab::NOABILITY } else { ability });
-    mods(s, &known, field, &belief).map(|m| m.speed(stat as u32, class))
+    let ability = if s.gastro_acid { ab::NOABILITY } else { ability };
+    // Whether Unburden is at work its own side can tell, where a watcher has to pass.
+    let mut seen = *s;
+    seen.item = ItemShown::Unknown;
+    let mut m = mods(&seen, &Know::Is(ability), field, &belief)?;
+    if ability == ab::UNBURDEN && lost_item && item == it::NONE {
+        m.chain = (m.chain * 8192 + 2048) >> 12;
+    }
+    Some(m.speed(stat as u32, class))
 }
 
 /// Ten times the priority a move has from a Pokémon, worked out by its own
@@ -701,6 +716,15 @@ impl Speeds {
     /// default it is, if the regulation says so and the team as given here keeps to it.)
     pub(crate) fn set_clause(&mut self, side: usize, on: bool) {
         self.clause[side] = on;
+    }
+
+    /// The Pokémon numbered `from` on `side` goes by the number `to` from now on, and
+    /// what was noted of it this turn with it. (A follower of Showdown's log numbers the
+    /// other side's Pokémon as they appear; one that drops a disguise appears anew.)
+    pub(crate) fn renumber(&mut self, side: usize, from: usize, to: usize) {
+        self.began[side][to] = self.began[side][from];
+        self.swapped[side][to] = self.swapped[side][from];
+        self.encored[side][to] = self.encored[side][from];
     }
 
     /// Keeps track for `side` alone: what it can tell of the other side's Speed.

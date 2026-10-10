@@ -1127,7 +1127,10 @@ impl Follower {
                         } else if let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
                             && loc > 0
                         {
-                            aimed.push((1 - side, loc as usize - 1));
+                            // (With nobody left where it was aimed, it goes for the other one.)
+                            let there = loc as usize - 1;
+                            let other = !self.present(1 - side, there) && self.present(1 - side, 1 - there);
+                            aimed.push((1 - side, if other { 1 - there } else { there }));
                         }
                         let pressed = aimed
                             .iter()

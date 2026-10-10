@@ -206,7 +206,7 @@ impl Battle {
             // onStart(target): `-item|target|Air Balloon`, the one item that announces itself.
             (it::AIRBALLOON, Ev::Start, Pre::On) => {
                 if !self.ignoring_item(holder) && !self.field.pseudo.has(Pseudo::Gravity) {
-                    self.show_item_gain(holder, item);
+                    self.show_item_held(holder, item);
                 }
                 Res::Undef
             }

@@ -51,45 +51,49 @@ use crate::state::*;
 
 /// One Pokémon as the log names it.
 #[derive(Clone, Debug)]
-struct Entry {
-    name: String,
-    species: u16,
-    gender: Gender,
+pub(crate) struct Entry {
+    pub(crate) name: String,
+    pub(crate) species: u16,
+    pub(crate) gender: Gender,
     /// What had been shown of it when it was last off the field.
-    rec: Shown,
+    pub(crate) rec: Shown,
 }
 
 /// Whoever is in an active position.
 #[derive(Clone, Debug)]
-struct Live {
+pub(crate) struct Live {
     /// Index of the entry it goes by.
-    entry: usize,
+    pub(crate) entry: usize,
     /// The species on show (a temporary forme, or the Pokémon it transformed into).
-    species: u16,
-    gender: Gender,
-    rec: Shown,
-    transformed: bool,
+    pub(crate) species: u16,
+    pub(crate) gender: Gender,
+    pub(crate) rec: Shown,
+    pub(crate) transformed: bool,
     /// It has fainted, and what was shown of it has been filed.
-    gone: bool,
+    pub(crate) gone: bool,
 }
 
 #[derive(Clone, Debug, Default)]
-struct ObsSide {
-    team: Vec<Entry>,
-    active: [Option<Live>; ACTIVE],
+pub(crate) struct ObsSide {
+    pub(crate) team: Vec<Entry>,
+    pub(crate) active: [Option<Live>; ACTIVE],
     /// Pokémon brought (`|teamsize|`), and how many of them have fainted.
-    size: u8,
-    fainted: u8,
+    pub(crate) size: u8,
+    pub(crate) fainted: u8,
     /// The registered team as Team Preview listed it (`|poke|`), and whether
     /// its sheet has been shown as well (`|showteam|`).
-    roster: Vec<Listed>,
-    open: bool,
+    pub(crate) roster: Vec<Listed>,
+    pub(crate) open: bool,
 }
 
 /// A reader of Showdown's battle log. See the module notes.
 #[derive(Clone, Debug, Default)]
 pub struct Observer {
-    sides: [ObsSide; 2],
+    pub(crate) sides: [ObsSide; 2],
+    /// Items seen to change hands, in order, for whoever keeps track of more than the
+    /// record (see [`crate::speed`]): the side, the registered Pokémon it appears to be,
+    /// whether that is in doubt, the item, and whether it was lost (or else come by).
+    pub(crate) item_notes: Vec<(usize, u8, bool, u16, bool)>,
     /// Items used up since the last move began, by side, name and item (see `arrived`).
     used_up: Vec<(usize, String, u16)>,
     /// The Pokémon whose Cud Chew has just been announced.
@@ -134,13 +138,13 @@ pub fn holder(kind: &str, tagged: bool, is_item: bool, effect: &str) -> Who {
 }
 
 /// `p1a: Name` or `p1: Name`.
-struct Ident<'a> {
-    side: usize,
-    pos: Option<usize>,
-    name: &'a str,
+pub(crate) struct Ident<'a> {
+    pub(crate) side: usize,
+    pub(crate) pos: Option<usize>,
+    pub(crate) name: &'a str,
 }
 
-fn ident(s: &str) -> Option<Ident<'_>> {
+pub(crate) fn ident(s: &str) -> Option<Ident<'_>> {
     let (who, name) = s.split_once(": ")?;
     let side = match who.get(..2)? {
         "p1" => 0,
@@ -157,7 +161,7 @@ fn ident(s: &str) -> Option<Ident<'_>> {
 }
 
 /// `Garchomp-Mega, L50, M` to species and gender.
-fn details(s: &str) -> Result<(u16, Gender), String> {
+pub(crate) fn details(s: &str) -> Result<(u16, Gender), String> {
     let mut parts = s.split(", ");
     let name = parts.next().unwrap_or("");
     let species = species_id(&to_id(name)).ok_or_else(|| format!("unknown species {name:?}"))?;
@@ -374,6 +378,12 @@ impl Observer {
         self.sides[id.side].rec(id)
     }
 
+    /// Notes that `id` has lost `item`, or come by it, before the record is changed.
+    fn note_item(&mut self, id: &Ident, item: u16, lost: bool) {
+        let rec = *self.rec(id);
+        self.item_notes.push((id.side, rec.listed, rec.suspect || rec.tainted, item, lost));
+    }
+
     /// A line says `item` has reached `id` (Trick, Thief, Magician...). Such lines
     /// come after the item was handed over, and one that is used the moment it
     /// arrives (a White Herb, a terrain seed) has had its `-enditem` by then,
@@ -386,6 +396,7 @@ impl Observer {
         );
         let gone = used_on_arrival
             && self.used_up.iter().any(|(side, name, i)| *side == id.side && name == id.name && *i == item);
+        self.note_item(id, item, false);
         if !gone {
             self.rec(id).item = ItemShown::Holds(item);
         }
@@ -658,6 +669,9 @@ impl Observer {
                 // Recycle and Pickup say what is coming, Frisk and Poltergeist what is there; the
                 // rest say what has been handed over, after the fact.
                 if matches!(from, "" | "move: Recycle" | "ability: Pickup" | "ability: Harvest" | "ability: Frisk") {
+                    if matches!(from, "move: Recycle" | "ability: Pickup" | "ability: Harvest") {
+                        self.note_item(&id, i, false);
+                    }
                     self.rec(&id).item = ItemShown::Holds(i);
                 } else {
                     self.arrived(&id, i);
@@ -666,6 +680,7 @@ impl Observer {
                 if let Some(victim) = &of
                     && matches!(from, "ability: Magician" | "ability: Pickpocket" | "move: Thief" | "move: Covet")
                 {
+                    self.note_item(victim, i, true);
                     self.rec(victim).item = ItemShown::Lost(i);
                 }
                 self.tags(kind, &id, &parts)?;
@@ -688,6 +703,7 @@ impl Observer {
                     // that is not what this line is about.
                     return Ok(());
                 }
+                self.note_item(&id, i, true);
                 self.rec(&id).item = ItemShown::Lost(i);
                 if from.is_empty() || from == "gem" {
                     // Used by its holder, not taken from it.
@@ -727,6 +743,7 @@ impl Observer {
                     }
                     "ability: Symbiosis" => {
                         let i = item(arg(4))?;
+                        self.note_item(&id, i, true);
                         self.rec(&id).item = ItemShown::Lost(i);
                         if let Some(ally) = &of {
                             self.arrived(ally, i);
@@ -819,6 +836,7 @@ impl Observer {
                 // The stone is named, and a Mega has the one ability.
                 let stone = item(arg(4))?;
                 let ability = crate::shown::mega_ability(stone, &to_id(arg(3)));
+                self.note_item(&id, stone, false);
                 if let Some(live) = self.sides[id.side].live(&id) {
                     live.rec.item = ItemShown::Holds(stone);
                     (live.rec.ability, live.rec.base_ability, live.rec.ability_changed) = (ability, ability, false);

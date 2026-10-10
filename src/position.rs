@@ -1599,6 +1599,7 @@ impl Battle {
                 let mon = b.mon_from(ps, p, side_has_mega)?;
                 b.sides[s].team[names.order[s][p] as usize] = mon;
             }
+            b.sides[s].mega_used = side_has_mega;
             let fainted = side.pokemon.iter().filter(|ps| ps.fainted || ps.hp == Some(0)).count() as u8;
             b.sides[s].total_fainted = side.total_fainted.unwrap_or(fainted);
             b.sides[s].pokemon_left = side.pokemon_left.unwrap_or(side.pokemon.len() as u8 - fainted);

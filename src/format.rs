@@ -293,6 +293,34 @@ impl ShowdownSet {
     }
 }
 
+/// A team in Showdown's packed format, as its server takes one (`/utm`): the
+/// Pokémon separated by `]`, each as
+/// `name|species|item|ability|moves|nature|evs|gender|ivs|shiny|level|happiness`.
+/// Stat points go where EVs do, as Showdown's Champions formats have them.
+pub fn packed_team(team: &[PokemonSet]) -> String {
+    let one = |set: &PokemonSet| {
+        let moves: Vec<&str> = set.moves.iter().map(|&m| MOVES[m as usize].id).collect();
+        let points = if set.stat_points == [0; 6] {
+            String::new()
+        } else {
+            let each: Vec<String> =
+                set.stat_points.iter().map(|&p| if p == 0 { String::new() } else { p.to_string() }).collect();
+            each.join(",")
+        };
+        format!(
+            "{}||{}|{}|{}|{}|{}|{}|||50|",
+            SPECIES[set.species as usize].name,
+            ITEMS[set.item as usize].id,
+            if set.ability == ab::NOABILITY { "" } else { ABILITIES[set.ability as usize].id },
+            moves.join(","),
+            NATURE_NAMES.iter().copied().find(|n| nature(n) == Some(set.nature)).unwrap_or(NEUTRAL),
+            points,
+            if set.gender == Gender::N { "" } else { set.gender.id() },
+        )
+    };
+    team.iter().map(one).collect::<Vec<_>>().join("]")
+}
+
 /// A team as the JSON Showdown takes (`Teams.pack(JSON.parse(...))` on its side).
 pub fn showdown_team(team: &[PokemonSet]) -> String {
     let sets: Vec<ShowdownSet> = team.iter().map(ShowdownSet::from_set).collect();

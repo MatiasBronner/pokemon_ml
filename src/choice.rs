@@ -87,6 +87,7 @@ impl Battle {
             order: [0, 1, 2, 3, 4, 5],
             pokemon_left: 0,
             total_fainted: 0,
+            mega_used: false,
             fainted_this_turn: false,
             fainted_last_turn: false,
             conds: SideConds::new(SideCond::FIRST),
@@ -418,7 +419,7 @@ impl Battle {
         out
     }
 
-    fn living_bench(&self, side: usize) -> usize {
+    pub(crate) fn living_bench(&self, side: usize) -> usize {
         let s = &self.sides[side];
         (ACTIVE..s.n as usize).filter(|&p| !s.team[s.order[p] as usize].fainted).count()
     }

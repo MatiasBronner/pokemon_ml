@@ -167,42 +167,14 @@ impl Game {
         self.battle.as_ref().and_then(|b| b.winner).map(|w| w as usize)
     }
 
-    /// The roster entry of the Pokémon at a position of a side's current order.
-    fn entry_at(b: &Battle, side: usize, position: usize) -> Option<usize> {
-        let s = &b.sides[side];
-        let idx = *s.order.get(position)?;
-        s.roster[..s.n_roster as usize].iter().position(|l| l.brought == idx)
-    }
-
     /// The number a choice goes by.
     pub fn action_of(&self, side: usize, choice: Choice) -> Option<usize> {
-        let b = self.battle.as_ref()?;
-        Some(match choice {
-            Choice::Pass => PASS,
-            Choice::Move { slot, target, mega } => {
-                let t = TARGETS.iter().position(|&x| x == target)?;
-                10 * slot as usize + 2 * t + mega as usize
-            }
-            Choice::Switch { to } => SWITCH + Game::entry_at(b, side, to as usize)?,
-        })
+        action_of(self.battle.as_ref()?, side, choice)
     }
 
     /// The choice a number stands for, whether or not it is legal now.
     pub fn choice_of(&self, side: usize, action: usize) -> Option<Choice> {
-        let b = self.battle.as_ref()?;
-        Some(match action {
-            PASS => Choice::Pass,
-            a if a < SWITCH => Choice::Move { slot: (a / 10) as u8, target: TARGETS[a % 10 / 2], mega: a % 2 == 1 },
-            a if a < PASS => {
-                let s = &b.sides[side];
-                let brought = s.roster.get(a - SWITCH)?.brought;
-                if brought == NOT_LISTED {
-                    return None;
-                }
-                Choice::Switch { to: s.team[brought as usize].position }
-            }
-            _ => return None,
-        })
+        choice_of(self.battle.as_ref()?, side, action)
     }
 
     /// Every pair of actions `side` may give now.
@@ -223,62 +195,54 @@ impl Game {
         let Some(b) = &self.battle else {
             return N_PREVIEW;
         };
-        if b.ended {
-            return 0;
-        }
-        let act = |c: Choice| self.action_of(side, c).expect("a legal choice has a number");
-        let first: Vec<(Choice, usize)> = b.legal_choices(side, 0).into_iter().map(|c| (c, act(c))).collect();
-        let second: Vec<(Choice, usize)> = b.legal_choices(side, 1).into_iter().map(|c| (c, act(c))).collect();
-        let mut n = 0;
-        for &(x, ax) in &first {
-            for &(y, ay) in &second {
-                if b.pair_ok(side, &[x, y]) {
-                    mask[ax] = 1;
-                    mask[N_ACTIONS * (1 + ax) + ay] = 1;
-                    n += 1;
-                }
-            }
-        }
-        n
+        masks_of(b, side, mask)
+    }
+
+    /// Team Preview ends: each side brings the Pokémon it names, as places in
+    /// its registered team, in the order it wants them (the first two lead).
+    /// `seed` seeds the battle that starts. ([`Game::act`] does this from a
+    /// Team Preview action, which names the leads in the order registered.)
+    pub fn start(&mut self, picks: [&[usize]; 2], seed: [u16; 4]) -> Result<(), Error> {
+        let rosters = [&self.rosters[0][..], &self.rosters[1][..]];
+        let b = speed::record(&mut self.events, || Battle::with_rosters(rosters, picks, self.open, seed))?;
+        self.timers = Timers::default();
+        self.timers.update(&b);
+        self.speeds.digest(&self.events, &b);
+        self.battle = Some(b);
+        Ok(())
+    }
+
+    /// Both sides choose, in the battle's own terms. ([`Game::act`] does this from actions.)
+    pub fn choose(&mut self, choices: [[Choice; ACTIVE]; 2]) -> Result<(), Error> {
+        let b = self.battle.as_mut().ok_or_else(|| Error::BadChoice("the battle has not started".into()))?;
+        speed::record(&mut self.events, || b.choose(choices))?;
+        self.timers.update(b);
+        self.speeds.digest(&self.events, b);
+        Ok(())
     }
 
     /// Both sides act. At Team Preview only the first number of each side
     /// counts, and `seed` seeds the battle that starts.
     pub fn act(&mut self, actions: [[usize; 2]; 2], seed: [u16; 4]) -> Result<(), Error> {
-        match &mut self.battle {
-            None => {
-                let mut picks = [[0usize; 4]; 2];
-                for side in 0..2 {
-                    let pick = preview_table().get(actions[side][0]).ok_or_else(|| {
-                        Error::BadChoice(format!("p{}: {} is not a Team Preview action", side + 1, actions[side][0]))
-                    })?;
-                    picks[side] = pick.map(|j| j as usize);
-                }
-                let rosters = [&self.rosters[0][..], &self.rosters[1][..]];
-                let b = speed::record(&mut self.events, || {
-                    Battle::with_rosters(rosters, [&picks[0], &picks[1]], self.open, seed)
+        if self.battle.is_none() {
+            let mut picks = [[0usize; 4]; 2];
+            for side in 0..2 {
+                let pick = preview_table().get(actions[side][0]).ok_or_else(|| {
+                    Error::BadChoice(format!("p{}: {} is not a Team Preview action", side + 1, actions[side][0]))
                 })?;
-                self.timers = Timers::default();
-                self.timers.update(&b);
-                self.speeds.digest(&self.events, &b);
-                self.battle = Some(b);
+                picks[side] = pick.map(|j| j as usize);
             }
-            Some(_) => {
-                let mut choices = [[Choice::Pass; ACTIVE]; 2];
-                for side in 0..2 {
-                    for pos in 0..ACTIVE {
-                        choices[side][pos] = self.choice_of(side, actions[side][pos]).ok_or_else(|| {
-                            Error::BadChoice(format!("p{}: {} is not an action", side + 1, actions[side][pos]))
-                        })?;
-                    }
-                }
-                let b = self.battle.as_mut().unwrap();
-                speed::record(&mut self.events, || b.choose(choices))?;
-                self.timers.update(b);
-                self.speeds.digest(&self.events, b);
+            return self.start([&picks[0], &picks[1]], seed);
+        }
+        let mut choices = [[Choice::Pass; ACTIVE]; 2];
+        for side in 0..2 {
+            for pos in 0..ACTIVE {
+                choices[side][pos] = self.choice_of(side, actions[side][pos]).ok_or_else(|| {
+                    Error::BadChoice(format!("p{}: {} is not an action", side + 1, actions[side][pos]))
+                })?;
             }
         }
-        Ok(())
+        self.choose(choices)
     }
 
     /// `view`'s side of the game, into buffers of [`OBS_F`], [`OBS_I`] and [`OBS_M`].
@@ -306,6 +270,65 @@ impl Game {
         let best = if kind == Baseline::Lookahead { lookahead(b, side, rng) } else { greedy(b, side, rng) };
         [act(best[0]), act(best[1])]
     }
+}
+
+/// The roster entry of the Pokémon at a position of a side's current order.
+fn entry_at(b: &Battle, side: usize, position: usize) -> Option<usize> {
+    let s = &b.sides[side];
+    let idx = *s.order.get(position)?;
+    s.roster[..s.n_roster as usize].iter().position(|l| l.brought == idx)
+}
+
+/// The number a choice goes by in a battle.
+pub(crate) fn action_of(b: &Battle, side: usize, choice: Choice) -> Option<usize> {
+    Some(match choice {
+        Choice::Pass => PASS,
+        Choice::Move { slot, target, mega } => {
+            let t = TARGETS.iter().position(|&x| x == target)?;
+            10 * slot as usize + 2 * t + mega as usize
+        }
+        Choice::Switch { to } => SWITCH + entry_at(b, side, to as usize)?,
+    })
+}
+
+/// The choice a number stands for in a battle, whether or not it is legal now.
+pub(crate) fn choice_of(b: &Battle, side: usize, action: usize) -> Option<Choice> {
+    Some(match action {
+        PASS => Choice::Pass,
+        a if a < SWITCH => Choice::Move { slot: (a / 10) as u8, target: TARGETS[a % 10 / 2], mega: a % 2 == 1 },
+        a if a < PASS => {
+            let s = &b.sides[side];
+            let brought = s.roster.get(a - SWITCH)?.brought;
+            if brought == NOT_LISTED {
+                return None;
+            }
+            Choice::Switch { to: s.team[brought as usize].position }
+        }
+        _ => return None,
+    })
+}
+
+/// Fills `mask` with what `side` may do in a battle and returns how many pairs of actions that is.
+pub(crate) fn masks_of(b: &Battle, side: usize, mask: &mut [u8]) -> usize {
+    assert_eq!(mask.len(), OBS_M, "a mask buffer of the wrong size");
+    mask.fill(0);
+    if b.ended {
+        return 0;
+    }
+    let act = |c: Choice| action_of(b, side, c).expect("a legal choice has a number");
+    let first: Vec<(Choice, usize)> = b.legal_choices(side, 0).into_iter().map(|c| (c, act(c))).collect();
+    let second: Vec<(Choice, usize)> = b.legal_choices(side, 1).into_iter().map(|c| (c, act(c))).collect();
+    let mut n = 0;
+    for &(x, ax) in &first {
+        for &(y, ay) in &second {
+            if b.pair_ok(side, &[x, y]) {
+                mask[ax] = 1;
+                mask[N_ACTIONS * (1 + ax) + ay] = 1;
+                n += 1;
+            }
+        }
+    }
+    n
 }
 
 /// What the greedy player does on a turn.

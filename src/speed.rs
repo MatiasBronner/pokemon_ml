@@ -243,6 +243,8 @@ pub(crate) struct Seen {
     pub listed: u8,
     /// It may be an Illusion, or has transformed: its Speed is not its own.
     pub doubt: bool,
+    /// It has transformed: its Speed is another Pokémon's, which its own side does not know either.
+    pub transformed: bool,
     /// The species on show.
     pub species: u16,
     pub stage: i8,
@@ -255,6 +257,28 @@ pub(crate) struct Seen {
     pub gastro_acid: bool,
     /// The truth, for [`Speeds::strict`] alone.
     true_item: u16,
+}
+
+impl Seen {
+    /// Nobody there.
+    pub(crate) fn nobody(r: MonRef) -> Seen {
+        Seen {
+            r,
+            present: false,
+            listed: NOT_LISTED,
+            doubt: false,
+            transformed: false,
+            species: 0,
+            stage: 0,
+            status: Status::None,
+            hp_full: true,
+            item: ItemShown::Unknown,
+            ability: UNKNOWN,
+            ability_changed: false,
+            gastro_acid: false,
+            true_item: it::NONE,
+        }
+    }
 }
 
 /// The field at one moment.
@@ -278,6 +302,8 @@ pub(crate) struct Queued {
     /// Speed as the queue sorts by it: negated under Trick Room.
     pub speed: i32,
     pub move_id: u16,
+    /// For a move that is starting: its user is under an Encore.
+    pub encored: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -328,6 +354,7 @@ pub(crate) fn seen(b: &Battle, r: MonRef) -> Seen {
         present: b.shown_live(r) && !m.fainted,
         listed: live.listed,
         doubt: live.suspect || m.transformed,
+        transformed: m.transformed,
         species: if m.illusion != 0 { live.species } else { m.species },
         stage: m.boosts[SPE],
         status: m.status,
@@ -358,6 +385,7 @@ fn queued(a: &Action) -> Queued {
         frac: a.frac,
         speed: a.speed,
         move_id: a.move_id,
+        encored: false,
     }
 }
 
@@ -367,7 +395,8 @@ impl Battle {
         if !on() {
             return;
         }
-        let me = queued(a);
+        let mut me = queued(a);
+        me.encored = self.vols(me.r).has(VolKind::Encore);
         let mut rest = [me; 3];
         let mut n_rest = 0;
         for other in self.queue.as_slice() {
@@ -547,6 +576,40 @@ fn mods(s: &Seen, known: &Know, field: &FieldSeen, belief: &Belief) -> Option<Mo
     })
 }
 
+/// The Speed the queue sorts a Pokémon by, worked out by its own side from what
+/// it knows of it (ability, item and Speed stat) and what is in plain sight.
+/// `lost_item`: it has lost an item since it came in, which is when Unburden
+/// starts. `None` if something this does not model is at work (see [`mods`]).
+pub(crate) fn own_speed(
+    s: &Seen,
+    ability: u16,
+    item: u16,
+    lost_item: bool,
+    stat: u16,
+    field: &FieldSeen,
+) -> Option<i32> {
+    let class = class_of(item);
+    let mut belief = Belief { bits: [[0; CLASSES]; NATURES] };
+    belief.bits[1][class] = 1;
+    let ability = if s.gastro_acid { ab::NOABILITY } else { ability };
+    // Whether Unburden is at work its own side can tell, where a watcher has to pass.
+    let mut seen = *s;
+    seen.item = ItemShown::Unknown;
+    let mut m = mods(&seen, &Know::Is(ability), field, &belief)?;
+    if ability == ab::UNBURDEN && lost_item && item == it::NONE {
+        m.chain = (m.chain * 8192 + 2048) >> 12;
+    }
+    Some(m.speed(stat as u32, class))
+}
+
+/// Ten times the priority a move has from a Pokémon, worked out by its own
+/// side from what it knows (its ability now, and the one it began the turn
+/// with). `None` where [`priority`] cannot say.
+pub(crate) fn own_priority(s: &Seen, ability: u16, at_start: u16, field: &FieldSeen, move_id: u16) -> Option<i32> {
+    let known = Know::Is(if s.gastro_acid { ab::NOABILITY } else { ability });
+    priority(s, &known, &Know::Is(at_start), field, move_id)
+}
+
 /// Ten times the priority `move_id` has from this Pokémon, as far as the
 /// watcher can tell; `None` if an ability it has not shown could change it.
 /// `at_start` is the ability it began the turn with: where a move goes
@@ -588,6 +651,8 @@ pub struct Speeds {
     /// By side and team index: what was known of its ability when the turn began (the
     /// ability shown, whether it had been replaced, and the species it then was).
     began: [[(u16, bool, u16); MAX_TEAM]; 2],
+    /// By side and team index: under an Encore when the turn began.
+    encored: [[bool; MAX_TEAM]; 2],
     /// By side: whether its team can be counted on to have each item once at most (the
     /// regulation's item clause, on a team that keeps it).
     clause: [bool; 2],
@@ -598,6 +663,9 @@ pub struct Speeds {
     owner: [[u8; CLASSES]; 2],
     /// Each active Pokémon's Speed as the queue would sort by it now. Its own side knows it.
     own: [[i32; ACTIVE]; 2],
+    /// Kept for one side alone, which this is: nothing is worked out about its own
+    /// Pokémon. (A player following a battle from Showdown's log has no more to go on.)
+    watcher: Option<u8>,
     /// Check every observation against the truth as it is used and panic on a
     /// difference: for tests. (It reads what a player is not shown.)
     pub strict: bool,
@@ -637,9 +705,31 @@ impl Speeds {
             owner: [[NOT_LISTED; CLASSES]; 2],
             swapped: [[false; MAX_TEAM]; 2],
             began: [[(UNKNOWN, true, 0); MAX_TEAM]; 2],
+            encored: [[false; MAX_TEAM]; 2],
             own: [[0; ACTIVE]; 2],
+            watcher: None,
             strict: false,
         }
+    }
+
+    /// Says whether `side`'s team can be counted on to have each item once at most. (By
+    /// default it is, if the regulation says so and the team as given here keeps to it.)
+    pub(crate) fn set_clause(&mut self, side: usize, on: bool) {
+        self.clause[side] = on;
+    }
+
+    /// The Pokémon numbered `from` on `side` goes by the number `to` from now on, and
+    /// what was noted of it this turn with it. (A follower of Showdown's log numbers the
+    /// other side's Pokémon as they appear; one that drops a disguise appears anew.)
+    pub(crate) fn renumber(&mut self, side: usize, from: usize, to: usize) {
+        self.began[side][to] = self.began[side][from];
+        self.swapped[side][to] = self.swapped[side][from];
+        self.encored[side][to] = self.encored[side][from];
+    }
+
+    /// Keeps track for `side` alone: what it can tell of the other side's Speed.
+    pub(crate) fn watch_as(&mut self, side: usize) {
+        self.watcher = Some(side as u8);
     }
 
     /// What `side`'s opponent knows of the Speed of the Pokémon `side` registered `entry`th.
@@ -740,6 +830,9 @@ impl Speeds {
         for (x, other, x_first) in [(first, second, true), (second, first, false)] {
             // What `other`'s side learns about `x`. It knows its own Pokémon's priority and Speed.
             let side = x.r.side as usize;
+            if self.watcher.is_some_and(|w| w as usize == side) {
+                continue;
+            }
             let Some(s) = seen.iter().find(|s| s.r == x.r) else { continue };
             if !s.present || s.doubt || s.listed == NOT_LISTED || swapped[side][x.r.idx as usize] {
                 continue;
@@ -752,6 +845,19 @@ impl Speeds {
             );
             // A Quick Claw or a Quick Draw going off is announced, and puts the move ahead of its bracket.
             if moved || x.frac > 0 || other.frac != 0 {
+                continue;
+            }
+            // An Encore that caught it this turn before it moved: the move it then used is
+            // not the one it chose, and where it stood in the queue went by the one it chose.
+            let at_start = if x_first { first } else { later };
+            if at_start.encored && !self.encored[side][x.r.idx as usize] {
+                continue;
+            }
+            // A Pokémon that has transformed or had its Speed swapped moves at a Speed its own
+            // side cannot put a number to.
+            if seen.iter().any(|o| o.r == other.r && o.transformed)
+                || swapped[other.r.side as usize][other.r.idx as usize]
+            {
                 continue;
             }
             let known = know(s, listed, b.open_team_sheets);
@@ -796,7 +902,9 @@ impl Speeds {
     fn settle(&mut self, b: &Battle) {
         for side in 0..2 {
             let s = &b.sides[side];
-            for a in 0..s.n as usize {
+            // (Every place on the team, brought or not: a follower of Showdown's log keeps a
+            // Pokémon it knows to be in disguise in one past the last it has seen.)
+            for a in 0..MAX_TEAM {
                 let m = &s.team[a];
                 if !m.is_active {
                     self.swapped[side][a] = false;
@@ -813,6 +921,8 @@ impl Speeds {
                     } else {
                         (UNKNOWN, true, 0)
                     };
+                    self.encored[side][a] =
+                        m.is_active && b.vols(MonRef { side: side as u8, idx: a as u8 }).has(VolKind::Encore);
                 }
                 // The record of the Pokémon this one appears to be.
                 let rec = if m.is_active && m.live.seen != 0 { &m.live } else { &s.shown[a] };
@@ -892,6 +1002,10 @@ impl Speeds {
         let s = seen(b, r);
         if !me.is_active || me.fainted || !s.present {
             return None;
+        }
+        if me.transformed || self.swapped[view][b.active(view, mine).idx as usize] {
+            // Its Speed is another Pokémon's, which its side has not been told.
+            return Some(First::Unknown);
         }
         let roster = &b.sides[opp].roster[..b.sides[opp].n_roster as usize];
         let (Some(listed), false) = (roster.get(s.listed as usize), self.swapped[opp][r.idx as usize]) else {

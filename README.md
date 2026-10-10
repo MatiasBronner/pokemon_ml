@@ -15,7 +15,9 @@ and the engine keeps track of
 [what each player has been shown](#what-each-side-has-been-shown) of the
 other's team. On top of it sit a [training environment](#training-a-bot)
 that steps thousands of games at once and hands each side's view to a model
-as arrays, and a first, small self-play learner in PyTorch.
+as arrays, a first, small self-play learner in PyTorch, and a
+[client](#playing-on-showdown) that plays what it has learned on a Pokémon
+Showdown server.
 
 ## Quick start
 
@@ -280,6 +282,8 @@ The pieces, from the engine up:
 | `python/pokemon_ml/model.py` | PyTorch | embeddings, a small transformer, policy and value heads |
 | `python/pokemon_ml/ppo.py`, `train.py` | PyTorch | PPO self-play and checkpoints |
 | `python/pokemon_ml/league.py` | PyTorch | snapshots of the network, games between them, ratings |
+| `src/follow.rs` | Rust | a battle on Showdown, followed from what a player is sent, as the same arrays |
+| `python/pokemon_ml/showdown.py` | Python | a client that plays the network on a Showdown server |
 
 ```sh
 python3 -m venv .venv && source .venv/bin/activate
@@ -324,7 +328,8 @@ update    25  games    68,551  ...  | rating 412; wins 98% vs random, 41% vs gre
 `python -m pokemon_ml.league --run runs/first --pool teams/2027-frankfurt.json`
 plays more games between a run's snapshots than training had time for and
 prints the table. None of this says how the network does against people: that
-takes playing them.
+takes playing them, which is what [the Showdown client](#playing-on-showdown)
+is for.
 
 ### What a model is given
 
@@ -360,12 +365,25 @@ state of the game and what things are, as in the two write-ups this follows
 account of adapting it to this format).
 
 Two things are done to keep hidden information hidden. The conditions an
-unrevealed item or ability keeps on a Pokémon (a Choice lock) are left out of
-the opponent's view. And a weather, a terrain or a screen is given by how
+unrevealed item or ability keeps on a Pokémon (a Choice lock) are left out.
+And a weather, a terrain or a screen is given by how
 long it has been up, not how long it has left, since an item the opponent
 may not have seen makes it last 8 turns for 5. `tests/env.rs` rebuilds the
 opponent's half of the observation from `Battle::shown` alone at every
 decision of 80 games and requires it to be the same.
+
+And one rule covers the whole of it: **nothing is in the observation that a
+player on Showdown is not told**, so that the network can
+[play there](#playing-on-showdown) on exactly what it trained on. Showdown
+tells a player what happens, line by line, and what its own Pokémon may do.
+It does not say that a Pokémon will flinch before the flinch stops a move,
+how many turns of a rampage are left, or what the simulator notes for itself
+in the middle of a turn, so those conditions are left out for both sides
+(`HIDDEN_VOLATILES` in `src/obs.rs` lists the sixteen). The player's own
+stats are the ones its team was registered with. And what a player's
+Pokémon is kept from, a disabled move or being trapped, is given as
+Showdown gives it: with the Pokémon's choices, when it has a choice to
+make.
 
 ### What the order of moves shows
 
@@ -475,6 +493,128 @@ past versions to play against (self-play against only the current network
 can go in circles), tokens for what happened on earlier turns, heads that
 predict the opponent's hidden sets and next action (which Jaxcalibur found
 worth a lot), and search at play time.
+
+## Playing on Showdown
+
+`python -m pokemon_ml.showdown` logs a bot in to a Pokémon Showdown server
+and plays battles there with a run's network: against whoever the ladder
+finds, against a player it challenges, or against anyone who challenges it.
+
+```sh
+pip install websockets
+python -m pokemon_ml.showdown --pool teams/2027-frankfurt.json --run runs/first \
+    --server sim3.psim.us --name MyBot --password ... --ladder --games 10
+```
+
+| | |
+|---|---|
+| `--ladder`, `--challenge USER`, `--accept` (`--from USER`) | how it finds battles |
+| `--run RUN`, `--snapshot 000300`, `--greedy` | the network that plays: a run's latest checkpoint or one of its snapshots, drawing from its policy or always taking the likeliest action. Without `--run` it picks legal actions at random, which is for trying a connection out |
+| `--pool FILE`, `--team N` | the teams it plays with: one of the pool at random each battle, or always the Nth |
+| `--server HOST:PORT` | `localhost:8000` unless told otherwise |
+| `--name`, `--password` | the account (the password can come from `SHOWDOWN_PASSWORD`) |
+| `--closed-sheets` | turn down open team sheets when they are offered |
+| `--records DIR`, `--results FILE` | keep every battle's messages as they arrived; add one line a battle to a file of results |
+
+It prints each result and, at the end, the share of battles won.
+
+**A server of your own** is the place to start. The copy of Showdown the
+engine is checked against is a whole server:
+
+```sh
+scripts/setup-oracle.sh
+(cd oracle/pokemon-showdown && node pokemon-showdown start --no-security 8000) &
+python -m pokemon_ml.showdown --pool teams/2027-frankfurt.json --run runs/first --name botb --accept --games 50 &
+python -m pokemon_ml.showdown --pool teams/2027-frankfurt.json --run runs/first --snapshot 000100 \
+    --name bota --challenge botb --games 50
+```
+
+That plays the run's latest network against an older one of its own through
+Showdown itself: slower by far than the simulator (five or six battles a
+second on a two-core machine, with a small network) and with the real game
+as referee. The server also prints an address to open Showdown's web client
+at, where a person should be able to pick a name and challenge the bot;
+that has not been tried here.
+
+### How a battle there becomes an observation
+
+In training the observation is written from the simulator's state. On
+Showdown there is no such thing: a player is sent a log (`|move|p2a:
+Garchomp|Earthquake|...`, `|-damage|p1b: Sinistcha|37/100`) and, at each
+decision, a request listing its own Pokémon and what they may do.
+`Follower` (`src/follow.rs`) takes in the two and keeps what they add up to:
+who stands where, stat stages, every condition on every Pokémon and side and
+how long it has been there, what each opposing Pokémon has shown
+([`observer`](#what-each-side-has-been-shown)), and what the order of moves
+says of its Speed ([`speed`](#what-the-order-of-moves-shows), fed the moves
+as the log gives them). From that it builds a `Battle` that is right in
+everything the observation reads, and from there on the code is the code
+training uses: the same function writes the arrays, the same function lists
+the legal actions, and the action the network picks is put into Showdown's
+words (`move 2 1 mega, switch 3`).
+
+### What has been checked, and what has not
+
+**That the follower sees what the simulator sees.** 16,600 battles were
+played in Showdown with random teams and random choices, half with open
+team sheets, and recorded with their logs and the requests each player was
+sent. `followcheck` replays each in the simulator with a follower for each
+side reading only what Showdown sent that side; at every decision the two
+must give the same observation, number for number, and the same legal
+actions, and the follower must put the choice that was made into the words
+Showdown was sent. (180 are left out, all for one reason: with closed
+sheets, an Illusion on a Pokémon the regulation does not give it, which the
+recorder's random teams allow and which nobody watching could suspect.)
+The follower was written against the first 10,600 until none differed. The
+last 6,000 were then recorded and run once, untouched, for an honest
+number: all 5,931 that count were followed to the end, and of 279,547
+observations 32 differed (0.011%), in 8 battles, from seven causes. Five of
+the seven are fixed; with that, 13 observations of 764,024 differ, in two
+battles, for the two reasons given below. `tests/follow.rs` keeps 23 of the
+battles as a fixture, and `followcheck` (under
+[Running it yourself](#running-it-yourself)) runs any number more.
+
+**That the pieces meet.** Through a server run as above, on this machine:
+two bots playing random actions finish their battles with both ends
+agreeing on every result and nothing sent that Showdown refused
+(`python/tests/test_showdown.py`, with `SHOWDOWN_SERVER=localhost:8000`).
+And a small network keeps its strength on the way through:
+
+| a network after 60 updates (a quarter-size one, on 100 random legal teams) | in the simulator | through the server |
+|---|---|---|
+| against the random player, open sheets | 98.4% of 4,000 | 98.6% of 500 |
+| against the random player, closed sheets | 98.3% of 4,000 | 98.8% of 500 |
+| against itself 30 updates earlier, open sheets | 72.0% of 8,000 | 71.9% of 2,500 |
+| against itself 30 updates earlier, closed sheets | 71.7% of 8,000 | 71.5% of 2,500 |
+
+(One standard error is about 0.5 points on the simulator's figures in the
+last two rows and 0.9 on the server's.) In those 6,000 battles Showdown
+refused a choice eight times, each time for the reason described next.
+
+**Where it and the simulator part.** Showdown keeps one thing from the last
+Pokémon of a side to choose: that it is barred from a move or from
+switching by something not yet shown, a foe's Imprison or a Shadow Tag that
+has not announced itself. It lists the choice anyway, refuses it if it is
+made, and sends the request again put right. The follower offers what
+Showdown lists and takes the corrected request like any other. The
+simulator, in training, does not offer the choice in the first place, so
+this is the one situation the network meets on Showdown and not in
+training (in the recorded battles, about one decision in 200, with random
+teams that are full of such moves). And two things the follower can get
+wrong, each seen in one battle of the last 6,000: the PP of a Pokémon that
+left the field on the turn its move paid a Pressure the log does not show
+(a failed Counter names no target); and the move a Pokémon last used, when
+its Choice item refused a move it had been free to pick while Magic Room
+was up.
+
+**Not checked: the public server.** Logging in with a password, searching
+the ladder and the pace of messages (one every 0.65 seconds, under
+Showdown's limit for ordinary accounts) are written from Showdown's
+protocol notes and its server's source, and have never been run: the
+machine this was written on cannot reach the public server. Expect to fix
+something small the first time. Whether and where a bot may play there is
+for Showdown's staff to say; ask before pointing it at the ladder. The bot
+answers at once and does not use the battle timer.
 
 ## What each side has been shown
 
@@ -855,6 +995,15 @@ with the sheets open and as if they had stayed closed. When that reports a
 difference it names the field, the two values and the first battle and
 decision where it happened.
 
+The [follower of Showdown's log](#playing-on-showdown) is checked on
+battles recorded with what each player was sent:
+
+```sh
+node oracle/gen_cases.js --n 2000 --seed 1 --log --requests --out closed.jsonl
+node oracle/gen_cases.js --n 2000 --seed 2 --log --requests --open-sheets --out open.jsonl
+cargo run --release --bin followcheck -- closed.jsonl open.jsonl      # add --battle 17 for one battle's differences
+```
+
 ## How abilities, items and conditions work
 
 The engine has a port of Showdown's event system (`src/events.rs`): `runEvent`,
@@ -1020,13 +1169,15 @@ src/speed.rs       what the order of moves has shown about each Pokémon's Speed
 src/python.rs      the two above as a Python module (feature `python`, built by maturin)
 src/shown.rs       what the battle has shown of each Pokémon: Battle::shown
 src/observer.rs    the same, read from Showdown's log
+src/follow.rs      a whole battle followed from what Showdown sends one player, as the model's observation
 src/state.rs       fixed-size state: Battle, Side, Pokemon, the action queue
 src/data.rs        data definitions; src/tables.rs is generated (do not edit)
 src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
-src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs, src/bin/envbench.rs
-python/pokemon_ml/  the learner: env.py, model.py, ppo.py, train.py, league.py; python/tests/ checks them (pytest)
+src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs, src/bin/envbench.rs, src/bin/followcheck.rs
+python/pokemon_ml/  the learner: env.py, model.py, ppo.py, train.py, league.py; showdown.py plays it on a
+                    Showdown server; python/tests/ checks them (pytest)
 pyproject.toml     how maturin builds the engine into that package
 oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
@@ -1047,6 +1198,7 @@ tests/perish_trap.rs  the perish trap, step by step, on battles played out in Sh
 tests/teams.rs     team sheets read, stat points guessed, a pool saved, loaded and played
 tests/env.rs       the training environment: actions, masks, what each side is given, many games at once
 tests/speed.rs     Speed worked out from the order of moves: an example, and that it is never wrong
+tests/follow.rs    the follower against the simulator on battles recorded in Showdown, and its use from outside
 ```
 
 Everything in `src/battle.rs`, `moves.rs` and `events.rs` is a
@@ -1092,8 +1244,9 @@ likely first steps when speed starts to matter.
    is what search needs.
 4. **Search at play time**: one turn ahead as the simultaneous game it is,
    over sampled worlds.
-5. **A Showdown client** that feeds the log to `observer` and plays the
-   policy's choices.
+5. **The public server.** The [Showdown client](#playing-on-showdown) has
+   played only on a server of its own: a first session on the real one,
+   then results there kept beside the ratings.
 6. **Searching for teams**: the regulation file gives the space of legal
    teams and steps that stay inside it; scoring a team needs a pool of
    opponents and a policy to play it.

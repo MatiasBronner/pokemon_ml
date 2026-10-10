@@ -66,6 +66,9 @@ const LOG = !!args.log || TRACE;
 // --open-sheets: both players have agreed to open team sheets, so the log starts with every
 // Pokémon's item, ability and moves (`|showteam|`), as it does in a best-of-three.
 const OPEN_SHEETS = !!args['open-sheets'];
+// --requests: keep, with every decision, the request Showdown sent each player (what a
+// player's own side looks like to it: exact HP, moves and PP, what it may do).
+const REQUESTS = !!args.requests;
 // --script FILE: instead of random battles, play the ones written out in FILE, a JSON list of
 // { name, seed, rosters: [[set, ...], [set, ...]], picks: [[0, 1, 2, 3], [0, 1, 2, 3]], choices: [[p1, p2], ...] }.
 // A set is { species, moves, ability, item, nature, sp, gender } by name or id; `choices` are
@@ -666,6 +669,8 @@ function runCase(id) {
 	if (script && script.name) out.name = script.name;
 	if (TRACE) { out.initial.draws = draws; draws = []; }
 	if (LOG) out.initial.log = battle.log.slice(0);
+	const requests = () => battle.sides.map(side => JSON.parse(JSON.stringify(side.activeRequest || null)));
+	if (REQUESTS) out.initial.requests = requests();
 	while (!battle.ended) {
 		if (battle.turn > MAX_TURNS) { out.truncated = true; break; }
 		if (script && out.steps.length >= script.choices.length) break;
@@ -686,6 +691,7 @@ function runCase(id) {
 		const after = snapshot(battle);
 		if (TRACE) { after.draws = draws; draws = []; }
 		if (LOG) after.log = battle.log.slice(logPos);
+		if (REQUESTS) after.requests = requests();
 		logPos = battle.log.length;
 		out.steps.push({ choices: choices.map(c => c.join(', ')), legal, after });
 	}

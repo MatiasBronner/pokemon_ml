@@ -46,7 +46,7 @@
 
 use std::sync::OnceLock;
 
-use crate::battle::PokemonSet;
+use crate::battle::{PokemonSet, calc_stats};
 use crate::data::*;
 use crate::shown::{ItemShown, Shown, UNKNOWN};
 use crate::speed::{self, Belief, First, Speeds};
@@ -129,21 +129,32 @@ pub fn layout() -> (Vec<Part>, Vec<Part>) {
     (f, i)
 }
 
-/// Volatile conditions an opponent is not shown: the ones an unrevealed item
-/// or ability keeps, and the engine's own notes during a turn.
-pub const HIDDEN_VOLATILES: [VolKind; 12] = [
+/// Volatile conditions that are left out, for either side: the ones the
+/// game keeps to itself. An item or ability that has not shown itself keeps
+/// some (a Choice lock, Unburden). Some are the engine's own notes during a
+/// turn (Counter's memory of the last hit). And some are things no line of
+/// Showdown's log says, so that a player following a battle from the log
+/// could not be given them: a flinch that has yet to stop a move, how far
+/// into a rampage a Pokémon is. What matters of those to a player's own
+/// Pokémon comes with its moves instead: which are disabled, and whether it
+/// is locked into one.
+pub const HIDDEN_VOLATILES: [VolKind; 16] = [
+    VolKind::Flinch,
     VolKind::Choicelock,
     VolKind::Gem,
     VolKind::Metronome,
     VolKind::Unburden,
     VolKind::Trapper,
-    VolKind::Counter,
-    VolKind::Mirrorcoat,
     VolKind::Sparklingaria,
-    VolKind::Fling,
-    VolKind::Chillyreception,
+    VolKind::Lockedmove,
     VolKind::Focuspunch,
     VolKind::Beakblast,
+    VolKind::Counter,
+    VolKind::Mirrorcoat,
+    VolKind::Gigatonhammer,
+    VolKind::Fling,
+    VolKind::Allyswitch,
+    VolKind::Chillyreception,
 ];
 
 fn megas() -> &'static [bool] {
@@ -172,15 +183,17 @@ fn mega_stone_for(item: u16, species: u16) -> bool {
 struct Timer {
     /// 0: not there.
     kind: u8,
+    /// Which instance of the condition this is: the engine numbers every one it starts.
+    uid: u16,
     began: u16,
     left: u8,
 }
 
 impl Timer {
-    fn see(&mut self, kind: u8, left: u8, now: u16) {
-        // New, or set again after running out with no decision in between.
-        if kind != self.kind || left > self.left {
-            self.kind = kind;
+    fn see(&mut self, kind: u8, uid: u16, left: u8, now: u16) {
+        // New: another condition, or the same one put up again since the last decision.
+        if kind != self.kind || uid != self.uid {
+            (self.kind, self.uid) = (kind, uid);
             self.began = now;
         }
         self.left = left;
@@ -219,19 +232,30 @@ pub struct Timers {
 const SCREENS: [SideCond; 3] = [SideCond::Reflect, SideCond::Lightscreen, SideCond::Auroraveil];
 
 impl Timers {
+    /// From a count kept some other way: how many turns have ended since the
+    /// weather, the terrain and each side's Reflect, Light Screen and Aurora
+    /// Veil went up (`None`: not there), with `turn` the turn it is now.
+    pub fn counted(weather: Option<u16>, terrain: Option<u16>, screens: [[Option<u16>; 3]; 2], turn: u16) -> Timers {
+        let timer = |count: Option<u16>| match count {
+            Some(n) => Timer { kind: 1, uid: 0, began: turn.saturating_sub(n), left: 0 },
+            None => Timer::default(),
+        };
+        Timers { weather: timer(weather), terrain: timer(terrain), screens: screens.map(|side| side.map(timer)) }
+    }
+
     /// To be called at every decision, the first included.
     pub fn update(&mut self, b: &Battle) {
         // What has turned up since the last decision began during the turn before, if a
         // new turn has started, and during this one otherwise.
         let now = if b.request == Request::Move && b.turn > 1 { b.turn - 1 } else { b.turn };
         let w = &b.field.weather;
-        self.weather.see(w.kind as u8, w.duration, now);
+        self.weather.see(w.kind as u8, w.st.uid, w.duration, now);
         let t = &b.field.terrain;
-        self.terrain.see(t.kind as u8, t.duration, now);
+        self.terrain.see(t.kind as u8, t.st.uid, t.duration, now);
         for side in 0..2 {
             for (k, &kind) in SCREENS.iter().enumerate() {
                 match b.sides[side].conds.get(kind) {
-                    Some(c) => self.screens[side][k].see(1, c.duration, now),
+                    Some(c) => self.screens[side][k].see(1, c.st.uid, c.duration, now),
                     None => self.screens[side][k] = Timer::default(),
                 }
             }
@@ -485,6 +509,15 @@ pub fn observe_preview(
 
 /// A battle from `view`'s side. `stats` are the viewer's own Pokémon's as
 /// registered (for the two left behind, which the battle does not hold).
+/// Whether nobody on `side` chooses after the Pokémon at `pos`: the one Showdown keeps
+/// in the dark about what an unseen ability or move bars it from.
+pub(crate) fn last_to_choose(b: &Battle, side: usize, pos: usize) -> bool {
+    (pos + 1..ACTIVE.min(b.sides[side].n as usize)).all(|p| {
+        let ally = b.mon(b.active(side, p));
+        !ally.is_active || ally.fainted
+    })
+}
+
 /// The last two numbers of `info` (how many joint actions are legal, and
 /// whether there is a choice to make) are left for whoever works out the
 /// legal actions.
@@ -500,7 +533,7 @@ pub fn observe_battle(
     let mut p = parts(f, i);
     let opp = 1 - view;
     let (us, them) = (&b.sides[view], &b.sides[opp]);
-    let megaed = |s: &Side| s.team[..s.n as usize].iter().any(|m| is_mega(m.species));
+    let megaed = |s: &Side| s.mega_used;
     let phase = if b.request == Request::Switch { Phase::Switch } else { Phase::Move };
 
     // ---- the field
@@ -562,11 +595,23 @@ pub fn observe_battle(
         tok.fainted = m.fainted;
         tok.active = m.is_active && !m.fainted;
         tok.hp = m.hp as f32 / m.max_hp().max(1) as f32;
-        tok.status = m.status;
-        tok.tox = m.tox_stage;
-        tok.stats = Some(m.stats);
+        // (A status a fainted Pokémon had is neither here nor there.)
+        tok.status = if m.fainted { Status::None } else { m.status };
+        // (The count starts over whenever it comes in.)
+        tok.tox = if m.is_active && m.status == Status::Tox { m.tox_stage } else { 0 };
+        // Its stats as its player is told them: its own, for the forme it is in. What a
+        // battle does to them is not said (after Transform or Power Split they are partly
+        // another Pokémon's).
+        let mut known = calc_stats(if m.transformed { m.base_species } else { m.species }, m.nature, m.stat_points);
+        known[0] = m.stats[0];
+        tok.stats = Some(known);
         tok.item = id(m.item);
-        tok.lost = if m.item == it::NONE && m.last_item != it::NONE { id(m.last_item) } else { ID_NONE };
+        // The item it was seen to lose, as the other side knows it.
+        let rec = if m.is_active && m.live.seen != 0 { &m.live } else { &us.shown[idx] };
+        tok.lost = match rec.item {
+            ItemShown::Lost(item) if m.item == it::NONE => id(item),
+            _ => ID_NONE,
+        };
         tok.ability = id(m.ability);
         (tok.item_known, tok.ability_known, tok.moves_known) = (true, true, MAX_MOVES as u8);
         tok.moves = [ID_NONE; MAX_MOVES];
@@ -578,7 +623,7 @@ pub fn observe_battle(
         tok.transformed = m.transformed;
         tok.gender = m.gender;
         tok.nature = Some(m.nature);
-        tok.speed_known(m.stats[5], m.item);
+        tok.speed_known(known[5], m.item);
         p.mon(j, &tok);
     }
 
@@ -699,8 +744,10 @@ pub fn observe_battle(
             w.one_hot(7, status as usize);
         }
         m.boosts.iter().for_each(|&s| w.put(s as f32 / 6.0));
-        if !own && m.illusion != 0 {
-            // The types everyone takes it to have.
+        let own_types = m.types == SPECIES[m.species as usize].types && m.added_type == Type::None;
+        if !own && m.illusion != 0 && own_types {
+            // The types everyone takes it to have: those of the Pokémon it passes for. (Once
+            // something has changed its types, which is said aloud, they are what they are.)
             for t in SPECIES[m.live.species as usize].types {
                 if (t as usize) < 18 {
                     w.buf[w.at + t as usize] = 1.0;
@@ -717,12 +764,19 @@ pub fn observe_battle(
         w.skip(18);
         w.flag(m.active_turns == 0);
         w.put(m.active_turns.min(5) as f32 / 5.0);
-        w.flag(own && m.trapped == Trapped::Yes);
-        w.flag(own && m.locked_move != NO_MOVE);
+        // Kept from switching, as its player is told when it chooses a move: not if there is
+        // nobody to switch to. And whether that move is chosen for it.
+        let choosing = own && phase == Phase::Move;
+        // (Held in by an ability nobody has shown, the last of a side to choose is not told:
+        // it would give the secret away. It finds out by trying.)
+        let last = last_to_choose(b, side, pos);
+        let held = m.trapped == Trapped::Yes || (m.trapped == Trapped::Hidden && !last);
+        w.flag(choosing && held && b.living_bench(side) > 0);
+        w.flag(choosing && m.locked_move != NO_MOVE);
         let vols = b.vols(r);
         debug_assert_eq!(w.at, ACT_VOLATILES);
         for v in vols.as_slice() {
-            if own || !HIDDEN_VOLATILES.contains(&v.kind) {
+            if !HIDDEN_VOLATILES.contains(&v.kind) {
                 w.buf[w.at + v.kind as usize] = 1.0;
             }
         }
@@ -745,11 +799,12 @@ pub fn observe_battle(
         debug_assert_eq!(w.at, ACT_F);
     }
 
-    // ---- the moves the viewer's two can pick, as Showdown's request lists them
+    // ---- the moves the viewer's two can pick, as Showdown's request lists them (when
+    // moves are being chosen: a request for replacements lists none)
     for pos in 0..ACTIVE.min(us.n as usize) {
         let r = b.active(view, pos);
         let m = b.mon(r);
-        if !m.is_active || m.fainted {
+        if !m.is_active || m.fainted || phase != Phase::Move {
             continue;
         }
         let mut put = |k: usize, mv: u16, pp: f32, disabled: bool, forced: bool| {
@@ -768,8 +823,13 @@ pub fn observe_battle(
         } else if !b.usable_moves(r) {
             put(0, crate::battle::struggle_id(), 1.0, false, true);
         } else {
+            // A move disabled by something not yet shown (a foe's Imprison) is listed as
+            // usable for the last Pokémon to choose, as Showdown lists it: to say otherwise
+            // would give the secret away.
+            let last = last_to_choose(b, view, pos);
             for (k, slot) in m.moves[..m.n_moves as usize].iter().enumerate() {
-                put(k, slot.id, slot.pp as f32 / slot.maxpp.max(1) as f32, !Battle::slot_usable(slot), false);
+                let disabled = slot.pp == 0 || (slot.disabled && !(slot.hidden && last));
+                put(k, slot.id, slot.pp as f32 / slot.maxpp.max(1) as f32, disabled, false);
             }
         }
     }

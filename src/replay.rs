@@ -12,7 +12,7 @@ use crate::state::{ACTIVE, Cond, NO_SPECIES, NOT_LISTED, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
 pub struct SetJson {
     pub species: String,
     pub moves: Vec<String>,
@@ -179,6 +179,9 @@ pub struct Snap {
     /// Showdown's battle log for the step (only recorded with `--trace`).
     #[serde(default)]
     pub log: Vec<String>,
+    /// The request Showdown sent each player at this point (only recorded with `--requests`).
+    #[serde(default)]
+    pub requests: Vec<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -1165,4 +1168,370 @@ pub fn check_shown_as(c: &Case, mode: Rebuild, closed: bool, tally: &mut ShownTa
         }
     }
     Outcome::Pass(c.steps.len())
+}
+
+// ------------------------------------------------- following from the log
+
+/// How [`check_follow`] has gone over the battles it was given.
+#[derive(Default, Debug)]
+pub struct FollowTally {
+    /// Observations compared, and how many differed anywhere.
+    pub observations: usize,
+    pub wrong: usize,
+    /// By feature: how often it differed, and one place it did.
+    pub by_feature: std::collections::BTreeMap<String, (usize, String)>,
+    /// Observations passed over: a move was disabled by something the player has not
+    /// been shown (a foe's Imprison). Showdown then lists the move as usable until the
+    /// player tries it, so its request and the simulator's own legal actions part ways.
+    pub hidden_disables: usize,
+    /// Print every difference as it is found.
+    pub verbose: bool,
+}
+
+/// A name for each number of an observation's feature buffer, by part and column.
+fn feature_name(index: usize) -> String {
+    use crate::obs::{ACT_F, ACT_VOLATILES, FIELD_F, MON_F, MOVE_F, layout};
+    let (parts, _) = layout();
+    let (name, start, _) = parts.iter().rev().find(|p| index >= p.1).expect("an index inside the buffer");
+    let at = index - start;
+    match *name {
+        "field" => {
+            let names = ["phase", "phase", "phase", "open sheets", "turn"];
+            let n_pseudo = crate::data::Pseudo::ALL.len();
+            let n_side = SideCond::ALL.len();
+            let per_side = n_side + 5;
+            let col = at % FIELD_F;
+            if col < 5 {
+                format!("field: {}", names[col])
+            } else if col < 10 {
+                "field: weather".into()
+            } else if col == 10 {
+                "field: weather timer".into()
+            } else if col < 16 {
+                "field: terrain".into()
+            } else if col == 16 {
+                "field: terrain timer".into()
+            } else if col < 17 + n_pseudo {
+                format!("field: {}", crate::data::Pseudo::ALL[col - 17].id())
+            } else if col < 17 + 2 * n_pseudo {
+                format!("field: {} turns", crate::data::Pseudo::ALL[col - 17 - n_pseudo].id())
+            } else if col < 17 + 2 * n_pseudo + 2 * per_side {
+                let k = (col - 17 - 2 * n_pseudo) % per_side;
+                if k < n_side {
+                    format!("side: {}", SideCond::ALL[k].id())
+                } else {
+                    format!(
+                        "side: {}",
+                        [
+                            "tailwind turns",
+                            "safeguard turns",
+                            "reflect timer",
+                            "light screen timer",
+                            "aurora veil timer"
+                        ][k - n_side]
+                    )
+                }
+            } else {
+                let k = col - 17 - 2 * n_pseudo - 2 * per_side;
+                format!(
+                    "field: {}",
+                    ["own left", "their left", "their unseen", "own mega", "their mega"].get(k).unwrap_or(&"?")
+                )
+            }
+        }
+        "mon_feats" => {
+            let own = if at / MON_F < crate::obs::ROSTER { "own" } else { "their" };
+            let col = at % MON_F;
+            let what = match col {
+                0 => "exists",
+                1 => "own",
+                2 => "brought",
+                3 => "left behind",
+                4 => "seen",
+                5 => "active",
+                6 => "fainted",
+                7 => "hp",
+                8..=14 => "status",
+                15 => "tox",
+                16..=22 => "stats",
+                23 => "item known",
+                24 => "ability known",
+                25 => "moves known",
+                26 => "can mega",
+                27 => "maybe disguise",
+                28 => "transformed",
+                29..=31 => "gender",
+                32..=41 => "nature",
+                42..=45 => "pp",
+                46 => "speed low",
+                47 => "speed high",
+                _ => "speed items",
+            };
+            format!("{own} mon: {what}")
+        }
+        "act_feats" => {
+            let own = if at / ACT_F < ACTIVE { "own" } else { "their" };
+            let col = at % ACT_F;
+            let n_vol = VolKind::ALL.len();
+            let what = match col {
+                0 => "there".to_string(),
+                1 => "hp".to_string(),
+                2..=8 => "status".to_string(),
+                9..=15 => "boosts".to_string(),
+                16..=33 => "types".to_string(),
+                34 => "first turn".to_string(),
+                35 => "active turns".to_string(),
+                36 => "trapped".to_string(),
+                37 => "locked".to_string(),
+                c if c < ACT_VOLATILES + n_vol => format!("vol {}", VolKind::ALL[c - ACT_VOLATILES].id()),
+                c if c == ACT_VOLATILES + n_vol => "perish count".to_string(),
+                c if c == ACT_VOLATILES + n_vol + 1 => "protect streak".to_string(),
+                c if c < ACT_VOLATILES + n_vol + 2 + SlotCond::ALL.len() => {
+                    format!("slot {}", SlotCond::ALL[c - ACT_VOLATILES - n_vol - 2].id())
+                }
+                _ => "moves first".to_string(),
+            };
+            format!("{own} position: {what}")
+        }
+        _ => format!("move token: {}", ["there", "pp", "disabled", "forced"][at % MOVE_F]),
+    }
+}
+
+fn id_name(index: usize) -> String {
+    use crate::obs::{ACT_IDS, MON_IDS, layout};
+    let (_, parts) = layout();
+    let (name, start, _) = parts.iter().rev().find(|p| index >= p.1).expect("an index inside the buffer");
+    let at = index - start;
+    match *name {
+        "mon_ids" => {
+            let own = if at / MON_IDS < crate::obs::ROSTER { "own" } else { "their" };
+            let what = ["species", "item", "lost item", "ability", "move", "move", "move", "move"][at % MON_IDS];
+            format!("{own} mon id: {what}")
+        }
+        "act_ids" => {
+            let own = if at / ACT_IDS < ACTIVE { "own" } else { "their" };
+            format!("{own} position id: {}", ["token", "last move"][at % ACT_IDS])
+        }
+        "move_ids" => "move token id".to_string(),
+        _ => format!("info: {}", ["phase", "joint actions", "turn", "acting"][at]),
+    }
+}
+
+/// Whether one of `side`'s Pokémon on the field is barred from a move or from switching by
+/// something its player has not been shown (a foe's Imprison, a Shadow Tag not yet announced).
+/// Showdown then offers the choice all the same and refuses it when it is tried; the game
+/// does not offer it.
+fn hidden_disable(game: &crate::env::Game, side: usize) -> bool {
+    let Some(b) = game.battle() else { return false };
+    b.request == Request::Move
+        && (0..ACTIVE).any(|pos| {
+            let m = b.mon(b.active(side, pos));
+            let last = crate::obs::last_to_choose(b, side, pos);
+            m.is_active
+                && !m.fainted
+                && (m.moves[..m.n_moves as usize].iter().any(|slot| slot.disabled && slot.hidden)
+                    || (m.trapped == Trapped::Hidden && last && b.living_bench(side) > 0))
+        })
+}
+
+/// What a recorded battle told its players at one decision: the log up to it
+/// and the request each side was sent.
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct Told {
+    #[serde(default)]
+    pub ended: bool,
+    pub log: Vec<String>,
+    pub requests: Vec<serde_json::Value>,
+}
+
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct ToldStep {
+    pub choices: [String; 2],
+    pub after: Told,
+}
+
+/// A recorded battle as [`check_follow`] needs it: the teams, what was
+/// chosen, and what the players were told. Any battle recorded with
+/// `gen_cases.js --log --requests` reads as one (the rest of what the
+/// recorder writes is passed over), and one written back out is a small
+/// fraction of the size.
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct FollowCase {
+    pub id: u32,
+    pub seed: [u16; 4],
+    pub rosters: [Vec<SetJson>; 2],
+    pub picks: [Vec<usize>; 2],
+    #[serde(default)]
+    pub open_sheets: bool,
+    pub initial: Told,
+    pub steps: Vec<ToldStep>,
+}
+
+/// Plays a recorded battle in a [`Game`](crate::env::Game) and, beside it,
+/// has a [`Follower`](crate::follow::Follower) for each side read the log
+/// and the requests Showdown sent that side. At every decision the
+/// follower's observation and legal actions must be the game's. Differences
+/// are counted in `tally`; the outcome is a failure only if a follower could
+/// not read something.
+// (The two sides, and the two versions of an observation, are indexed side by side.)
+#[allow(clippy::needless_range_loop)]
+pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
+    use crate::env::{Game, OBS_M};
+    use crate::follow::Follower;
+    use crate::obs::{OBS_F, OBS_I};
+    let (rosters, picks) = (&c.rosters, &c.picks);
+    let sets: Result<Vec<Vec<PokemonSet>>, String> =
+        rosters.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
+    let sets = match sets {
+        Ok(sets) => sets,
+        Err(e) => return Outcome::Fail(vec![e]),
+    };
+    if c.initial.requests.len() != 2 {
+        return Outcome::Unsupported("a battle recorded without its requests".into());
+    }
+    let mut game = match Game::new([sets[0].clone(), sets[1].clone()], c.open_sheets) {
+        Ok(game) => game,
+        Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
+        Err(e) => return Outcome::Fail(vec![e.to_string()]),
+    };
+    // The recorder gives each Pokémon a name of its own, which the first request has
+    // for those brought. (Its teams can have a species twice, which no ladder allows.)
+    let names = |side: usize| -> Vec<String> {
+        let mut out = vec![String::new(); sets[side].len()];
+        let listed = c.initial.requests[side]["side"]["pokemon"].as_array();
+        for (k, mon) in listed.into_iter().flatten().enumerate() {
+            let name = mon["ident"].as_str().and_then(|i| i.split_once(": ")).map(|(_, n)| n.to_string());
+            if let (Some(name), Some(&j)) = (name, picks[side].get(k)) {
+                out[j] = name;
+            }
+        }
+        out
+    };
+    let mut followers = match (Follower::new(0, sets[0].clone()), Follower::new(1, sets[1].clone())) {
+        (Ok(a), Ok(b)) => [a.with_names(names(0)), b.with_names(names(1))],
+        (Err(e), _) | (_, Err(e)) => return Outcome::Fail(vec![e]),
+    };
+    // The recorder's teams do not all keep the item clause, and the game knows which do.
+    let clause = crate::format::Format::current().team.item_clause == 1;
+    for side in 0..2 {
+        let team = &sets[1 - side];
+        let once =
+            team.iter().enumerate().all(|(k, a)| a.item == it::NONE || team[..k].iter().all(|b| b.item != a.item));
+        followers[side].trust_item_clause(clause && once);
+    }
+    let mut decisions = 0;
+    let mut compare = |game: &Game, followers: &[Follower; 2], step: usize| -> Result<(), String> {
+        let (mut f, mut i, mut m) = (
+            [vec![0f32; OBS_F], vec![0f32; OBS_F]],
+            [vec![0i16; OBS_I], vec![0i16; OBS_I]],
+            [vec![0u8; OBS_M], vec![0u8; OBS_M]],
+        );
+        for side in 0..2 {
+            if hidden_disable(game, side) {
+                tally.hidden_disables += 1;
+                continue;
+            }
+            game.observe(side, &mut f[0], &mut i[0], &mut m[0]);
+            followers[side].observe(&mut f[1], &mut i[1], &mut m[1])?;
+            tally.observations += 1;
+            let at = format!("battle {} step {step} side {side}", c.id);
+            let mut wrong = false;
+            let verbose = tally.verbose;
+            let mut note = |name: String, a: String, b: String| {
+                if verbose {
+                    println!("{at}: {name}: the game has {a}, the follower {b}");
+                }
+                let entry = tally.by_feature.entry(name).or_insert((0, String::new()));
+                entry.0 += 1;
+                if entry.1.is_empty() {
+                    entry.1 = format!("{at}: the game has {a}, the follower {b}");
+                }
+                wrong = true;
+            };
+            for k in 0..OBS_F {
+                if (f[0][k] - f[1][k]).abs() > 1e-6 {
+                    note(feature_name(k), format!("{} (at {k})", f[0][k]), f[1][k].to_string());
+                }
+            }
+            for k in 0..OBS_I {
+                if i[0][k] != i[1][k] {
+                    note(id_name(k), format!("{} (at {k})", i[0][k]), i[1][k].to_string());
+                }
+            }
+            if m[0] != m[1] {
+                let (a, b) = (m[0].iter().filter(|&&x| x != 0).count(), m[1].iter().filter(|&&x| x != 0).count());
+                note("legal actions".to_string(), format!("{a} set"), format!("{b} set"));
+            }
+            tally.wrong += wrong as usize;
+        }
+        Ok(())
+    };
+    // With closed sheets a player takes the other team for a legal one. The recorder also
+    // hands Illusion to Pokémon the regulation gives no such ability, and what a player
+    // makes of those battles is not what the game, which knows better, makes of them.
+    if !c.open_sheets {
+        let legal = |set: &PokemonSet| {
+            let rule = crate::format::Format::current().rule(set.species);
+            set.ability != ab::ILLUSION || rule.is_some_and(|r| r.abilities.contains(&ab::ILLUSION))
+        };
+        if !sets.iter().flatten().all(legal) {
+            return Outcome::Unsupported("an Illusion the regulation does not allow, with closed sheets".into());
+        }
+    }
+    let result = (|| -> Result<(), String> {
+        // Team Preview: everything up to the battle's start.
+        let cut = c.initial.log.iter().position(|l| l.starts_with("|teamsize|")).unwrap_or(0);
+        for side in 0..2 {
+            followers[side].lines(&Follower::own_lines(side, &c.initial.log[..cut]))?;
+        }
+        if cut > 0 {
+            compare(&game, &followers, 0)?;
+        }
+        game.start([&picks[0], &picks[1]], c.seed).map_err(|e| e.to_string())?;
+        for side in 0..2 {
+            followers[side].lines(&Follower::own_lines(side, &c.initial.log[cut..]))?;
+            followers[side].request(&c.initial.requests[side].to_string())?;
+        }
+        compare(&game, &followers, 0)?;
+        decisions += 1;
+        for (k, step) in c.steps.iter().enumerate() {
+            let parse = |s: &str| Choice::parse_side(s).ok_or_else(|| format!("unreadable choice {s:?}"));
+            let choices = [parse(&step.choices[0])?, parse(&step.choices[1])?];
+            // What the game takes as actions, each follower must turn back into Showdown's words.
+            for side in 0..2 {
+                if hidden_disable(&game, side) {
+                    continue;
+                }
+                let action = |pos: usize| game.action_of(side, choices[side][pos]).ok_or("a choice with no action");
+                let reply = followers[side].choice([action(0)?, action(1)?])?;
+                if Choice::parse_side(&reply) != Some(choices[side]) {
+                    return Err(format!(
+                        "battle {} step {}: side {side} chose {:?}, and its follower would have sent {reply:?}",
+                        c.id,
+                        k + 1,
+                        step.choices[side]
+                    ));
+                }
+            }
+            game.choose(choices).map_err(|e| e.to_string())?;
+            for side in 0..2 {
+                followers[side].lines(&Follower::own_lines(side, &step.after.log))?;
+                let request = step.after.requests.get(side).ok_or("a step recorded without its requests")?;
+                followers[side].request(&request.to_string())?;
+            }
+            if step.after.ended {
+                if !game.ended() || !followers.iter().all(|f| f.ended() && f.winner() == game.winner()) {
+                    return Err(format!("battle {}: the followers and the game disagree about how it ended", c.id));
+                }
+                break;
+            }
+            compare(&game, &followers, k + 1)?;
+            decisions += 1;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => Outcome::Pass(decisions),
+        Err(e) => Outcome::Fail(vec![e]),
+    }
 }

@@ -1116,6 +1116,7 @@ impl Battle {
             _ => SPECIES[self.sides[r.side as usize].team[self.shown_as(r)].species as usize].id,
         };
         let ability = crate::shown::mega_ability(stone, named);
+        self.sides[r.side as usize].mega_used = true;
         self.show_item_gain(r, stone);
         let rec = self.shown_mut(r);
         (rec.ability, rec.base_ability, rec.ability_changed) = (ability, ability, false);

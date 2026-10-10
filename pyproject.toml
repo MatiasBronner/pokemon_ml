@@ -9,6 +9,10 @@ description = "Self-play training for Pokémon Champions doubles on the vgc_engi
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.26", "torch>=2.2"]
 
+[project.optional-dependencies]
+# For playing on a Pokémon Showdown server (python -m pokemon_ml.showdown).
+showdown = ["websockets>=12"]
+
 [tool.maturin]
 # The Rust crate at the root of the repository, built as pokemon_ml/_engine.*.so
 # next to the Python sources in python/pokemon_ml.

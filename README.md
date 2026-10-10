@@ -364,11 +364,13 @@ state of the game and what things are, as in the two write-ups this follows
 ([Jaxcalibur](https://jaxcalibur.github.io/) for singles, and mikumiku37's
 account of adapting it to this format).
 
-Two things are done to keep hidden information hidden. The conditions an
+Three things are done to keep hidden information hidden. The conditions an
 unrevealed item or ability keeps on a Pokémon (a Choice lock) are left out.
-And a weather, a terrain or a screen is given by how
+A weather, a terrain or a screen is given by how
 long it has been up, not how long it has left, since an item the opponent
-may not have seen makes it last 8 turns for 5. `tests/env.rs` rebuilds the
+may not have seen makes it last 8 turns for 5. And a Pokémon in disguise is
+given the types of the Pokémon it passes for, with any type added to them,
+until something changes its types outright and says what to. `tests/env.rs` rebuilds the
 opponent's half of the observation from `Battle::shown` alone at every
 decision of 80 games and requires it to be the same.
 
@@ -592,17 +594,24 @@ honest number before anything it turned up was fixed:
 | 4,000 | 183,355 | 19 (0.010%), in 2 |
 | 4,000 | 184,110 | 9 (0.005%), in 1 |
 | 4,000 | 182,779 | 5 (0.003%), in 2 |
+| 4,000 | 182,997 | 14 (0.008%), in 2 |
 
-Every battle of the five was followed to its end. Each difference in the
-first four was traced to its cause and fixed, a dozen causes in all: with
-that, none of their 828,876 observations differs. The two causes the fifth
-turned up are known and not yet fixed (a type added to a Pokémon in
-disguise by Forest's Curse or Trick-or-Treat; a Smack Down on a Pokémon
-charging Sky Attack, which the follower takes to end the charge). So the
-rate to expect from battles not yet seen is the one in the last rows, about
-one observation in 10,000 to 40,000, from something rare that is still to
-be found. (The first 10,600 were not kept and have not been run again
-since.)
+Every battle of the six was followed to its end. Each difference in the
+first five was traced to its cause and fixed, fourteen causes in all: with
+that, none of their 1,011,655 observations differs. Not every cause was the
+follower's. One was the simulator's: it gave a Pokémon in disguise its real
+types as soon as a type was added to them (Forest's Curse, Trick-or-Treat),
+where a player is only told that a type was added.
+
+The two causes the sixth turned up are known and not yet fixed. Reflect
+Type copies a Pokémon's real types, and when that Pokémon is in disguise
+the log does not say what they are until the turn ends, or at all (see
+below). And when a Pokémon is under Octolock and a binding move at once and
+the binding move's user leaves, the follower takes the Octolock to have
+ended with it. So the rate to expect from battles not yet seen is the one
+in the last rows, about one observation in 10,000 to 40,000, from something
+rare that is still to be found. (The first 10,600 were not kept and have
+not been run again since.)
 
 Rare things can be made common, too. Two kinds of battle were recorded to
 lean on the two differences known to remain (below): 2,400 with Pressure on
@@ -612,7 +621,34 @@ Encore. They turned up several of the causes fixed above, and what is left
 in them is only the two things Showdown does not tell a player: 292 of
 118,862 observations in the first, 10 of 128,173 in the second.
 
-`tests/follow.rs` keeps 37 of the battles as a fixture, and `followcheck`
+Three more were recorded for the causes of the fifth set, 1,500 battles
+each: Zoroark on every team with Forest's Curse, Trick-or-Treat, Soak, Magic
+Powder and Reflect Type all round; Smack Down and Gravity against Fly,
+Bounce, Sky Attack, Meteor Beam and Magnet Rise; and Gravity again with more
+moves that charge. With both causes fixed the third has no difference in
+66,580 observations (76 before). What is left in the other two is not yet
+fixed:
+
+- *Reflect Type*, nearly always on a disguise: 129 of 76,540 observations,
+  in 21 battles.
+  The user takes the real types of the Pokémon it copies, and the log names
+  only the Pokémon. Copying one of the other side's in disguise, nobody is
+  told the types until the turn ends (the simulator has them at once);
+  copying a disguised partner, the other side is never told (the simulator
+  gives them), and the follower does not yet use what its own side knows of
+  its own Pokémon, which can leave it wrong about whether its Curse is a
+  Ghost's. Copying the same Pokémon twice, or one that is roosting, the
+  follower also gets wrong where the log is enough to get it right. And
+  when the user stands beside a disguise of itself, Showdown's line at the
+  end of the turn gives its new types to the disguise.
+- *A Pokémon held back by Quash, and a switch in the middle of the turn*
+  (an Eject Button) before it moves: the follower forgets it was held back
+  and reads its moving last as slowness. 19 of 73,017 observations, in one
+  battle.
+- *After a Speed Swap*, which of two Pokémon goes first, for one that came
+  in that turn: one observation of 76,540. Not traced.
+
+`tests/follow.rs` keeps 45 of the battles as a fixture, and `followcheck`
 (under [Running it yourself](#running-it-yourself)) runs any number more.
 
 **That the pieces meet.** Through a server run as above, on this machine:
@@ -651,7 +687,7 @@ Showdown does not tell a player:
   follower cannot know whether a second PP went, and counts none. Every
   request gives the PP of the two Pokémon on the field, so it stays wrong
   only for one that left the field, or fainted, that same turn. Not seen in
-  the 18,000 battles of the table.
+  the 26,000 battles of the table.
 - *That a move of the other side's never began*, when the Choice item that
   held it back has never been shown. A Pokémon held to one move can come to
   choose another (its item was switched off by a Magic Room when it chose,
@@ -660,7 +696,7 @@ Showdown does not tell a player:
   player's own Pokémon; the other side's on an open sheet, or once it has
   been seen) the follower knows the move was never used. Where it is not,
   it takes it for the move that Pokémon last used, and the simulator knows
-  better. Not seen in the 18,000 either.
+  better. Not seen in the 26,000 either.
 
 **Not checked: the public server.** Logging in with a password, searching
 the ladder and the pace of messages (one every 0.65 seconds, under

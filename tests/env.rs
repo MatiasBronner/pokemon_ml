@@ -548,3 +548,53 @@ fn a_move_sealed_by_imprison_is_known_to_be_the_sealers() {
     g.choose([[mv(0), mv(0)], [mv(0), mv(0)]]).unwrap();
     assert_eq!(ninetales(&g), [imprison, named("calmmind", move_id), ID_UNKNOWN, ID_UNKNOWN]);
 }
+
+#[test]
+fn a_type_added_to_a_disguised_pokemon_does_not_give_it_away() {
+    use vgc_engine::data::Type;
+    let set = |species: &str, moves: &[&str]| PokemonSet::from_names(species, moves, "Hardy", [0; 6]).unwrap();
+    // Zoroark-Hisui (Normal/Ghost) leads, looking like the last of the four brought: Garchomp (Dragon/Ground).
+    let ours = vec![
+        set("Trevenant", &["Forest's Curse", "Calm Mind"]),
+        set("Milotic", &["Soak", "Calm Mind"]),
+        set("Snorlax", &["Calm Mind"]),
+        set("Arcanine", &["Calm Mind"]),
+        set("Kingambit", &["Calm Mind"]),
+        set("Volcarona", &["Calm Mind"]),
+    ];
+    let theirs = vec![
+        set("Zoroark-Hisui", &["Calm Mind"]).ability("Illusion").unwrap(),
+        set("Sylveon", &["Calm Mind"]),
+        set("Volcarona", &["Calm Mind"]),
+        set("Garchomp", &["Swords Dance"]),
+        set("Snorlax", &["Calm Mind"]),
+        set("Arcanine", &["Calm Mind"]),
+    ];
+    let mut g = Game::new([ours, theirs], false).unwrap();
+    g.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [1, 2, 3, 4]).unwrap();
+    let mv = |slot: u8, target: i8| Choice::Move { slot, target, mega: false };
+    // (After whether it is there, its HP, its status and its seven stat stages.)
+    let types = |g: &Game, view: usize, slot: usize| {
+        let o = Obs::of(g, view);
+        (0..18).filter(|&t| o.act_feats(slot)[16 + t] == 1.0).collect::<Vec<_>>()
+    };
+    let of = |list: &[Type]| list.iter().map(|&t| t as usize).collect::<Vec<_>>();
+    // (Which of the six listed the Pokémon in their first place is taken to be: the fourth.)
+    let taken_for = |g: &Game| Obs::of(g, 0).i[MONS * MON_IDS + 2 * 2] as usize - 1 - ROSTER;
+    assert_eq!(taken_for(&g), 3);
+    assert_eq!(types(&g, 0, 2), of(&[Type::Ground, Type::Dragon]));
+    assert_eq!(types(&g, 1, 0), of(&[Type::Normal, Type::Ghost]));
+
+    // Forest's Curse: "Grass was added" is all anyone is told. The other side goes on seeing
+    // Garchomp's types, with Grass; its own side sees what it is.
+    g.choose([[mv(0, 1), mv(1, 0)], [mv(0, 0), mv(0, 0)]]).unwrap();
+    assert_eq!(types(&g, 0, 2), of(&[Type::Ground, Type::Grass, Type::Dragon]));
+    assert_eq!(types(&g, 1, 0), of(&[Type::Normal, Type::Ghost, Type::Grass]));
+
+    // Soak: "it became the Water type" is said in so many words, and Water is what everyone sees.
+    g.choose([[mv(1, 0), mv(0, 1)], [mv(0, 0), mv(0, 0)]]).unwrap();
+    assert_eq!(types(&g, 0, 2), of(&[Type::Water]));
+    assert_eq!(types(&g, 1, 0), of(&[Type::Water]));
+    // (It is still taken for Garchomp.)
+    assert_eq!(taken_for(&g), 3);
+}

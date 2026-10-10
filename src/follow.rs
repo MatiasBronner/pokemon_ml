@@ -101,6 +101,8 @@ struct Spot {
     lost_item: bool,
     /// Something has been said of its ability since the last request.
     ability_touched: bool,
+    /// Instruct has been used on it: its next move is the repeat, put in ahead of the queue.
+    instructed: bool,
 }
 
 impl Spot {
@@ -121,6 +123,7 @@ impl Spot {
             quick: false,
             lost_item: false,
             ability_touched: false,
+            instructed: false,
         }
     }
 
@@ -264,8 +267,10 @@ struct Begun {
     r: MonRef,
     /// The move the log named for it (`NO_MOVE`: none).
     named: u16,
-    /// It had begun a move already this turn (Instruct).
+    /// It had begun a move already this turn.
     again: bool,
+    /// The move is the repeat Instruct called for, which was never in the queue with the rest.
+    instructed: bool,
     /// All that has been said of it is that its user is asleep.
     asleep: bool,
     reordered: Option<usize>,
@@ -843,6 +848,7 @@ impl Follower {
             r: MonRef { side: 0, idx: 0 },
             named,
             again: spot.begun > 0,
+            instructed: spot.instructed,
             asleep: false,
             reordered: spot.reordered,
             overridden: spot.overridden,
@@ -851,7 +857,11 @@ impl Follower {
             field,
             own,
         });
-        spot.begun += 1;
+        if spot.instructed {
+            spot.instructed = false;
+        } else {
+            spot.begun += 1;
+        }
         self.begun[at].r = self.mon_ref(side, pos);
     }
 
@@ -1238,6 +1248,8 @@ impl Follower {
                     }
                 } else if let Some(vol) = VolKind::named(&effect) {
                     self.spot(side, pos).add(vol, ends);
+                } else if effect == "instruct" {
+                    self.spot(side, pos).instructed = true;
                 }
                 // A move that protects makes the next one less likely to work.
                 let stalling = move_id(&effect).is_some_and(|m| MOVES[m as usize].stalling_move)
@@ -1881,7 +1893,7 @@ impl Follower {
             move_id: if s.named == NO_MOVE { 0 } else { s.named },
             encored: s.overridden.is_some(),
         };
-        if s.again || s.reordered.is_some_and(|t| t <= at) {
+        if s.again || s.instructed || s.reordered.is_some_and(|t| t <= at) {
             q.order = 3;
         }
         if s.side == self.side {
@@ -1938,7 +1950,7 @@ impl Follower {
             for j in i + 1..self.begun.len() {
                 let later = &self.begun[j];
                 let listed = rest[..n_rest].iter().any(|q| q.r == later.r);
-                if later.stay != self.begun[i].stay && !listed && n_rest < 3 {
+                if later.stay != self.begun[i].stay && !later.instructed && !listed && n_rest < 3 {
                     rest[n_rest] = self.queued(j, i);
                     n_rest += 1;
                 }
@@ -1951,23 +1963,6 @@ impl Follower {
                 field: self.begun[i].field,
                 named: self.begun[i].named,
             });
-        }
-        if std::env::var("FOLLOW_DEBUG").is_ok() {
-            for e in &events {
-                match e {
-                    Event::Start { me, rest, n_rest, named, .. } => eprintln!(
-                        "DBG side {} turn {} start {:?} named {named} rest {:?}",
-                        self.side,
-                        b.turn,
-                        (me.r.side, me.r.idx, me.order, me.priority, me.frac, me.speed, me.move_id, me.encored),
-                        rest[..*n_rest as usize]
-                            .iter()
-                            .map(|q| (q.r.side, q.r.idx, q.order, q.priority, q.frac, q.speed, q.move_id))
-                            .collect::<Vec<_>>()
-                    ),
-                    other => eprintln!("DBG side {} {other:?}", self.side),
-                }
-            }
         }
         let speeds = self.speeds.as_mut().unwrap();
         for (from, to) in self.renumbered.drain(..) {

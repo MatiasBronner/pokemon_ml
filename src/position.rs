@@ -512,6 +512,10 @@ pub struct ListedState {
     /// Its place in [`SideState::pokemon`] if it was brought.
     #[serde(skip_serializing_if = "is_default")]
     pub brought: Option<u8>,
+    /// With closed sheets: moves the other side has worked out it knows without
+    /// seeing it use them (see [`crate::shown::ListedMon::told`]).
+    #[serde(skip_serializing_if = "is_default")]
+    pub told: Vec<String>,
 }
 
 impl ShownState {
@@ -1252,6 +1256,7 @@ impl Battle {
                         moves: l.moves().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
                         nature: nature_name(l.nature).to_string(),
                         brought: (l.brought != NOT_LISTED).then(|| side.team[l.brought as usize].position),
+                        told: l.told().iter().map(|&m| MOVES[m as usize].id.to_string()).collect(),
                     })
                     .collect(),
             }
@@ -1760,6 +1765,9 @@ impl Battle {
             };
             for (k, m) in ls.moves.iter().enumerate() {
                 entry.moves[k] = find_move(m)?;
+            }
+            for m in &ls.told {
+                entry.tell(find_move(m)?);
             }
             if let Some(p) = ls.brought {
                 if p as usize >= n || std::mem::replace(&mut brought[p as usize], true) {

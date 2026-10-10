@@ -2944,6 +2944,7 @@ impl Battle {
         }
         self.request_locks();
         self.request = Request::Move;
+        self.note_sealed();
     }
 
     /// What the end of a turn works out for the coming move request about one

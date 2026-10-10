@@ -11,7 +11,7 @@ use vgc_engine::obs::{
 };
 use vgc_engine::rng::Rng;
 use vgc_engine::teams::{Pool, PoolTeam, Variation};
-use vgc_engine::{PokemonSet, Request};
+use vgc_engine::{Choice, PokemonSet, Request};
 
 fn pool(teams: usize, seed: u16) -> Pool {
     let format = Format::current();
@@ -225,7 +225,16 @@ fn the_other_side_is_given_as_the_battle_has_shown_it() {
                     assert_eq!(ids[3], ability, "ability of {j}");
                     let moves: Vec<i16> = match (sheet, mon) {
                         (Some(s), _) => s.moves.iter().map(|m| named(m, move_id)).collect(),
-                        (None, Some(m)) => m.moves.iter().take(4).map(|m| named(m, move_id)).collect(),
+                        // What it has used, then what it has been worked out to know.
+                        (None, Some(m)) => {
+                            let mut known: Vec<&String> = m.moves.iter().take(4).collect();
+                            for told in &listed.told {
+                                if !known.contains(&told) && known.len() < 4 {
+                                    known.push(told);
+                                }
+                            }
+                            known.iter().map(|m| named(m, move_id)).collect()
+                        }
                         (None, None) => Vec::new(),
                     };
                     let rest = if open { ID_NONE } else { ID_UNKNOWN };
@@ -473,4 +482,69 @@ fn a_hidden_item_that_extends_the_weather_does_not_show_in_its_timer() {
             g.act([[0, 0], [0, 0]], [1, 1, 1, 1]).unwrap();
         }
     }
+}
+
+/// With closed sheets a player works some things out for itself. A move of
+/// its own that it is told it cannot choose, for no reason on show, has been
+/// sealed by the other side's Imprison: so whoever has Imprison up knows that
+/// move, used or not. Showdown tells this to all but the last of a side to
+/// choose, and so does the simulator.
+#[test]
+fn a_move_sealed_by_imprison_is_known_to_be_the_sealers() {
+    let set = |species: &str, moves: &[&str]| PokemonSet::from_names(species, moves, "Hardy", [0; 6]).unwrap();
+    let team = |first: PokemonSet, second: PokemonSet| {
+        vec![
+            first,
+            second,
+            set("Snorlax", &["Calm Mind"]),
+            set("Arcanine", &["Calm Mind"]),
+            set("Kingambit", &["Calm Mind"]),
+            set("Volcarona", &["Calm Mind"]),
+        ]
+    };
+    let mv = |slot: u8| Choice::Move { slot, target: 0, mega: false };
+    // Ninetales seals Protect. `first`: whether it is our first Pokémon or our last that has Protect.
+    let game = |first: bool, open: bool| {
+        let with = set("Milotic", &["Calm Mind", "Protect"]);
+        let without = set("Sylveon", &["Calm Mind", "Hyper Voice"]);
+        let ours = if first { team(with, without) } else { team(without, with) };
+        let theirs = team(set("Ninetales", &["Imprison", "Protect", "Flamethrower"]), set("Garchomp", &["Calm Mind"]));
+        let mut g = Game::new([ours, theirs], open).unwrap();
+        g.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [1, 2, 3, 4]).unwrap();
+        g.choose([[mv(0), mv(0)], [mv(0), mv(0)]]).unwrap();
+        g
+    };
+    let (imprison, protect) = (named("imprison", move_id), named("protect", move_id));
+    let ninetales = |g: &Game| Obs::of(g, 0).mon_ids(ROSTER)[4..8].to_vec();
+
+    // Our first Pokémon is told its Protect is barred: Ninetales has Protect.
+    let mut g = game(true, false);
+    assert_eq!(ninetales(&g), [imprison, protect, ID_UNKNOWN, ID_UNKNOWN]);
+    assert_eq!(g.battle().unwrap().shown(1).roster[0].told, ["protect"]);
+    // It stays known when Ninetales goes, and whatever Ninetales shows later joins it.
+    g.choose([[mv(0), mv(0)], [Choice::Switch { to: 2 }, mv(0)]]).unwrap();
+    assert_eq!(ninetales(&g), [imprison, protect, ID_UNKNOWN, ID_UNKNOWN]);
+    // Nothing of the kind is noted about our own side, whose Imprison is nobody's.
+    assert!(g.battle().unwrap().shown(0).roster.iter().all(|l| l.told.is_empty()));
+
+    // Our last Pokémon to choose is not told what bars it, and nothing is worked out.
+    let g = game(false, false);
+    assert_eq!(ninetales(&g), [imprison, ID_UNKNOWN, ID_UNKNOWN, ID_UNKNOWN]);
+    // ...though the move is barred all the same.
+    let b = g.battle().unwrap();
+    assert!(!b.legal_choices(0, 1).contains(&mv(1)) && b.legal_choices(0, 1).contains(&mv(0)));
+
+    // With open sheets there is nothing to work out: the sheet has the moves.
+    let g = game(true, true);
+    assert!(g.battle().unwrap().shown(1).roster[0].told.is_empty());
+    assert_eq!(ninetales(&g)[..3], [imprison, protect, named("flamethrower", move_id)]);
+
+    // A move stopped in the act says the same, and says it to everyone: Milotic is slower
+    // than Ninetales, whose Imprison is up by the time Milotic tries the Calm Mind they share.
+    let ours = team(set("Milotic", &["Calm Mind", "Surf"]), set("Sylveon", &["Hyper Voice"]));
+    let theirs = team(set("Ninetales", &["Imprison", "Calm Mind"]), set("Garchomp", &["Swords Dance"]));
+    let mut g = Game::new([ours, theirs], false).unwrap();
+    g.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [1, 2, 3, 4]).unwrap();
+    g.choose([[mv(0), mv(0)], [mv(0), mv(0)]]).unwrap();
+    assert_eq!(ninetales(&g), [imprison, named("calmmind", move_id), ID_UNKNOWN, ID_UNKNOWN]);
 }

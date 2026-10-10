@@ -666,6 +666,15 @@ pub fn observe_battle(
                 tok.moves[k] = id(m);
             }
             tok.moves_known = rec.n_moves.min(MAX_MOVES as u8);
+            // And the moves it has not used that it is known to have: ones of the viewer's
+            // own that its Imprison sealed.
+            for &m in listed.told() {
+                let n = tok.moves_known as usize;
+                if n < MAX_MOVES && !tok.moves[..n].contains(&id(m)) {
+                    tok.moves[n] = id(m);
+                    tok.moves_known += 1;
+                }
+            }
         }
         shown_item(&mut tok, rec);
         if rec.ability != UNKNOWN {

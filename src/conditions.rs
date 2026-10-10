@@ -1399,6 +1399,12 @@ impl Battle {
                 if id != mv::STRUGGLE && self.move_slot(source, id).is_some() {
                     // `cant|attacker|move: Imprison|Move`
                     self.show_attempted(e.target);
+                    // Which says, to anyone who did not know, that the sealer has the move.
+                    if !self.open_team_sheets
+                        && let Some(entry) = self.imprisoner(holder.side as usize)
+                    {
+                        self.sides[holder.side as usize].roster[entry].tell(id);
+                    }
                     return FALSE;
                 }
                 Res::Undef

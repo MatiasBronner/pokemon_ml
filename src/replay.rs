@@ -179,6 +179,9 @@ pub struct Snap {
     /// Showdown's battle log for the step (only recorded with `--trace`).
     #[serde(default)]
     pub log: Vec<String>,
+    /// The request Showdown sent each player at this point (only recorded with `--requests`).
+    #[serde(default)]
+    pub requests: Vec<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug)]

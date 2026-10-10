@@ -1169,3 +1169,274 @@ pub fn check_shown_as(c: &Case, mode: Rebuild, closed: bool, tally: &mut ShownTa
     }
     Outcome::Pass(c.steps.len())
 }
+
+// ------------------------------------------------- following from the log
+
+/// How [`check_follow`] has gone over the battles it was given.
+#[derive(Default, Debug)]
+pub struct FollowTally {
+    /// Observations compared, and how many differed anywhere.
+    pub observations: usize,
+    pub wrong: usize,
+    /// By feature: how often it differed, and one place it did.
+    pub by_feature: std::collections::BTreeMap<String, (usize, String)>,
+    /// Print every difference as it is found.
+    pub verbose: bool,
+}
+
+/// A name for each number of an observation's feature buffer, by part and column.
+fn feature_name(index: usize) -> String {
+    use crate::obs::{ACT_F, ACT_VOLATILES, FIELD_F, MON_F, MOVE_F, layout};
+    let (parts, _) = layout();
+    let (name, start, _) = parts.iter().rev().find(|p| index >= p.1).expect("an index inside the buffer");
+    let at = index - start;
+    match *name {
+        "field" => {
+            let names = ["phase", "phase", "phase", "open sheets", "turn"];
+            let n_pseudo = crate::data::Pseudo::ALL.len();
+            let n_side = SideCond::ALL.len();
+            let per_side = n_side + 5;
+            let col = at % FIELD_F;
+            if col < 5 {
+                format!("field: {}", names[col])
+            } else if col < 10 {
+                "field: weather".into()
+            } else if col == 10 {
+                "field: weather timer".into()
+            } else if col < 16 {
+                "field: terrain".into()
+            } else if col == 16 {
+                "field: terrain timer".into()
+            } else if col < 17 + n_pseudo {
+                format!("field: {}", crate::data::Pseudo::ALL[col - 17].id())
+            } else if col < 17 + 2 * n_pseudo {
+                format!("field: {} turns", crate::data::Pseudo::ALL[col - 17 - n_pseudo].id())
+            } else if col < 17 + 2 * n_pseudo + 2 * per_side {
+                let k = (col - 17 - 2 * n_pseudo) % per_side;
+                if k < n_side {
+                    format!("side: {}", SideCond::ALL[k].id())
+                } else {
+                    format!(
+                        "side: {}",
+                        [
+                            "tailwind turns",
+                            "safeguard turns",
+                            "reflect timer",
+                            "light screen timer",
+                            "aurora veil timer"
+                        ][k - n_side]
+                    )
+                }
+            } else {
+                let k = col - 17 - 2 * n_pseudo - 2 * per_side;
+                format!(
+                    "field: {}",
+                    ["own left", "their left", "their unseen", "own mega", "their mega"].get(k).unwrap_or(&"?")
+                )
+            }
+        }
+        "mon_feats" => {
+            let own = if at / MON_F < crate::obs::ROSTER { "own" } else { "their" };
+            let col = at % MON_F;
+            let what = match col {
+                0 => "exists",
+                1 => "own",
+                2 => "brought",
+                3 => "left behind",
+                4 => "seen",
+                5 => "active",
+                6 => "fainted",
+                7 => "hp",
+                8..=14 => "status",
+                15 => "tox",
+                16..=22 => "stats",
+                23 => "item known",
+                24 => "ability known",
+                25 => "moves known",
+                26 => "can mega",
+                27 => "maybe disguise",
+                28 => "transformed",
+                29..=31 => "gender",
+                32..=41 => "nature",
+                42..=45 => "pp",
+                46 => "speed low",
+                47 => "speed high",
+                _ => "speed items",
+            };
+            format!("{own} mon: {what}")
+        }
+        "act_feats" => {
+            let own = if at / ACT_F < ACTIVE { "own" } else { "their" };
+            let col = at % ACT_F;
+            let n_vol = VolKind::ALL.len();
+            let what = match col {
+                0 => "there".to_string(),
+                1 => "hp".to_string(),
+                2..=8 => "status".to_string(),
+                9..=15 => "boosts".to_string(),
+                16..=33 => "types".to_string(),
+                34 => "first turn".to_string(),
+                35 => "active turns".to_string(),
+                36 => "trapped".to_string(),
+                37 => "locked".to_string(),
+                c if c < ACT_VOLATILES + n_vol => format!("vol {}", VolKind::ALL[c - ACT_VOLATILES].id()),
+                c if c == ACT_VOLATILES + n_vol => "perish count".to_string(),
+                c if c == ACT_VOLATILES + n_vol + 1 => "protect streak".to_string(),
+                c if c < ACT_VOLATILES + n_vol + 2 + SlotCond::ALL.len() => {
+                    format!("slot {}", SlotCond::ALL[c - ACT_VOLATILES - n_vol - 2].id())
+                }
+                _ => "moves first".to_string(),
+            };
+            format!("{own} position: {what}")
+        }
+        _ => format!("move token: {}", ["there", "pp", "disabled", "forced"][at % MOVE_F]),
+    }
+}
+
+fn id_name(index: usize) -> String {
+    use crate::obs::{ACT_IDS, MON_IDS, layout};
+    let (_, parts) = layout();
+    let (name, start, _) = parts.iter().rev().find(|p| index >= p.1).expect("an index inside the buffer");
+    let at = index - start;
+    match *name {
+        "mon_ids" => {
+            let own = if at / MON_IDS < crate::obs::ROSTER { "own" } else { "their" };
+            let what = ["species", "item", "lost item", "ability", "move", "move", "move", "move"][at % MON_IDS];
+            format!("{own} mon id: {what}")
+        }
+        "act_ids" => {
+            let own = if at / ACT_IDS < ACTIVE { "own" } else { "their" };
+            format!("{own} position id: {}", ["token", "last move"][at % ACT_IDS])
+        }
+        "move_ids" => "move token id".to_string(),
+        _ => format!("info: {}", ["phase", "joint actions", "turn", "acting"][at]),
+    }
+}
+
+/// Plays a recorded battle in a [`Game`](crate::env::Game) and, beside it,
+/// has a [`Follower`](crate::follow::Follower) for each side read the log
+/// and the requests Showdown sent that side. At every decision the
+/// follower's observation and legal actions must be the game's. Differences
+/// are counted in `tally`; the outcome is a failure only if a follower could
+/// not read something.
+pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
+    use crate::env::{Game, OBS_M};
+    use crate::follow::Follower;
+    use crate::obs::{OBS_F, OBS_I};
+    let (Some(rosters), Some(picks)) = (&c.rosters, &c.picks) else {
+        return Outcome::Unsupported("a battle recorded without its registered teams".into());
+    };
+    let sets: Result<Vec<Vec<PokemonSet>>, String> =
+        rosters.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
+    let sets = match sets {
+        Ok(sets) => sets,
+        Err(e) => return Outcome::Fail(vec![e]),
+    };
+    if c.initial.requests.len() != 2 {
+        return Outcome::Unsupported("a battle recorded without its requests".into());
+    }
+    let mut game = match Game::new([sets[0].clone(), sets[1].clone()], c.open_sheets) {
+        Ok(game) => game,
+        Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
+        Err(e) => return Outcome::Fail(vec![e.to_string()]),
+    };
+    // The recorder names each Pokémon after its species and its place in the team.
+    let names = |team: &[PokemonSet]| -> Vec<String> {
+        let base = |sp: u16| crate::data::species_id(SPECIES[sp as usize].base_species).unwrap_or(sp);
+        team.iter().enumerate().map(|(j, set)| format!("{}{j}", SPECIES[base(set.species) as usize].name)).collect()
+    };
+    let mut followers = match (Follower::new(0, sets[0].clone()), Follower::new(1, sets[1].clone())) {
+        (Ok(a), Ok(b)) => [a.with_names(names(&sets[0])), b.with_names(names(&sets[1]))],
+        (Err(e), _) | (_, Err(e)) => return Outcome::Fail(vec![e]),
+    };
+    // The recorder's teams do not all keep the item clause, and the game knows which do.
+    let clause = crate::format::Format::current().team.item_clause == 1;
+    for side in 0..2 {
+        let team = &sets[1 - side];
+        let once =
+            team.iter().enumerate().all(|(k, a)| a.item == it::NONE || team[..k].iter().all(|b| b.item != a.item));
+        followers[side].trust_item_clause(clause && once);
+    }
+    let mut decisions = 0;
+    let mut compare = |game: &Game, followers: &[Follower; 2], step: usize| -> Result<(), String> {
+        let (mut f, mut i, mut m) = (
+            [vec![0f32; OBS_F], vec![0f32; OBS_F]],
+            [vec![0i16; OBS_I], vec![0i16; OBS_I]],
+            [vec![0u8; OBS_M], vec![0u8; OBS_M]],
+        );
+        for side in 0..2 {
+            game.observe(side, &mut f[0], &mut i[0], &mut m[0]);
+            followers[side].observe(&mut f[1], &mut i[1], &mut m[1])?;
+            tally.observations += 1;
+            let at = format!("battle {} step {step} side {side}", c.id);
+            let mut wrong = false;
+            let verbose = tally.verbose;
+            let mut note = |name: String, a: String, b: String| {
+                if verbose {
+                    println!("{at}: {name}: the game has {a}, the follower {b}");
+                }
+                let entry = tally.by_feature.entry(name).or_insert((0, String::new()));
+                entry.0 += 1;
+                if entry.1.is_empty() {
+                    entry.1 = format!("{at}: the game has {a}, the follower {b}");
+                }
+                wrong = true;
+            };
+            for k in 0..OBS_F {
+                if (f[0][k] - f[1][k]).abs() > 1e-6 {
+                    note(feature_name(k), format!("{} (at {k})", f[0][k]), f[1][k].to_string());
+                }
+            }
+            for k in 0..OBS_I {
+                if i[0][k] != i[1][k] {
+                    note(id_name(k), format!("{} (at {k})", i[0][k]), i[1][k].to_string());
+                }
+            }
+            if m[0] != m[1] {
+                let (a, b) = (m[0].iter().filter(|&&x| x != 0).count(), m[1].iter().filter(|&&x| x != 0).count());
+                note("legal actions".to_string(), format!("{a} set"), format!("{b} set"));
+            }
+            tally.wrong += wrong as usize;
+        }
+        Ok(())
+    };
+    let result = (|| -> Result<(), String> {
+        // Team Preview: everything up to the battle's start.
+        let cut = c.initial.log.iter().position(|l| l.starts_with("|teamsize|")).unwrap_or(0);
+        for side in 0..2 {
+            followers[side].lines(&Follower::own_lines(side, &c.initial.log[..cut]))?;
+        }
+        if cut > 0 {
+            compare(&game, &followers, 0)?;
+        }
+        game.start([&picks[0], &picks[1]], c.seed).map_err(|e| e.to_string())?;
+        for side in 0..2 {
+            followers[side].lines(&Follower::own_lines(side, &c.initial.log[cut..]))?;
+            followers[side].request(&c.initial.requests[side].to_string())?;
+        }
+        compare(&game, &followers, 0)?;
+        decisions += 1;
+        for (k, step) in c.steps.iter().enumerate() {
+            let parse = |s: &str| Choice::parse_side(s).ok_or_else(|| format!("unreadable choice {s:?}"));
+            game.choose([parse(&step.choices[0])?, parse(&step.choices[1])?]).map_err(|e| e.to_string())?;
+            for side in 0..2 {
+                followers[side].lines(&Follower::own_lines(side, &step.after.log))?;
+                let request = step.after.requests.get(side).ok_or("a step recorded without its requests")?;
+                followers[side].request(&request.to_string())?;
+            }
+            if step.after.ended {
+                if !game.ended() || !followers.iter().all(|f| f.ended() && f.winner() == game.winner()) {
+                    return Err(format!("battle {}: the followers and the game disagree about how it ended", c.id));
+                }
+                break;
+            }
+            compare(&game, &followers, k + 1)?;
+            decisions += 1;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => Outcome::Pass(decisions),
+        Err(e) => Outcome::Fail(vec![e]),
+    }
+}

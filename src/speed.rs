@@ -243,6 +243,8 @@ pub(crate) struct Seen {
     pub listed: u8,
     /// It may be an Illusion, or has transformed: its Speed is not its own.
     pub doubt: bool,
+    /// It has transformed: its Speed is another Pokémon's, which its own side does not know either.
+    pub transformed: bool,
     /// The species on show.
     pub species: u16,
     pub stage: i8,
@@ -255,6 +257,28 @@ pub(crate) struct Seen {
     pub gastro_acid: bool,
     /// The truth, for [`Speeds::strict`] alone.
     true_item: u16,
+}
+
+impl Seen {
+    /// Nobody there.
+    pub(crate) fn nobody(r: MonRef) -> Seen {
+        Seen {
+            r,
+            present: false,
+            listed: NOT_LISTED,
+            doubt: false,
+            transformed: false,
+            species: 0,
+            stage: 0,
+            status: Status::None,
+            hp_full: true,
+            item: ItemShown::Unknown,
+            ability: UNKNOWN,
+            ability_changed: false,
+            gastro_acid: false,
+            true_item: it::NONE,
+        }
+    }
 }
 
 /// The field at one moment.
@@ -328,6 +352,7 @@ pub(crate) fn seen(b: &Battle, r: MonRef) -> Seen {
         present: b.shown_live(r) && !m.fainted,
         listed: live.listed,
         doubt: live.suspect || m.transformed,
+        transformed: m.transformed,
         species: if m.illusion != 0 { live.species } else { m.species },
         stage: m.boosts[SPE],
         status: m.status,
@@ -547,6 +572,17 @@ fn mods(s: &Seen, known: &Know, field: &FieldSeen, belief: &Belief) -> Option<Mo
     })
 }
 
+/// The Speed the queue sorts a Pokémon by, worked out by its own side from what
+/// it knows of it (ability, item and Speed stat) and what is in plain sight.
+/// `None` if something here does not model is at work (see [`mods`]).
+pub(crate) fn own_speed(s: &Seen, ability: u16, item: u16, stat: u16, field: &FieldSeen) -> Option<i32> {
+    let class = class_of(item);
+    let mut belief = Belief { bits: [[0; CLASSES]; NATURES] };
+    belief.bits[1][class] = 1;
+    let known = Know::Is(if s.gastro_acid { ab::NOABILITY } else { ability });
+    mods(s, &known, field, &belief).map(|m| m.speed(stat as u32, class))
+}
+
 /// Ten times the priority `move_id` has from this Pokémon, as far as the
 /// watcher can tell; `None` if an ability it has not shown could change it.
 /// `at_start` is the ability it began the turn with: where a move goes
@@ -598,6 +634,9 @@ pub struct Speeds {
     owner: [[u8; CLASSES]; 2],
     /// Each active Pokémon's Speed as the queue would sort by it now. Its own side knows it.
     own: [[i32; ACTIVE]; 2],
+    /// Kept for one side alone, which this is: nothing is worked out about its own
+    /// Pokémon. (A player following a battle from Showdown's log has no more to go on.)
+    watcher: Option<u8>,
     /// Check every observation against the truth as it is used and panic on a
     /// difference: for tests. (It reads what a player is not shown.)
     pub strict: bool,
@@ -638,8 +677,20 @@ impl Speeds {
             swapped: [[false; MAX_TEAM]; 2],
             began: [[(UNKNOWN, true, 0); MAX_TEAM]; 2],
             own: [[0; ACTIVE]; 2],
+            watcher: None,
             strict: false,
         }
+    }
+
+    /// Says whether `side`'s team can be counted on to have each item once at most. (By
+    /// default it is, if the regulation says so and the team as given here keeps to it.)
+    pub(crate) fn set_clause(&mut self, side: usize, on: bool) {
+        self.clause[side] = on;
+    }
+
+    /// Keeps track for `side` alone: what it can tell of the other side's Speed.
+    pub(crate) fn watch_as(&mut self, side: usize) {
+        self.watcher = Some(side as u8);
     }
 
     /// What `side`'s opponent knows of the Speed of the Pokémon `side` registered `entry`th.
@@ -740,6 +791,9 @@ impl Speeds {
         for (x, other, x_first) in [(first, second, true), (second, first, false)] {
             // What `other`'s side learns about `x`. It knows its own Pokémon's priority and Speed.
             let side = x.r.side as usize;
+            if self.watcher.is_some_and(|w| w as usize == side) {
+                continue;
+            }
             let Some(s) = seen.iter().find(|s| s.r == x.r) else { continue };
             if !s.present || s.doubt || s.listed == NOT_LISTED || swapped[side][x.r.idx as usize] {
                 continue;
@@ -752,6 +806,10 @@ impl Speeds {
             );
             // A Quick Claw or a Quick Draw going off is announced, and puts the move ahead of its bracket.
             if moved || x.frac > 0 || other.frac != 0 {
+                continue;
+            }
+            // A transformed Pokémon moves at a Speed its own side cannot put a number to.
+            if seen.iter().any(|o| o.r == other.r && o.transformed) {
                 continue;
             }
             let known = know(s, listed, b.open_team_sheets);
@@ -892,6 +950,10 @@ impl Speeds {
         let s = seen(b, r);
         if !me.is_active || me.fainted || !s.present {
             return None;
+        }
+        if me.transformed {
+            // Its Speed is the copied Pokémon's, which its side has not been told.
+            return Some(First::Unknown);
         }
         let roster = &b.sides[opp].roster[..b.sides[opp].n_roster as usize];
         let (Some(listed), false) = (roster.get(s.listed as usize), self.swapped[opp][r.idx as usize]) else {

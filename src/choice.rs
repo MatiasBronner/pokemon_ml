@@ -418,7 +418,7 @@ impl Battle {
         out
     }
 
-    fn living_bench(&self, side: usize) -> usize {
+    pub(crate) fn living_bench(&self, side: usize) -> usize {
         let s = &self.sides[side];
         (ACTIVE..s.n as usize).filter(|&p| !s.team[s.order[p] as usize].fainted).count()
     }

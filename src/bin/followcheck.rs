@@ -1,6 +1,6 @@
 //! Checks the log follower against recorded Showdown battles.
 //!
-//!     followcheck CASES.jsonl... [--limit N] [--battle ID] [--slim OUT.jsonl]
+//!     followcheck CASES.jsonl... [--limit N] [--battle ID] [--list] [--slim OUT.jsonl]
 //!
 //! The battles must have been recorded with their logs and requests
 //! (`oracle/gen_cases.js --log --requests`). Each is played in the
@@ -17,6 +17,7 @@ fn main() {
     let mut limit = usize::MAX;
     let mut only = None;
     let mut slim = None;
+    let mut list = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         if arg == "--limit" {
@@ -25,6 +26,9 @@ fn main() {
             // Write the battles followed back out with only what this check reads.
             let path = args.next().expect("--slim takes a file to write");
             slim = Some(std::fs::File::create(&path).unwrap_or_else(|e| panic!("cannot write {path}: {e}")));
+        } else if arg == "--list" {
+            // The first difference of every battle that has one.
+            list = true;
         } else if arg == "--battle" {
             // Every difference found in this one battle.
             only = Some(args.next().and_then(|n| n.parse::<u32>().ok()).expect("--battle takes a number"));
@@ -33,7 +37,7 @@ fn main() {
         }
     }
     if files.is_empty() {
-        eprintln!("usage: followcheck CASES.jsonl... [--limit N] [--battle ID] [--slim OUT.jsonl]");
+        eprintln!("usage: followcheck CASES.jsonl... [--limit N] [--battle ID] [--list] [--slim OUT.jsonl]");
         std::process::exit(2);
     }
     let mut tally = FollowTally { verbose: only.is_some(), ..FollowTally::default() };
@@ -85,10 +89,21 @@ fn main() {
         100.0 * tally.wrong as f64 / tally.observations.max(1) as f64,
         tally.hidden_disables
     );
+    println!(
+        "of those, {} are ones the player has a choice to make at: {} differ ({:.3}%)",
+        tally.choices,
+        tally.wrong_choices,
+        100.0 * tally.wrong_choices as f64 / tally.choices.max(1) as f64
+    );
     let mut rows: Vec<_> = tally.by_feature.iter().collect();
     rows.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));
     for (name, (n, example)) in rows {
         println!("{n:>8}  {name}\n          {example}");
+    }
+    if list {
+        for first in &tally.first_wrong {
+            println!("first: {first}");
+        }
     }
     if !failed.is_empty() {
         std::process::exit(1);

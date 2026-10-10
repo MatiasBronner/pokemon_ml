@@ -49,16 +49,24 @@
 //! corrected request like any other; the simulator, in training, does not
 //! offer the choice in the first place.
 //!
-//! Two things it can get wrong, each seen in one battle of the last six
-//! thousand recorded for checking it (random teams, random play). The PP of
-//! its own Pokémon comes with every request for the two on the field; for
-//! the others it is counted from the log, and a move whose target the log
-//! leaves out (a Counter that fails) may have paid a Pressure the follower
-//! cannot see, which stays wrong if the Pokémon leaves the field that turn.
-//! And a move the log shows failing is taken to have been used, where one
-//! refused by a Choice lock that Magic Room had lifted when it was chosen
-//! never began: the move that Pokémon last used is then wrong until its
-//! next.
+//! Two things it is not told, and so cannot always have right:
+//!
+//! - *What a move with no target on show paid to Pressure.* A Counter or a
+//!   Mirror Coat that fails, or a move called by another that does nothing
+//!   to be seen, was aimed at one of the other side picked at random, and
+//!   the log does not say which. Facing one Pokémon with Pressure and one
+//!   without, the follower cannot know whether a second PP went, and counts
+//!   none. Every request gives the PP of the two on the field, so this
+//!   stays wrong only for a Pokémon that left the field, or fainted, in
+//!   that same turn.
+//! - *That a move of the other side's never began*, when the Choice item
+//!   that held it back has never been shown. A Pokémon held to one move can
+//!   come to choose another (a Magic Room had its item switched off when it
+//!   chose, and ended before it moved). Showdown shows the move and that it
+//!   failed, like any move that fails. Where the item is known (its own
+//!   Pokémon; the other side's on an open sheet, or once seen) the
+//!   follower knows the move was never used. Where it is not, it takes it
+//!   for the move that Pokémon last used, and the simulator knows better.
 
 use serde_json::Value;
 
@@ -122,9 +130,20 @@ struct Spot {
     lost_item: bool,
     /// Something has been said of its ability since the last request.
     ability_touched: bool,
+    /// The item the log has given it, or left it without (`it::NONE`), since the last request.
+    item_since: Option<u16>,
     /// It has said it has Pressure, as its holder does on coming in or coming by it. (A
     /// Pokémon passing for one that has it says nothing.)
     pressing: bool,
+    /// The move its Choice item holds it to, where that can be told: its first since it
+    /// came in with the item at work. (`None`: none, or not known.)
+    choice: Option<u16>,
+    /// It has been seen to use a move its Choice item would have held it from: whatever
+    /// the reason, the item is not taken to be at work on it.
+    no_hold: bool,
+    /// The opposing Pokémon that have damaged it with a move since it came in and are
+    /// still on the field, oldest first: the stay of each, and the position it struck from.
+    hit_by: Vec<(u32, usize)>,
     /// Instruct has been used on it: its next move is the repeat, put in ahead of the queue.
     instructed: bool,
     /// The forme it has changed into on the field, where the log has said so (a request
@@ -150,7 +169,11 @@ impl Spot {
             quick: false,
             lost_item: false,
             ability_touched: false,
+            item_since: None,
             pressing: false,
+            choice: None,
+            no_hold: false,
+            hit_by: Vec::new(),
             instructed: false,
             forme: None,
         }
@@ -300,6 +323,17 @@ impl OwnNow {
     }
 }
 
+/// A move just shown that its user's Choice item holds it from, to be taken back if the
+/// next line says it failed: the move it had last used before, and the PP counted for
+/// this one (whose, whether of a moveset it copied, which move, how many).
+#[derive(Clone, Debug)]
+struct Refusal {
+    side: usize,
+    pos: usize,
+    last_move: u16,
+    paid: Option<(usize, bool, u16, u8)>,
+}
+
 /// A queued move that has begun since the last decision.
 #[derive(Clone, Debug)]
 struct Begun {
@@ -375,6 +409,8 @@ pub struct Follower {
     /// Items seen to change hands since the last decision, each with how many moves had begun by then.
     items: Vec<(usize, Event)>,
     mover: Option<Mover>,
+    /// The move in the line just read, if its user's Choice item cannot have let it begin.
+    refusable: Option<Refusal>,
     /// The moves chosen with the last reply, by team index, and where each was aimed.
     chosen: Vec<(usize, u16, i8)>,
     /// By side: it has Mega Evolved.
@@ -579,6 +615,7 @@ impl Follower {
             begun: Vec::new(),
             items: Vec::new(),
             mover: None,
+            refusable: None,
             chosen: Vec::new(),
             megaed: [false; 2],
             ending: false,
@@ -665,6 +702,38 @@ impl Follower {
         self.reader.sides[side].active[pos].as_ref().is_some_and(|l| !l.gone)
     }
 
+    /// Whether the Pokémon at a position is known to hold a Choice item that is doing
+    /// its work: not in a Magic Room, and not on a Pokémon that may have Klutz.
+    fn choice_at_work(&self, side: usize, pos: usize) -> bool {
+        if self.field.pseudo.iter().any(|p| p.0 == Pseudo::Magicroom) || self.spots[side][pos].no_hold {
+            return false;
+        }
+        let (item, klutz) = if side == self.side {
+            match self.own_now(pos) {
+                Some(now) => (now.item, now.abilities.contains(&ab::KLUTZ)),
+                None => return false,
+            }
+        } else {
+            let s = self.seen(side, pos);
+            let Some(listed) = self.reader.sides[side].roster.get(s.listed as usize).filter(|_| s.present) else {
+                return false;
+            };
+            // An item it has been seen with is the item of whoever stands there. One that is
+            // only on a team sheet is its own if it is who it looks like, and if the sheets
+            // say which is which (two of a species on a team, which no ladder allows, and
+            // they do not).
+            let twice = self.reader.sides[side].roster.iter().filter(|l| l.species == listed.species).count() > 1;
+            let item = match s.item {
+                ItemShown::Holds(item) => item,
+                ItemShown::Lost(_) => it::NONE,
+                ItemShown::Unknown if self.open() && !twice && !s.doubt => listed.item,
+                ItemShown::Unknown => return false,
+            };
+            (item, speed::may_have(&s, listed, self.open(), ab::KLUTZ))
+        };
+        ITEMS[item as usize].flags & IF_CHOICE != 0 && !klutz
+    }
+
     /// The team index the rebuilt battle gives whoever stands at a position.
     fn mon_ref(&self, side: usize, pos: usize) -> MonRef {
         if side == self.side {
@@ -684,9 +753,16 @@ impl Follower {
         };
         let copy = match s.active[1 - pos].as_ref() {
             Some(other) if other.entry == here.entry && !here.gone => {
-                // The one that has fainted was the Pokémon itself. Of two still standing,
-                // the one that came in second is taken for the copy.
-                other.gone || self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+                // The one that has fainted was the Pokémon itself. Of two still standing, the
+                // copy is the one the record has its doubts about, if it doubts just one;
+                // otherwise the one that came in second.
+                if other.gone {
+                    true
+                } else if here.rec.suspect != other.rec.suspect {
+                    here.rec.suspect
+                } else {
+                    self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+                }
             }
             _ => false,
         };
@@ -712,6 +788,11 @@ impl Follower {
                 "cant" => !arg(3).starts_with("ability: "),
                 _ => false,
             };
+            if kind == "move" && !begins && to_id(arg(3)) == "round" {
+                // A Round that another move called (Copycat) calls the next one forward
+                // like any other.
+                self.round.get_or_insert(self.begun.len());
+            }
             if begins {
                 // (The later turns of a move it is locked into say nothing the first did not.)
                 let named = match kind {
@@ -746,15 +827,30 @@ impl Follower {
         };
         let before = held(self);
         let unmasked = match who {
-            Some((side, pos)) if kind == "replace" && side != self.side => Some((pos, self.their_index(pos))),
+            Some((side, pos)) if kind == "replace" && side != self.side => {
+                Some([(pos, self.their_index(pos)), (1 - pos, self.their_index(1 - pos))])
+            }
             _ => None,
         };
         self.reader.line(line)?;
-        if let Some((pos, was)) = unmasked {
-            let now = self.their_index(pos);
-            if now != was {
-                self.renumbered.push((was, now));
+        if let Some(were) = unmasked {
+            // A disguise dropped: the Pokémon is numbered anew, and so may be the one beside
+            // it that it was passing for. What was noted of either goes by the new numbers.
+            let moved: Vec<(usize, usize)> =
+                were.iter().map(|&(pos, was)| (was, self.their_index(pos))).filter(|(was, now)| was != now).collect();
+            let opp = (1 - self.side) as u8;
+            let renumber = |r: &mut MonRef| {
+                if r.side == opp
+                    && let Some(&(_, now)) = moved.iter().find(|m| m.0 == r.idx as usize)
+                {
+                    r.idx = now as u8;
+                }
+            };
+            for begun in &mut self.begun {
+                renumber(&mut begun.r);
+                begun.seen.iter_mut().for_each(|seen| renumber(&mut seen.r));
             }
+            self.renumbered.extend(moved);
         }
         let after = held(self);
         self.track(kind, &parts, from)?;
@@ -763,6 +859,10 @@ impl Follower {
                 let (Some(was), Some(is)) = (before[k], after[k]) else { continue };
                 if was.0 != is.0 && matches!(is.0, ItemShown::Lost(_)) {
                     self.spots[k / 2][k % 2].lost_item = true;
+                }
+                if was.0 != is.0 {
+                    // (A Choice item that goes takes its hold with it; one that comes starts afresh.)
+                    self.spots[k / 2][k % 2].choice = None;
                 }
                 if (was.1, was.2) != (is.1, is.2) {
                     self.spots[k / 2][k % 2].ability_touched = true;
@@ -837,7 +937,12 @@ impl Follower {
         // The species it is now: as the request had it, or the forme it has taken since.
         let species = self.spots[self.side][pos].forme.filter(|_| !is_mega(mon.species)).unwrap_or(mon.species);
         let rec = &live.rec;
+        // Its item: what the other side has been shown of it, and failing that what the
+        // request said. For one of its own in disguise the record is of the Pokémon it
+        // passes for, and it goes by the request and what the log has said since.
+        let disguised = self.reader.sides[self.side].team.get(live.entry).is_some_and(|e| e.name != own.name);
         let item = match rec.item {
+            _ if disguised => self.spots[self.side][pos].item_since.unwrap_or(mon.item),
             ItemShown::Holds(item) => item,
             ItemShown::Lost(_) => it::NONE,
             ItemShown::Unknown => mon.item,
@@ -963,6 +1068,12 @@ impl Follower {
 
     fn track(&mut self, kind: &str, parts: &[&str], from: &str) -> Result<(), String> {
         let arg = |i: usize| parts.get(i).copied().unwrap_or("");
+        let refusable = self.refusable.take();
+        if let Some(r) = refusable.as_ref().filter(|_| kind != "-fail") {
+            // (The move thought to be held back did not fail: see `no_hold`.)
+            let spot = &mut self.spots[r.side][r.pos];
+            (spot.choice, spot.no_hold) = (None, true);
+        }
         match kind {
             "player" => {
                 if let Some(side) = Follower::side_of(arg(2))
@@ -987,6 +1098,19 @@ impl Follower {
                         }
                         (spot.begun, spot.reordered, spot.overridden, spot.quick) = (0, None, None, false);
                     }
+                }
+                // Who hit whom is kept for as long as the one that hit is on the field.
+                let here: Vec<u32> = (0..2)
+                    .flat_map(|s| (0..ACTIVE).map(move |p| (s, p)))
+                    .filter(|&(s, p)| self.present(s, p))
+                    .map(|(s, p)| self.spots[s][p].stay)
+                    .collect();
+                for spot in self.spots.iter_mut().flatten() {
+                    spot.hit_by.retain(|(stay, _)| here.contains(stay));
+                }
+                // (A Revival Blessing nobody was brought back with is over with its turn.)
+                for slots in self.field.sides.iter_mut().flat_map(|s| s.slots.iter_mut()) {
+                    slots.retain(|c| c.0 != SlotCond::Revivalblessing);
                 }
                 self.round = None;
                 self.mover = None;
@@ -1140,6 +1264,25 @@ impl Follower {
                 let queued = queued_move(arg(3), from);
                 let stay = self.spots[side][pos].stay;
                 let mut undo = None;
+                // A Choice item holds its Pokémon to one move. It can come to choose another
+                // all the same (the item was switched off by a Magic Room when it chose, and is
+                // not now): Showdown then shows the move and that it failed, with nothing to
+                // tell it from any other that failed, but the move never began. It is not the
+                // move the Pokémon last used, and it cost no PP.
+                let held_to = self.spots[side][pos].choice;
+                let at_work = queued && used != mv::STRUGGLE && self.choice_at_work(side, pos);
+                let doubtful = at_work && parts.contains(&"[still]") && held_to.is_some_and(|held| held != used);
+                let before = self.spots[side][pos].last_move;
+                let mut paid = None;
+                if at_work && !doubtful && held_to.is_some_and(|held| held != used) {
+                    // It went ahead with a move it was thought to be held from: the item is
+                    // not doing its work after all (a Klutz not yet shown, say).
+                    let spot = self.spot(side, pos);
+                    (spot.choice, spot.no_hold) = (None, true);
+                }
+                if at_work && held_to.is_none() {
+                    self.spot(side, pos).choice = Some(used);
+                }
                 if queued {
                     let spot = self.spot(side, pos);
                     spot.last_move = used;
@@ -1170,8 +1313,9 @@ impl Follower {
                         // A move on the whole field, on everyone across it, or one of the few
                         // (Imprison, Spikes) that pay to every opponent: whether or not it lands.
                         aimed.extend([(1 - side, 0), (1 - side, 1)]);
-                    } else if data.target == Target::FoeSide {
-                        // (Any other move laid on the far side of the field pays nothing extra.)
+                    } else if data.target == Target::FoeSide || parts.contains(&"[notarget]") {
+                        // (Any other move laid on the far side of the field pays nothing extra.
+                        // Nor does one left with nobody to aim at, whoever the line goes on to name.)
                     } else if let Some(target) = fourth {
                         aimed.push(target);
                     } else if queued
@@ -1183,21 +1327,49 @@ impl Follower {
                         let other = !self.present(1 - side, there) && self.present(1 - side, 1 - there);
                         aimed.push((1 - side, if other { 1 - there } else { there }));
                     }
-                    let pressed = aimed
-                        .iter()
-                        .filter(|&&(s, p)| {
-                            s != side
-                                && self.spots[s][p].pressing
-                                && !self.spots[s][p].has(VolKind::Gastroacid)
-                                && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
-                        })
-                        .count() as u8;
-                    if let Some(own) = self.own.get_mut(self.own_at[pos]) {
-                        let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
-                        if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
-                            slot.1 = slot.1.saturating_sub(base + pressed);
+                    let presses = |&(s, p): &(usize, usize)| {
+                        s != side
+                            && self.present(s, p)
+                            && self.spots[s][p].pressing
+                            && !self.spots[s][p].has(VolKind::Gastroacid)
+                            && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
+                    };
+                    // A move for one target that its user did not pick one for: one that answers
+                    // whoever hit it, one that goes for anybody, one called by another move.
+                    let unaimed = match data.target {
+                        Target::Scripted | Target::RandomNormal => true,
+                        Target::Normal | Target::Any | Target::AdjacentFoe => !queued,
+                        _ => false,
+                    };
+                    if aimed.is_empty() && unaimed && parts.contains(&"[still]") {
+                        // It did nothing to be seen, and the line names nobody. Metal Burst and
+                        // Comeuppance were still aimed where the last blow came from, if someone
+                        // stands there. Otherwise the game picked one of the other side at
+                        // random and does not say which: counted only where it makes no
+                        // difference.
+                        let foes: Vec<(usize, usize)> =
+                            (0..ACTIVE).map(|p| (1 - side, p)).filter(|&(s, p)| self.present(s, p)).collect();
+                        let back = self.spots[side][pos].hit_by.last().map(|&(_, p)| (1 - side, p));
+                        match back.filter(|at| matches!(used, mv::METALBURST | mv::COMEUPPANCE) && foes.contains(at)) {
+                            Some(at) => aimed.push(at),
+                            None if !foes.is_empty() && foes.iter().all(presses) => aimed.push(foes[0]),
+                            None => {}
                         }
                     }
+                    let pressed = aimed.iter().filter(|at| presses(at)).count() as u8;
+                    let idx = self.own_at[pos];
+                    if let Some(own) = self.own.get_mut(idx) {
+                        let copied = !own.copied.is_empty();
+                        let known = if copied { &mut own.copied } else { &mut own.pp };
+                        if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
+                            let taken = (base + pressed).min(slot.1);
+                            slot.1 -= taken;
+                            paid = Some((idx, copied, paying, taken));
+                        }
+                    }
+                }
+                if doubtful {
+                    self.refusable = Some(Refusal { side, pos, last_move: before, paid });
                 }
                 match used {
                     mv::WIDEGUARD | mv::QUICKGUARD => {
@@ -1227,6 +1399,15 @@ impl Follower {
                             undo = Some(Undo::Slot(side, pos, cond));
                         }
                     }
+                    _ if MOVES[used as usize].stalling_move
+                        && MOVES[used as usize].volatile.is_some_and(|up| self.spots[side][pos].has(up)) =>
+                    {
+                        // Used again in a turn its protection is already up (Instruct): if it
+                        // works, nothing more is said, and the run is one longer.
+                        let spot = self.spot(side, pos);
+                        undo = Some(Undo::Stall(spot.vols.iter().find(|v| v.kind == VolKind::Stall).copied()));
+                        spot.stalled();
+                    }
                     _ => {}
                 }
                 let stalling = MOVES[used as usize].stalling_move;
@@ -1235,14 +1416,25 @@ impl Follower {
             }
             "cant" => {
                 if !arg(3).starts_with("ability: ") {
+                    // (Out of PP for Destiny Bond itself: the one already up is left standing.)
+                    let again = arg(3) == "nopp" && to_id(arg(4)) == "destinybond";
                     self.spot(side, pos).vols.retain(|v| {
-                        v.ends != Ends::Move
+                        (v.ends != Ends::Move || (again && v.kind == VolKind::Destinybond))
                             && !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge)
                             && !CHARGING.contains(&v.kind)
                     });
                 }
             }
             "-fail" => {
+                // Whether anybody else has yet to move this turn: not one that has moved, or
+                // that came in during it.
+                let to_act = (0..2).flat_map(|s| (0..ACTIVE).map(move |p| (s, p))).any(|(s, p)| {
+                    (s, p) != (side, pos)
+                        && self.present(s, p)
+                        && self.spots[s][p].begun == 0
+                        && self.spots[s][p].active_turns > 0
+                });
+                let refused = refusable.filter(|r| (r.side, r.pos) == (side, pos));
                 if let Some(mover) = &mut self.mover
                     && (mover.side, mover.pos) == (side, pos)
                 {
@@ -1256,9 +1448,23 @@ impl Follower {
                         }
                         None => {}
                     }
-                    if mover.stalling {
-                        // A protecting move that fails ends the run.
+                    if mover.stalling && to_act && refused.is_none() {
+                        // A protecting move that fails ends the run. (Not one that fails for
+                        // coming last in the turn: there was nothing to protect from, the odds
+                        // were never put to the test, and the run stands.)
                         self.spots[side][pos].remove(VolKind::Stall);
+                    }
+                }
+                if let Some(refused) = refused {
+                    // Held to another move by its Choice item: this one never began.
+                    self.spot(side, pos).last_move = refused.last_move;
+                    if let Some((idx, copied, paying, taken)) = refused.paid
+                        && let Some(own) = self.own.get_mut(idx)
+                    {
+                        let known = if copied { &mut own.copied } else { &mut own.pp };
+                        if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
+                            slot.1 += taken;
+                        }
                     }
                 }
             }
@@ -1308,6 +1514,7 @@ impl Follower {
                     let theirs = self.spots[s][p].clone();
                     let species = self.reader.sides[s].active[p].as_ref().map(|l| l.species);
                     let spot = self.spot(side, pos);
+                    spot.choice = None;
                     spot.boosts = theirs.boosts;
                     spot.types = theirs.types.or(species.map(|sp| SPECIES[sp as usize].types));
                     spot.added = theirs.added;
@@ -1398,7 +1605,7 @@ impl Follower {
                     // Abilities change hands (and one of them says so again if it is Pressure):
                     // both Pokémon's for a swap, the attacker's for one that rubs off.
                     let swap = matches!(name.as_str(), "skillswap" | "wanderingspirit");
-                    for (s, p) in of.into_iter().chain(swap.then_some((side, pos))) {
+                    for (s, p) in of.or(fourth).into_iter().chain(swap.then_some((side, pos))) {
                         let spot = &mut self.spots[s][p];
                         (spot.pressing, spot.lost_item) = (false, false);
                     }
@@ -1435,6 +1642,8 @@ impl Follower {
                 if effect_id(arg(3)) == "custapberry" {
                     self.spot(side, pos).quick = true;
                 }
+                let spot = self.spot(side, pos);
+                (spot.choice, spot.item_since) = (None, Some(it::NONE));
             }
             "-waiting" => {
                 // A Pledge waits for its partner, which goes next.
@@ -1451,6 +1660,24 @@ impl Follower {
                 }
                 let spot = self.spot(side, pos);
                 (spot.pressing, spot.lost_item) = (false, false);
+            }
+            "-item" => {
+                // (A Choice item that comes, even in place of another, starts afresh.)
+                let item = item_id(&to_id(arg(3)));
+                let spot = self.spot(side, pos);
+                spot.item_since = item.or(spot.item_since);
+                if !from.is_empty() && !from.contains("Frisk") {
+                    // (Not an item it had all along coming to light: a Choice item that
+                    // comes, even in place of another, starts afresh.)
+                    (spot.choice, spot.no_hold) = (None, false);
+                }
+                let taken =
+                    ["move: Thief", "move: Covet", "ability: Pickpocket", "ability: Magician", "ability: Symbiosis"];
+                if let Some((s, p)) = of.filter(|_| taken.contains(&from)) {
+                    // Taken from, or handed over by, the Pokémon named last.
+                    let spot = &mut self.spots[s][p];
+                    (spot.choice, spot.item_since) = (None, Some(it::NONE));
+                }
             }
             "-mustrecharge" => {
                 self.spot(side, pos).add(VolKind::Mustrecharge, Ends::Said);
@@ -1476,6 +1703,16 @@ impl Follower {
             "-anim" => {
                 // The move goes off at once after all (Power Herb, Solar Beam in the sun).
                 self.spot(side, pos).vols.retain(|v| v.kind != VolKind::Twoturnmove && !CHARGING.contains(&v.kind));
+            }
+            "-damage" if from.is_empty() && !self.ending => {
+                // A blow from a move of the other side's: Metal Burst and Comeuppance go back
+                // to where the last one came from.
+                if let Some(m) =
+                    self.mover.as_ref().filter(|m| m.side != side && self.spots[m.side][m.pos].stay == m.stay)
+                {
+                    let by = (m.stay, m.pos);
+                    self.spot(side, pos).hit_by.push(by);
+                }
             }
             "-damage" if from == "confusion" => {
                 // It hurt itself in place of moving: a move it was charging is off.
@@ -1557,8 +1794,14 @@ impl Follower {
                         spot.overridden = Some(at);
                     }
                     if kind == VolKind::Smackdown {
-                        // Knocked out of the air, and out of the move that took it there.
-                        spot.vols.retain(|v| !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove));
+                        // Knocked out of the air, and out of the move or the Magnet Rise that
+                        // took it there.
+                        spot.vols.retain(|v| {
+                            !matches!(
+                                v.kind,
+                                VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove | VolKind::Magnetrise
+                            )
+                        });
                     }
                 }
             }
@@ -1648,6 +1891,12 @@ impl Follower {
             }
             let live = if k < ACTIVE { self.reader.sides[self.side].active[k].as_ref() } else { None };
             let transformed = live.is_some_and(|l| l.transformed && !l.gone);
+            if k < ACTIVE
+                && self.spots[self.side][k].choice.is_some_and(|held| !self.own[idx].pp.iter().any(|s| s.0 == held))
+            {
+                // (Held to a move it does not have, one it was made to use: the hold lapses.)
+                self.spots[self.side][k].choice = None;
+            }
             let own = &mut self.own[idx];
             if !transformed {
                 own.copied.clear();
@@ -1665,7 +1914,7 @@ impl Follower {
             }
         }
         self.req = Some(req);
-        self.spots.iter_mut().flatten().for_each(|spot| spot.ability_touched = false);
+        self.spots.iter_mut().flatten().for_each(|spot| (spot.ability_touched, spot.item_since) = (false, None));
         let b = self.rebuild()?;
         self.digest(&b);
         if b.request == Request::Move {
@@ -1997,7 +2246,7 @@ impl Follower {
         }
         let a = b.resolve_move(begun.r, chosen, 0);
         // A Quick Claw is rolled for, and says so when it works; what always holds a move back does not.
-        Some(a.frac.min(0) + begun.quick as i8)
+        Some(if begun.quick { 1 } else { a.frac.min(0) })
     }
 
     /// A move as it stood in the queue when the `at`th of this stretch began.
@@ -2021,6 +2270,9 @@ impl Follower {
             // (Once an Encore has caught it, the move in the queue is the one it is held to.)
             match self.chosen.iter().find(|c| c.0 == s.r.idx as usize) {
                 _ if s.overridden.is_some_and(|t| t <= at) => {}
+                // (With every move barred, by an Imprison it was not told the reach of, what
+                // went into the queue when it chose was Struggle.)
+                Some(_) if s.named == mv::STRUGGLE => q.move_id = mv::STRUGGLE,
                 Some(&(_, chosen, _)) => q.move_id = chosen,
                 None if s.overridden.is_some() => q.order = 3,
                 None => {}
@@ -2031,10 +2283,7 @@ impl Follower {
             let now = then.own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1.as_ref());
             let speed =
                 now.and_then(|n| n.agreed(|a| speed::own_speed(&n.seen, a, n.item, n.lost_item, n.stat, &then.field)));
-            let began = self.turn_start.as_ref().map(|b| b.mon(s.r).ability);
-            let priority = now
-                .zip(began)
-                .and_then(|(n, began)| n.agreed(|a| speed::own_priority(&n.seen, a, began, &then.field, q.move_id)));
+            let priority = now.and_then(|n| n.agreed(|a| speed::own_priority(&n.seen, a, &then.field, q.move_id)));
             match (speed, priority, self.own_frac(s, q.move_id)) {
                 (Some(speed), Some(priority), Some(frac)) => {
                     (q.speed, q.priority, q.frac) = (speed, priority + frac as i32, frac)
@@ -2131,7 +2380,11 @@ impl Follower {
     /// The reply to send Showdown (after `/choose `) for a pair of actions
     /// (at Team Preview, the first of the pair alone counts).
     pub fn choice(&mut self, actions: [usize; 2]) -> Result<String, String> {
-        self.chosen.clear();
+        // (A replacement sent in while a turn is under way leaves the moves chosen for
+        // that turn as they were: some have yet to be used.)
+        if !self.req.as_ref().is_some_and(|r| matches!(r.asked, Asked::Switch | Asked::Wait)) {
+            self.chosen.clear();
+        }
         let Some(b) = &self.battle else {
             let pick = preview_table().get(actions[0]).ok_or("not a Team Preview action")?;
             // The four brought, then the two left behind: Showdown takes the first four.

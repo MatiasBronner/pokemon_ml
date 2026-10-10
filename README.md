@@ -555,24 +555,46 @@ words (`move 2 1 mega, switch 3`).
 
 ### What has been checked, and what has not
 
-**That the follower sees what the simulator sees.** 16,600 battles were
-played in Showdown with random teams and random choices, half with open
-team sheets, and recorded with their logs and the requests each player was
-sent. `followcheck` replays each in the simulator with a follower for each
-side reading only what Showdown sent that side; at every decision the two
-must give the same observation, number for number, and the same legal
-actions, and the follower must put the choice that was made into the words
-Showdown was sent. (180 are left out, all for one reason: with closed
-sheets, an Illusion on a Pokémon the regulation does not give it, which the
-recorder's random teams allow and which nobody watching could suspect.)
-The follower was written against the first 10,600 until none differed. The
-last 6,000 were then recorded and run once, untouched, for an honest
-number: all 5,931 that count were followed to the end, and of 279,547
-observations 32 differed (0.011%), in 8 battles, from seven causes. Five of
-the seven are fixed; with that, 13 observations of 764,024 differ, in two
-battles, for the two reasons given below. `tests/follow.rs` keeps 23 of the
-battles as a fixture, and `followcheck` (under
-[Running it yourself](#running-it-yourself)) runs any number more.
+**That the follower sees what the simulator sees.** Battles are played in
+Showdown with random teams and random choices, half with open team sheets,
+and recorded with their logs and the requests each player was sent.
+`followcheck` replays each in the simulator with a follower for each side
+reading only what Showdown sent that side; at every decision the two must
+give the same observation, number for number, and the same legal actions,
+and the follower must put the choice that was made into the words Showdown
+was sent. (About one battle in a hundred is left out, all for one reason:
+with closed sheets, an Illusion on a Pokémon the regulation does not give
+it, which the recorder's random teams allow and which nobody watching could
+suspect.)
+
+The follower was written against 10,600 such battles until none differed.
+After that, sets were recorded one at a time, each run once untouched for an
+honest number before anything it turned up was fixed:
+
+| recorded | observations | differed when first run |
+|---|---|---|
+| 6,000 battles | 279,547 | 32 (0.011%), in 8 battles |
+| 4,000 | 181,864 | 16 (0.009%), in 2 |
+| 4,000 | 183,355 | 19 (0.010%), in 2 |
+| 4,000 | 184,110 | 9 (0.005%), in 1 |
+
+Every battle of the four was followed to its end, and each difference was
+traced to its cause and fixed, a dozen causes in all: with that, none of
+the 828,876 observations differs. So the rate to expect from battles not
+yet seen is the one in the last rows, about one observation in 10,000 to
+20,000, from something rare that is still to be found. (The first 10,600
+were not kept and have not been run again since.)
+
+Rare things can be made common, too. Two kinds of battle were recorded to
+lean on the two differences known to remain (below): 2,400 with Pressure on
+half the Pokémon and Counter, Mirror Coat, Metal Burst and Comeuppance all
+round; and 2,000 with Choice Scarves, Magic Room, Trick, Instruct and
+Encore. They turned up several of the causes fixed above, and what is left
+in them is only the two things Showdown does not tell a player: 292 of
+118,862 observations in the first, 10 of 128,173 in the second.
+
+`tests/follow.rs` keeps 37 of the battles as a fixture, and `followcheck`
+(under [Running it yourself](#running-it-yourself)) runs any number more.
 
 **That the pieces meet.** Through a server run as above, on this machine:
 two bots playing random actions finish their battles with both ends
@@ -591,21 +613,35 @@ And a small network keeps its strength on the way through:
 last two rows and 0.9 on the server's.) In those 6,000 battles Showdown
 refused a choice eight times, each time for the reason described next.
 
-**Where it and the simulator part.** Showdown keeps one thing from the last
-Pokémon of a side to choose: that it is barred from a move or from
-switching by something not yet shown, a foe's Imprison or a Shadow Tag that
-has not announced itself. It lists the choice anyway, refuses it if it is
-made, and sends the request again put right. The follower offers what
-Showdown lists and takes the corrected request like any other. The
-simulator, in training, does not offer the choice in the first place, so
-this is the one situation the network meets on Showdown and not in
-training (in the recorded battles, about one decision in 200, with random
-teams that are full of such moves). And two things the follower can get
-wrong, each seen in one battle of the last 6,000: the PP of a Pokémon that
-left the field on the turn its move paid a Pressure the log does not show
-(a failed Counter names no target); and the move a Pokémon last used, when
-its Choice item refused a move it had been free to pick while Magic Room
-was up.
+**Where it and the simulator part.** Three things, all of them something
+Showdown does not tell a player:
+
+- *A choice that is barred by something not yet shown*: a foe's Imprison,
+  or a Shadow Tag that has not announced itself. Showdown keeps this from
+  the last Pokémon of a side to choose. It lists the choice anyway, refuses
+  it if it is made, and sends the request again put right. The follower
+  offers what Showdown lists and takes the corrected request like any
+  other. The simulator, in training, does not offer the choice in the first
+  place, so this is the one situation the network meets on Showdown and not
+  in training (in the recorded battles, about one decision in 200, with
+  random teams that are full of such moves).
+- *What a move with no target on show paid to Pressure.* A Counter or
+  Mirror Coat that fails, or a move called by another that does nothing to
+  be seen, was aimed at one of the other side picked at random, and the log
+  does not say which. Facing one Pokémon with Pressure and one without, the
+  follower cannot know whether a second PP went, and counts none. Every
+  request gives the PP of the two Pokémon on the field, so it stays wrong
+  only for one that left the field, or fainted, that same turn. Not seen in
+  the 18,000 battles of the table.
+- *That a move of the other side's never began*, when the Choice item that
+  held it back has never been shown. A Pokémon held to one move can come to
+  choose another (its item was switched off by a Magic Room when it chose,
+  and the Magic Room ended before it moved). Showdown shows the move and
+  that it failed, like any move that fails. Where the item is known (the
+  player's own Pokémon; the other side's on an open sheet, or once it has
+  been seen) the follower knows the move was never used. Where it is not,
+  it takes it for the move that Pokémon last used, and the simulator knows
+  better. Not seen in the 18,000 either.
 
 **Not checked: the public server.** Logging in with a password, searching
 the ladder and the pace of messages (one every 0.65 seconds, under
@@ -1001,7 +1037,8 @@ battles recorded with what each player was sent:
 ```sh
 node oracle/gen_cases.js --n 2000 --seed 1 --log --requests --out closed.jsonl
 node oracle/gen_cases.js --n 2000 --seed 2 --log --requests --open-sheets --out open.jsonl
-cargo run --release --bin followcheck -- closed.jsonl open.jsonl      # add --battle 17 for one battle's differences
+cargo run --release --bin followcheck -- closed.jsonl open.jsonl      # --list: the first difference of each battle
+cargo run --release --bin followcheck -- open.jsonl --battle 17       # every difference of one battle
 ```
 
 ## How abilities, items and conditions work

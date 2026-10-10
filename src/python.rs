@@ -10,7 +10,9 @@ use pyo3::types::PyDict;
 
 use crate::data::{ABILITIES, ITEMS, MOVES, SPECIES};
 use crate::env::{Baseline, Config, N_ACTIONS, N_PREVIEW, OBS_M, VecEnv, preview_table};
-use crate::obs::{self, OBS_F, OBS_I, Table};
+use crate::follow::Follower;
+use crate::format::{Format, ShowdownSet};
+use crate::obs::{self, OBS_F, OBS_I, Phase, Table};
 use crate::teams::{Pool, Variation};
 
 fn failed(e: crate::Error) -> PyErr {
@@ -142,6 +144,111 @@ impl PyVecEnv {
     }
 }
 
+/// A team given as JSON (a list of sets as a team pool has them) in the engine's terms.
+fn team_of(json: &str) -> PyResult<Vec<crate::PokemonSet>> {
+    let sets: Vec<ShowdownSet> =
+        serde_json::from_str(json).map_err(|e| PyValueError::new_err(format!("unreadable team: {e}")))?;
+    sets.iter().map(|s| s.to_set()).collect::<Result<_, _>>().map_err(failed)
+}
+
+/// One player's side of a battle on Pokémon Showdown, followed from the
+/// messages that player is sent. See `pokemon_ml.showdown`.
+#[pyclass(name = "Follower")]
+struct PyFollower {
+    inner: Follower,
+}
+
+#[pymethods]
+impl PyFollower {
+    /// `side`: 0 for `p1`, 1 for `p2`. `team`: the six Pokémon registered, as
+    /// JSON (one team of a pool), in the order they were sent to Showdown.
+    #[new]
+    fn new(side: usize, team: &str) -> PyResult<Self> {
+        Ok(PyFollower { inner: Follower::new(side, team_of(team)?).map_err(PyValueError::new_err)? })
+    }
+
+    /// Takes in lines of the battle's log, as this player is sent them.
+    fn lines(&mut self, text: &str) -> PyResult<()> {
+        for line in text.lines() {
+            self.inner.line(line).map_err(|e| PyRuntimeError::new_err(format!("{e} in {line:?}")))?;
+        }
+        Ok(())
+    }
+
+    /// Takes in a request (the JSON after `|request|`). Give the log up to it first.
+    fn request(&mut self, json: &str) -> PyResult<()> {
+        self.inner.request(json).map_err(PyRuntimeError::new_err)
+    }
+
+    /// Writes the observation (`f`: OBS_F float32, `i`: OBS_I int16, `mask`:
+    /// OBS_M uint8) and returns how many joint actions are legal.
+    fn observe(
+        &self,
+        mut f: PyReadwriteArray1<'_, f32>,
+        mut i: PyReadwriteArray1<'_, i16>,
+        mut mask: PyReadwriteArray1<'_, u8>,
+    ) -> PyResult<usize> {
+        let flat = |_: ()| PyValueError::new_err("the observation arrays must be contiguous");
+        let f = f.as_slice_mut().map_err(|_| flat(()))?;
+        let i = i.as_slice_mut().map_err(|_| flat(()))?;
+        let mask = mask.as_slice_mut().map_err(|_| flat(()))?;
+        if f.len() != OBS_F || i.len() != OBS_I || mask.len() != OBS_M {
+            return Err(PyValueError::new_err(format!(
+                "observation arrays must be {OBS_F} float32, {OBS_I} int16 and {OBS_M} uint8"
+            )));
+        }
+        self.inner.observe(f, i, mask).map_err(PyRuntimeError::new_err)
+    }
+
+    /// What to send Showdown after `/choose ` for a pair of actions.
+    fn choice(&mut self, first: usize, second: usize) -> PyResult<String> {
+        self.inner.choice([first, second]).map_err(PyRuntimeError::new_err)
+    }
+
+    /// "preview", "move" or "switch": what the last request asks; `None` if there is none.
+    #[getter]
+    fn phase(&self) -> Option<&'static str> {
+        self.inner.phase().map(|p| match p {
+            Phase::Preview => "preview",
+            Phase::Move => "move",
+            Phase::Switch => "switch",
+        })
+    }
+
+    #[getter]
+    fn side(&self) -> usize {
+        self.inner.side()
+    }
+
+    #[getter]
+    fn turn(&self) -> u16 {
+        self.inner.turn()
+    }
+
+    #[getter]
+    fn ended(&self) -> bool {
+        self.inner.ended()
+    }
+
+    /// The side that won, once the battle has ended; `None` for a tie.
+    #[getter]
+    fn winner(&self) -> Option<usize> {
+        self.inner.winner()
+    }
+}
+
+/// A team (JSON, as a pool has it) in Showdown's packed format, for `/utm`.
+#[pyfunction]
+fn packed_team(team: &str) -> PyResult<String> {
+    Ok(crate::format::packed_team(&team_of(team)?))
+}
+
+/// What is wrong with a team (JSON, as a pool has it) under the regulation: nothing, if it is legal.
+#[pyfunction]
+fn team_problems(team: &str) -> PyResult<Vec<String>> {
+    Ok(Format::current().check_team(&team_of(team)?).iter().map(|v| v.to_string()).collect())
+}
+
 /// The sizes and the parts of an observation: for each part, where it begins and its shape.
 #[pyfunction]
 fn layout(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
@@ -152,6 +259,7 @@ fn layout(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     d.set_item("actions", N_ACTIONS)?;
     d.set_item("preview_actions", N_PREVIEW)?;
     d.set_item("roster", obs::ROSTER)?;
+    d.set_item("format", Format::current().id.as_str())?;
     let [species, items, abilities, moves] = obs::vocab();
     let vocab = PyDict::new(py);
     vocab.set_item("species", species)?;
@@ -203,6 +311,9 @@ fn names(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 #[pymodule]
 fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVecEnv>()?;
+    m.add_class::<PyFollower>()?;
+    m.add_function(wrap_pyfunction!(packed_team, m)?)?;
+    m.add_function(wrap_pyfunction!(team_problems, m)?)?;
     m.add_function(wrap_pyfunction!(layout, m)?)?;
     m.add_function(wrap_pyfunction!(tables, m)?)?;
     m.add_function(wrap_pyfunction!(names, m)?)?;

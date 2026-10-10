@@ -1180,6 +1180,10 @@ pub struct FollowTally {
     pub wrong: usize,
     /// By feature: how often it differed, and one place it did.
     pub by_feature: std::collections::BTreeMap<String, (usize, String)>,
+    /// Observations passed over: a move was disabled by something the player has not
+    /// been shown (a foe's Imprison). Showdown then lists the move as usable until the
+    /// player tries it, so its request and the simulator's own legal actions part ways.
+    pub hidden_disables: usize,
     /// Print every difference as it is found.
     pub verbose: bool,
 }
@@ -1313,6 +1317,16 @@ fn id_name(index: usize) -> String {
     }
 }
 
+/// Whether one of `side`'s Pokémon on the field has a move disabled by something its player has not been shown.
+fn hidden_disable(game: &crate::env::Game, side: usize) -> bool {
+    let Some(b) = game.battle() else { return false };
+    b.request == Request::Move
+        && (0..ACTIVE).any(|pos| {
+            let m = b.mon(b.active(side, pos));
+            m.is_active && m.moves[..m.n_moves as usize].iter().any(|slot| slot.disabled && slot.hidden)
+        })
+}
+
 /// Plays a recorded battle in a [`Game`](crate::env::Game) and, beside it,
 /// has a [`Follower`](crate::follow::Follower) for each side read the log
 /// and the requests Showdown sent that side. At every decision the
@@ -1340,13 +1354,21 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
         Err(Error::Unsupported(what)) => return Outcome::Unsupported(what),
         Err(e) => return Outcome::Fail(vec![e.to_string()]),
     };
-    // The recorder names each Pokémon after its species and its place in the team.
-    let names = |team: &[PokemonSet]| -> Vec<String> {
-        let base = |sp: u16| crate::data::species_id(SPECIES[sp as usize].base_species).unwrap_or(sp);
-        team.iter().enumerate().map(|(j, set)| format!("{}{j}", SPECIES[base(set.species) as usize].name)).collect()
+    // The recorder gives each Pokémon a name of its own, which the first request has
+        // for those brought. (Its teams can have a species twice, which no ladder allows.)
+    let names = |side: usize| -> Vec<String> {
+        let mut out = vec![String::new(); sets[side].len()];
+        let listed = c.initial.requests[side]["side"]["pokemon"].as_array();
+        for (k, mon) in listed.into_iter().flatten().enumerate() {
+            let name = mon["ident"].as_str().and_then(|i| i.split_once(": ")).map(|(_, n)| n.to_string());
+            if let (Some(name), Some(&j)) = (name, picks[side].get(k)) {
+                out[j] = name;
+            }
+        }
+        out
     };
     let mut followers = match (Follower::new(0, sets[0].clone()), Follower::new(1, sets[1].clone())) {
-        (Ok(a), Ok(b)) => [a.with_names(names(&sets[0])), b.with_names(names(&sets[1]))],
+        (Ok(a), Ok(b)) => [a.with_names(names(0)), b.with_names(names(1))],
         (Err(e), _) | (_, Err(e)) => return Outcome::Fail(vec![e]),
     };
     // The recorder's teams do not all keep the item clause, and the game knows which do.
@@ -1365,6 +1387,10 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
             [vec![0u8; OBS_M], vec![0u8; OBS_M]],
         );
         for side in 0..2 {
+            if hidden_disable(game, side) {
+                tally.hidden_disables += 1;
+                continue;
+            }
             game.observe(side, &mut f[0], &mut i[0], &mut m[0]);
             followers[side].observe(&mut f[1], &mut i[1], &mut m[1])?;
             tally.observations += 1;
@@ -1421,6 +1447,9 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
             let choices = [parse(&step.choices[0])?, parse(&step.choices[1])?];
             // What the game takes as actions, each follower must turn back into Showdown's words.
             for side in 0..2 {
+                if hidden_disable(&game, side) {
+                    continue;
+                }
                 let action = |pos: usize| game.action_of(side, choices[side][pos]).ok_or("a choice with no action");
                 let reply = followers[side].choice([action(0)?, action(1)?])?;
                 if Choice::parse_side(&reply) != Some(choices[side]) {

@@ -62,10 +62,11 @@ fn main() {
         println!("  {why}");
     }
     println!(
-        "{} observations compared, {} differ ({:.2}%)",
+        "{} observations compared, {} differ ({:.2}%); {} passed over (a move disabled in a way the player is not shown)",
         tally.observations,
         tally.wrong,
-        100.0 * tally.wrong as f64 / tally.observations.max(1) as f64
+        100.0 * tally.wrong as f64 / tally.observations.max(1) as f64,
+        tally.hidden_disables
     );
     let mut rows: Vec<_> = tally.by_feature.iter().collect();
     rows.sort_by_key(|(_, (n, _))| std::cmp::Reverse(*n));

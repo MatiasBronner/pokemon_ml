@@ -65,6 +65,29 @@ pub struct MonId {
     pub pokemon: u8,
 }
 
+/// What each side has been told of a Pokémon's types: after a Reflect Type
+/// the log names the Pokémon copied, not the types, and one of the two may be
+/// in disguise.
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TypesSaidState {
+    /// The base types side 0, then side 1, takes it to have. Empty: nothing said.
+    pub seen: [Vec<String>; 2],
+    /// The base types Showdown's log last gave it (`apparentType`).
+    pub apparent: Vec<String>,
+    /// Showdown's `knownType`.
+    pub known: bool,
+    /// This turn it has copied another Pokémon's types; the last time by Reflect
+    /// Type from a foe; and its own side has since been told what they are.
+    pub copied: bool,
+    pub copied_foe: bool,
+    pub told: bool,
+    /// What its own side took its base types to be before the first of those.
+    pub before: Vec<String>,
+    /// Who has aimed a move at it and stayed on the field since.
+    pub attacked_by: Vec<MonId>,
+}
+
 /// One move a Pokémon knows.
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -325,6 +348,11 @@ pub struct PokemonState {
     /// A third type from Forest's Curse or Trick-or-Treat.
     #[serde(skip_serializing_if = "is_default")]
     pub added_type: String,
+    /// What has been said of its types, where that is more than what they are.
+    /// Absent: both sides take them for what they are (or for those of the
+    /// Pokémon it is disguised as), and nothing has attacked it.
+    #[serde(skip_serializing_if = "is_default")]
+    pub types_said: Option<TypesSaidState>,
     /// Its ability now; empty for none.
     #[serde(skip_serializing_if = "is_default")]
     pub ability: String,
@@ -1161,6 +1189,26 @@ impl Battle {
             }),
             types: Some(m.types.iter().filter(|&&t| t != Type::None).map(|&t| type_name(t)).collect()),
             added_type: type_name(m.added_type),
+            types_said: (m.said != TypesSaid::fresh(m.types)).then(|| {
+                let names =
+                    |types: [Type; 2]| types.iter().filter(|&&t| t != Type::None).map(|&t| type_name(t)).collect();
+                TypesSaidState {
+                    seen: m.said.seen.map(names),
+                    apparent: names(m.said.apparent),
+                    known: m.said.known,
+                    copied: m.said.copied,
+                    copied_foe: m.said.copied_foe,
+                    told: m.said.told,
+                    before: names(m.said.before),
+                    attacked_by: (0..2 * MAX_TEAM)
+                        .filter(|bit| m.said.attacked_by & 1 << bit != 0)
+                        .map(|bit| MonId {
+                            side: (bit / MAX_TEAM) as u8,
+                            pokemon: self.sides[bit / MAX_TEAM].team[bit % MAX_TEAM].position,
+                        })
+                        .collect(),
+                }
+            }),
             ability: ability_name(m.ability),
             base_ability: Some(ability_name(m.base_ability)),
             ability_extra: Extra {
@@ -1465,6 +1513,21 @@ impl Battle {
             None => SPECIES[species as usize].types,
         };
         mon.added_type = parse_type(&ps.added_type)?;
+        mon.said = TypesSaid::fresh(mon.types);
+        if let Some(said) = &ps.types_said {
+            let pair = |names: &Vec<String>| -> Result<[Type; 2], Error> {
+                let mut t = [Type::None; 2];
+                for (k, name) in names.iter().take(2).enumerate() {
+                    t[k] = parse_type(name)?;
+                }
+                Ok(t)
+            };
+            mon.said.seen = [pair(&said.seen[0])?, pair(&said.seen[1])?];
+            mon.said.apparent = pair(&said.apparent)?;
+            (mon.said.known, mon.said.copied) = (said.known, said.copied);
+            (mon.said.copied_foe, mon.said.told) = (said.copied_foe, said.told);
+            mon.said.before = pair(&said.before)?;
+        }
         mon.stats = match ps.stats {
             Some(stats) if stats.contains(&0) => return Err(bad(format!("{}: a stat of 0", ps.species))),
             Some(stats) => stats,
@@ -1617,6 +1680,14 @@ impl Battle {
                 if let Some(place) = ps.illusion {
                     let as_whom = names.mon(MonId { side: s as u8, pokemon: place })?;
                     b.mon_mut(r).illusion = as_whom.idx + 1;
+                }
+                if let Some(said) = &ps.types_said {
+                    let mut bits = 0u16;
+                    for &id in &said.attacked_by {
+                        let by = names.mon(id)?;
+                        bits |= 1 << (by.side as usize * MAX_TEAM + by.idx as usize);
+                    }
+                    b.mon_mut(r).said.attacked_by = bits;
                 }
                 let mut bits = 0u16;
                 for &id in &ps.hit_by_this_turn {

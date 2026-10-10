@@ -241,6 +241,8 @@ pub struct Pokemon {
     pub types: [Type; 2],
     /// A third type added by Forest's Curse or Trick-or-Treat (`Type::None` if none).
     pub added_type: Type,
+    /// What each side has been told of its types, which is not always what they are.
+    pub(crate) said: TypesSaid,
     pub level: u8,
     pub gender: Gender,
     /// Unboosted stats: max HP, Atk, Def, SpA, SpD, Spe.
@@ -329,6 +331,57 @@ pub struct Pokemon {
     pub locked_move: u16,
     /// What has been shown of it during this stay on the field (see `shown.rs`); `seen` is 0 when there is none.
     pub(crate) live: Shown,
+}
+
+/// What a Pokémon's types are taken to be, and what Showdown has said of them.
+///
+/// Types are public: Showdown names them whenever they change. Two things keep
+/// that from being the whole story. A Pokémon in disguise is shown with the
+/// types of the one it passes for. And Reflect Type (or Transform) says only
+/// which Pokémon was copied, whose types the two sides may see differently;
+/// when what it took is not what the log last gave it, Showdown says so at the
+/// end of the turn (`-start|…|typechange|…|[silent]`), and otherwise never.
+/// [`Battle::seen_types`] reads this; `Battle::end_turn` keeps Showdown's side
+/// of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TypesSaid {
+    /// By the side looking: the base types it takes this Pokémon to have, or
+    /// [`NOT_SAID`] where nothing has been said and they are what they seem.
+    pub(crate) seen: [[Type; 2]; 2],
+    /// Showdown's `apparentType`: the base types its log has given this Pokémon.
+    pub(crate) apparent: [Type; 2],
+    /// Showdown's `knownType`: off from when it copies a foe's types until something attacks it.
+    pub(crate) known: bool,
+    /// This turn it has taken another Pokémon's types (Reflect Type, Transform)...
+    pub(crate) copied: bool,
+    /// ...the last time by Reflect Type from a foe...
+    pub(crate) copied_foe: bool,
+    /// ...and its own side has since been told what they are.
+    pub(crate) told: bool,
+    /// What its own side took its base types to be before the first of those.
+    pub(crate) before: [Type; 2],
+    /// Showdown's `attackedBy`, as far as "is there anything in it" goes: who has aimed
+    /// a move at it and stayed on the field since (bit `side * MAX_TEAM + team index`).
+    pub(crate) attacked_by: u16,
+}
+
+/// Nothing said of a Pokémon's types that it does not show anyway.
+pub(crate) const NOT_SAID: [Type; 2] = [Type::None; 2];
+
+impl TypesSaid {
+    /// A Pokémon as it comes in, or changes forme: it has its species' types and everyone knows it.
+    pub(crate) const fn fresh(types: [Type; 2]) -> TypesSaid {
+        TypesSaid {
+            seen: [NOT_SAID; 2],
+            apparent: types,
+            known: true,
+            copied: false,
+            copied_foe: false,
+            told: false,
+            before: NOT_SAID,
+            attacked_by: 0,
+        }
+    }
 }
 
 impl Pokemon {

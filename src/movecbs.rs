@@ -9,6 +9,7 @@
 #![allow(clippy::collapsible_if)]
 
 use crate::battle::modify;
+use crate::battle::types_copied;
 use crate::battle::{Taken, div1, round_div};
 use crate::data::*;
 use crate::state::*;
@@ -814,8 +815,29 @@ impl Battle {
                     }
                     new[0] = Type::Normal;
                 }
+                // `-start|source|typechange|[from] move: Reflect Type|[of] target`: the log
+                // names the Pokémon, not the types. Each side takes them for the ones it
+                // sees on the target, which for a disguise only its own side sees rightly.
+                let roosting = self.vols(target).has(VolKind::Roost);
+                let seen = [0, 1].map(|viewer| types_copied(self.seen_base(target, viewer), roosting));
+                let before = self.seen_base(source, source.side as usize);
+                let was = self.mon(source).said;
                 self.set_type(source, new);
-                self.mon_mut(source).added_type = added;
+                // (`source.knownType = target.isAlly(source) && target.knownType`, and
+                // while that is off Showdown's own note of its types stays as it was.)
+                let ally = source.side == target.side;
+                let known = ally && self.mon(target).said.known;
+                let m = self.mon_mut(source);
+                m.added_type = added;
+                m.said.seen = seen;
+                m.said.known = known;
+                if !known {
+                    m.said.apparent = was.apparent;
+                }
+                if !was.copied {
+                    m.said.before = before;
+                }
+                (m.said.copied, m.said.copied_foe) = (true, !ally);
                 Res::Undef
             }
             // ---- Burn Up, Double Shock: only a Fire (Electric) type can use it, and it stops being one.

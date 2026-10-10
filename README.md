@@ -368,9 +368,9 @@ Three things are done to keep hidden information hidden. The conditions an
 unrevealed item or ability keeps on a Pokémon (a Choice lock) are left out.
 A weather, a terrain or a screen is given by how
 long it has been up, not how long it has left, since an item the opponent
-may not have seen makes it last 8 turns for 5. And a Pokémon in disguise is
-given the types of the Pokémon it passes for, with any type added to them,
-until something changes its types outright and says what to. `tests/env.rs` rebuilds the
+may not have seen makes it last 8 turns for 5. And a Pokémon's types are
+given as the player has been told them, which is not always what they are
+([below](#types-and-disguises)). `tests/env.rs` rebuilds the
 opponent's half of the observation from `Battle::shown` alone at every
 decision of 80 games and requires it to be the same.
 
@@ -595,23 +595,18 @@ honest number before anything it turned up was fixed:
 | 4,000 | 184,110 | 9 (0.005%), in 1 |
 | 4,000 | 182,779 | 5 (0.003%), in 2 |
 | 4,000 | 182,997 | 14 (0.008%), in 2 |
+| 4,000 | 178,690 | 0 |
 
-Every battle of the six was followed to its end. Each difference in the
-first five was traced to its cause and fixed, fourteen causes in all: with
-that, none of their 1,011,655 observations differs. Not every cause was the
-follower's. One was the simulator's: it gave a Pokémon in disguise its real
-types as soon as a type was added to them (Forest's Curse, Trick-or-Treat),
-where a player is only told that a type was added.
-
-The two causes the sixth turned up are known and not yet fixed. Reflect
-Type copies a Pokémon's real types, and when that Pokémon is in disguise
-the log does not say what they are until the turn ends, or at all (see
-below). And when a Pokémon is under Octolock and a binding move at once and
-the binding move's user leaves, the follower takes the Octolock to have
-ended with it. So the rate to expect from battles not yet seen is the one
-in the last rows, about one observation in 10,000 to 40,000, from something
-rare that is still to be found. (The first 10,600 were not kept and have
-not been run again since.)
+Every battle of the seven was followed to its end. Each difference in the
+first six was traced to its cause and fixed, sixteen causes in all: with
+that, none of the 1,373,342 observations of the seven differs. Not every
+cause was the follower's. Two were the simulator's, which gave away more
+than a player is told about a Pokémon in disguise: its real types as soon
+as a type was added to them (Forest's Curse, Trick-or-Treat), and the types
+a Reflect Type took from it ([below](#types-and-disguises)). The seventh
+set is the first with nothing in it. That is one set: the ones before it
+had a battle or two in 4,000 each, and something as rare may well remain.
+(The first 10,600 were not kept and have not been run again since.)
 
 Rare things can be made common, too. Two kinds of battle were recorded to
 lean on the two differences known to remain (below): 2,400 with Pressure on
@@ -621,34 +616,40 @@ Encore. They turned up several of the causes fixed above, and what is left
 in them is only the two things Showdown does not tell a player: 292 of
 118,862 observations in the first, 10 of 128,173 in the second.
 
-Three more were recorded for the causes of the fifth set, 1,500 battles
-each: Zoroark on every team with Forest's Curse, Trick-or-Treat, Soak, Magic
-Powder and Reflect Type all round; Smack Down and Gravity against Fly,
-Bounce, Sky Attack, Meteor Beam and Magnet Rise; and Gravity again with more
-moves that charge. With both causes fixed the third has no difference in
-66,580 observations (76 before). What is left in the other two is not yet
-fixed:
+Five more were recorded to lean on what the later sets turned up, with
+closed sheets, 1,200 to 1,500 battles each:
 
-- *Reflect Type*, nearly always on a disguise: 129 of 76,540 observations,
-  in 21 battles.
-  The user takes the real types of the Pokémon it copies, and the log names
-  only the Pokémon. Copying one of the other side's in disguise, nobody is
-  told the types until the turn ends (the simulator has them at once);
-  copying a disguised partner, the other side is never told (the simulator
-  gives them), and the follower does not yet use what its own side knows of
-  its own Pokémon, which can leave it wrong about whether its Curse is a
-  Ghost's. Copying the same Pokémon twice, or one that is roosting, the
-  follower also gets wrong where the log is enough to get it right. And
-  when the user stands beside a disguise of itself, Showdown's line at the
-  end of the turn gives its new types to the disguise.
-- *A Pokémon held back by Quash, and a switch in the middle of the turn*
-  (an Eject Button) before it moves: the follower forgets it was held back
-  and reads its moving last as slowness. 19 of 73,017 observations, in one
-  battle.
-- *After a Speed Swap*, which of two Pokémon goes first, for one that came
-  in that turn: one observation of 76,540. Not traced.
+| every team has | and these moves all round | observations | differed when first run | now |
+|---|---|---|---|---|
+| Zoroark | Forest's Curse, Trick-or-Treat, Soak, Magic Powder, Reflect Type | 76,544 | 232 | 0 |
+| | Smack Down, Gravity, Fly, Bounce, Sky Attack, Meteor Beam, Magnet Rise | 73,017 | 72 | 0 |
+| | Gravity, Magnet Rise, moves that charge | 66,580 | 0 (76 on the code before it) | 0 |
+| Zoroark | Reflect Type, Roost, Ally Switch, Roar, Dragon Tail, U-turn, Speed Swap, Quash, Instruct | 86,736 | 0 | 0 |
+| Eject Button or Red Card | Octolock, Bind, Wrap, Quash, After You, Encore, Round, U-turn, Volt Switch, Speed Swap | 63,302 | 3 | 0 |
 
-`tests/follow.rs` keeps 45 of the battles as a fixture, and `followcheck`
+What they found, beyond the causes of the table's sets, were mistakes of
+the follower's with a Pokémon of its own in disguise (it took it for the
+Pokémon it was passing for until the next request, and filed what happened
+in between under the wrong one); a Pokémon held back by Quash, or caught by
+an Encore, forgotten to be so after a switch in the middle of the turn; and
+a Round taken to call forward a Pokémon that an Encore turned to Round only
+afterwards.
+
+And two sets with open sheets and Illusion on half of all Pokémon, which
+no regulation allows (2,000 battles). They turned up two more mistakes of
+the follower's, both fixed: what it had noted of one Pokémon's Speed went
+to another that came in under its name in disguise, and of two Pokémon
+under one name it took the wrong one for the copy where one of them had
+transformed. In the 493 battles where neither side brought more than one
+Pokémon with Illusion, whatever its species, nothing differs now. Where a
+side brought two or more, 72 of 104,604 observations differ, in four
+battles. One was looked at: a Pokémon in disguise as another that has
+Illusion too, the two then standing side by side under one name, where the
+follower stays in doubt about both and the simulator's record does not.
+These were left: Zoroark and Hisuian Zoroark are one species, and a team
+has one.
+
+`tests/follow.rs` keeps 56 of the battles as a fixture, and `followcheck`
 (under [Running it yourself](#running-it-yourself)) runs any number more.
 
 **That the pieces meet.** Through a server run as above, on this machine:
@@ -668,8 +669,8 @@ And a small network keeps its strength on the way through:
 last two rows and 0.9 on the server's.) In those 6,000 battles Showdown
 refused a choice eight times, each time for the reason described next.
 
-**Where it and the simulator part.** Three things, all of them something
-Showdown does not tell a player:
+**Where it and the simulator part.** Five things, all of them something
+Showdown does not tell a player, or tells it late:
 
 - *A choice that is barred by something not yet shown*: a foe's Imprison,
   or a Shadow Tag that has not announced itself. Showdown keeps this from
@@ -687,7 +688,7 @@ Showdown does not tell a player:
   follower cannot know whether a second PP went, and counts none. Every
   request gives the PP of the two Pokémon on the field, so it stays wrong
   only for one that left the field, or fainted, that same turn. Not seen in
-  the 26,000 battles of the table.
+  the 30,000 battles of the table.
 - *That a move of the other side's never began*, when the Choice item that
   held it back has never been shown. A Pokémon held to one move can come to
   choose another (its item was switched off by a Magic Room when it chose,
@@ -696,7 +697,45 @@ Showdown does not tell a player:
   player's own Pokémon; the other side's on an open sheet, or once it has
   been seen) the follower knows the move was never used. Where it is not,
   it takes it for the move that Pokémon last used, and the simulator knows
-  better. Not seen in the 26,000 either.
+  better. Not seen in the 30,000 either.
+- *Which of two Pokémon standing side by side under one name is the
+  disguise.* Illusion copies the last healthy Pokémon of the team, so as a
+  rule the copy is on the field first and the Pokémon itself comes in
+  beside it. But a Pokémon that comes in on the left with nobody left in
+  reserve may be either: the last Pokémon itself, or the Illusion Pokémon
+  copying its neighbour. The log reads the same. The follower takes the
+  newcomer for the copy until something settles it (the disguise breaks,
+  one of them transforms). Not seen in the 30,000.
+- *That a Pokémon of its own came in in disguise*, for a short while. A
+  player's own Pokémon with Illusion is logged under the other's name for
+  its own side too. The follower knows which it is from its HP, which a
+  side is shown exactly for its own, or from having sent it in. Dragged in,
+  and with the very HP of the Pokémon it passes for, it is taken for that
+  one until the next request, which says who stands where.
+
+#### Types and disguises
+
+Types are public: Showdown names the new ones whenever a Pokémon's types
+change. Two things keep that from being the whole story, and the simulator
+keeps, for each Pokémon, the types each side takes it to have alongside the
+ones it has (`Battle::seen_types`):
+
+- A Pokémon in disguise is shown with the types of the Pokémon it passes
+  for, and a type added to it (Forest's Curse, Trick-or-Treat) is added to
+  those. A change that names the new types (Soak) is taken as said.
+- Reflect Type names the Pokémon copied, not the types. Each side takes
+  them for the types it sees on that Pokémon, so if it is in disguise its
+  own side knows what was taken and the other side sees the disguise's.
+  At the end of the turn Showdown says the new types if they are not the
+  ones its log last gave that Pokémon. So a player whose Pokémon copied a
+  foe in disguise learns the truth then (and learns it by silence too:
+  nothing said means nothing changed). After copying a partner Showdown
+  says nothing, and the other side goes on seeing the disguise's types.
+
+The follower keeps the same for its own side by the same rules. One oddity
+of Showdown's is read rather than copied: with a disguise standing beside
+the Pokémon it copies, the end-of-turn line names whichever of the two
+stands on the left, and gives the types of the one that was copied.
 
 **Not checked: the public server.** Logging in with a password, searching
 the ladder and the pace of messages (one every 0.65 seconds, under

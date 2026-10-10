@@ -939,6 +939,7 @@ impl Battle {
                     let ally = self.is_ally(t, user);
                     let mon = self.mon_mut(t);
                     mon.was_attacked = true;
+                    mon.said.attacked_by |= 1 << (user.side as usize * MAX_TEAM + user.idx as usize);
                     mon.last_attack_damage = last_damage[i].num();
                     if let Res::Num(d) = last_damage[i] {
                         if d > 0 {

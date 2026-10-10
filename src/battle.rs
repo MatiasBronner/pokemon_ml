@@ -447,24 +447,61 @@ impl Battle {
     /// added by Forest's Curse or Trick-or-Treat comes last.
     pub(crate) fn get_types(&self, r: MonRef, exclude_added: bool) -> ([Type; 3], usize) {
         let m = self.mon(r);
-        let roosting = self.vols(r).has(VolKind::Roost);
-        let mut out = [Type::None; 3];
-        let mut n = 0;
-        for &t in &m.types {
-            if t != Type::None && !(roosting && t == Type::Flying) {
-                out[n] = t;
-                n += 1;
+        let added = if exclude_added { Type::None } else { m.added_type };
+        types_now(m.types, self.vols(r).has(VolKind::Roost), added)
+    }
+
+    /// The base types `viewer`'s side takes `r` to have. What they are, as a
+    /// rule; for one of the other side's in disguise, those of the Pokémon it
+    /// passes for; and where the log has said something of them (a change that
+    /// names the new types, or one that names only the Pokémon they were copied
+    /// from), what that came to for this side. See [`TypesSaid`].
+    pub(crate) fn seen_base(&self, r: MonRef, viewer: usize) -> [Type; 2] {
+        let m = self.mon(r);
+        let said = m.said.seen[viewer];
+        if said != NOT_SAID {
+            said
+        } else if r.side as usize != viewer && m.illusion != 0 {
+            SPECIES[m.live.species as usize].types
+        } else {
+            m.types
+        }
+    }
+
+    /// [`Battle::get_types`] as `viewer`'s side sees it: a type added to a
+    /// Pokémon is said aloud, and a roosting one is seen to roost.
+    pub(crate) fn seen_types(&self, r: MonRef, viewer: usize) -> ([Type; 3], usize) {
+        types_now(self.seen_base(r, viewer), self.vols(r).has(VolKind::Roost), self.mon(r).added_type)
+    }
+
+    /// Showdown's line at the end of a turn, `-start|named|typechange|types|[silent]`,
+    /// for a Pokémon whose types are not the ones its log last gave it: what each
+    /// side makes of it. The line gives the types of the Pokémon that `named`
+    /// is or passes for, so its own side, which knows a disguise of its own,
+    /// reads it rightly. The other side takes it for the Pokémon named if that
+    /// one copied another's types this turn, and for its partner if only the
+    /// partner did (then `named` must be a disguise of it).
+    pub(crate) fn told_types(&mut self, named: MonRef, types: [Type; 2]) {
+        let other = self.active(named.side as usize, 1 - self.mon(named).position as usize);
+        let partner = Some(other).filter(|&p| p != named && self.mon(p).is_active && !self.mon(p).fainted);
+        for viewer in 0..2 {
+            let meant = match partner {
+                Some(p) if viewer == named.side as usize => {
+                    if self.mon(named).illusion != 0 {
+                        p
+                    } else {
+                        named
+                    }
+                }
+                Some(p) if !self.mon(named).said.copied && self.mon(p).said.copied => p,
+                _ => named,
+            };
+            let m = self.mon_mut(meant);
+            m.said.seen[viewer] = types;
+            if viewer == meant.side as usize {
+                m.said.told = true;
             }
         }
-        if n == 0 {
-            out[0] = Type::Normal;
-            n = 1;
-        }
-        if !exclude_added && m.added_type != Type::None {
-            out[n] = m.added_type;
-            n += 1;
-        }
-        (out, n)
     }
 
     /// `Pokemon#hasType`.
@@ -484,6 +521,8 @@ impl Battle {
         let m = self.mon_mut(r);
         m.types = types;
         m.added_type = Type::None;
+        // (Said in so many words, to both sides: `-start|pokemon|typechange|types`.)
+        (m.said.seen, m.said.apparent, m.said.known) = ([types; 2], types, true);
         true
     }
 
@@ -1075,6 +1114,7 @@ impl Battle {
         m.n_damaged_by = 0;
         let base = m.base_species;
         self.set_species(r, base);
+        self.mon_mut(r).said = TypesSaid::fresh(SPECIES[base as usize].types);
     }
 
     /// `Pokemon#setSpecies`: species, types and stats (never max HP, which
@@ -1086,6 +1126,7 @@ impl Battle {
         m.species = species;
         m.types = SPECIES[species as usize].types;
         m.added_type = Type::None;
+        (m.said.seen, m.said.apparent, m.said.known) = ([NOT_SAID; 2], m.types, true);
         m.stats[1..].copy_from_slice(&stats[1..]);
         m.speed = m.stats[5] as i32;
     }
@@ -1168,6 +1209,11 @@ impl Battle {
             m.transformed = true;
             m.types = t.types;
             m.added_type = t.added_type;
+            // Each side sees on it what it sees on the one it turned into.
+            m.said.seen = t.said.seen;
+            m.said.apparent = t.said.apparent;
+            m.said.known = r.side == target.side && t.said.known;
+            m.said.copied = true;
             m.stats[1..].copy_from_slice(&t.stats[1..]);
             m.base_moves = m.moves;
             m.base_n_moves = m.n_moves;
@@ -2928,6 +2974,7 @@ impl Battle {
                     }
                 }
                 self.mon_mut(r).n_damaged_by = kept as u8;
+                self.end_turn_types(r);
                 self.request_prep(r);
                 if self.mon(r).fainted {
                     continue;
@@ -2942,9 +2989,63 @@ impl Battle {
             self.win(None);
             return;
         }
+        self.types_settled();
         self.request_locks();
         self.request = Request::Move;
         self.note_sealed();
+    }
+
+    /// The part of `Battle#endTurn` that keeps everyone's types on show (since
+    /// generation 7 "the real type of every Pokemon is visible to all players"):
+    /// a Pokémon whose types, or those of the Pokémon it passes for, are not
+    /// what the log last gave them has them said.
+    fn end_turn_types(&mut self, r: MonRef) {
+        let m = self.mon(r);
+        if !m.is_active || m.fainted {
+            return;
+        }
+        // (`if (pokemon.getLastAttackedBy()) pokemon.knownType = true`, and then the
+        // attacks of Pokémon that have left the field are forgotten.)
+        let mut by = m.said.attacked_by;
+        let known = m.said.known || by != 0;
+        for bit in 0..2 * MAX_TEAM {
+            let from = MonRef { side: (bit / MAX_TEAM) as u8, idx: (bit % MAX_TEAM) as u8 };
+            if by & 1 << bit != 0 && !self.mon(from).is_active {
+                by &= !(1 << bit);
+            }
+        }
+        let m = self.mon_mut(r);
+        (m.said.known, m.said.attacked_by) = (known, by);
+        let seen = match m.illusion {
+            0 => r,
+            k => MonRef { side: r.side, idx: k - 1 },
+        };
+        let (types, n) = self.get_types(seen, true);
+        let real = [types[0], if n > 1 { types[1] } else { Type::None }];
+        if real != self.mon(seen).said.apparent {
+            self.mon_mut(seen).said.apparent = real;
+            self.told_types(r, real);
+        }
+    }
+
+    /// With the turn's last word on types said: a Pokémon that took a foe's
+    /// types this turn and has not been told what they are has, then, the ones
+    /// it had before (Showdown speaks only of a change). The other side, whose
+    /// Pokémon was copied, knew all along.
+    fn types_settled(&mut self) {
+        for side in 0..2 {
+            for pos in 0..ACTIVE {
+                let r = self.active(side, pos);
+                let m = self.mon_mut(r);
+                if !m.is_active || m.fainted {
+                    continue;
+                }
+                if m.said.copied_foe && !m.said.told && m.illusion == 0 {
+                    m.said.seen[side] = m.said.before;
+                }
+                (m.said.copied, m.said.copied_foe, m.said.told) = (false, false, false);
+            }
+        }
     }
 
     /// What the end of a turn works out for the coming move request about one
@@ -3040,4 +3141,47 @@ pub(crate) fn type_effectiveness(attack: Type, defend: Type) -> i32 {
 /// using it: floored, but at least 1 when the numerator is positive.
 pub(crate) fn div1(num: u32, den: u32) -> i32 {
     if num == 0 { 0 } else { (num / den).max(1) as i32 }
+}
+
+/// `Pokemon#getTypes` for a Pokémon with these base types: a roosting one is
+/// not Flying; with no type left it is Normal; a type added by Forest's Curse
+/// or Trick-or-Treat comes last.
+pub(crate) fn types_now(base: [Type; 2], roosting: bool, added: Type) -> ([Type; 3], usize) {
+    let mut out = [Type::None; 3];
+    let mut n = 0;
+    for &t in &base {
+        if t != Type::None && !(roosting && t == Type::Flying) {
+            out[n] = t;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        out[0] = Type::Normal;
+        n = 1;
+    }
+    if added != Type::None {
+        out[n] = added;
+        n += 1;
+    }
+    (out, n)
+}
+
+/// The base types Reflect Type takes from a Pokémon that has these: as they
+/// count right now, without the `???` a Burn Up leaves, and Normal if that
+/// leaves nothing. (The real move fails in that last case unless a type has
+/// been added; this is also used for what a side takes the types to be.)
+pub(crate) fn types_copied(base: [Type; 2], roosting: bool) -> [Type; 2] {
+    let (types, n) = types_now(base, roosting, Type::None);
+    let mut new = [Type::None; 2];
+    let mut k = 0;
+    for &t in &types[..n] {
+        if t != Type::Typeless && k < 2 {
+            new[k] = t;
+            k += 1;
+        }
+    }
+    if k == 0 {
+        new[0] = Type::Normal;
+    }
+    new
 }

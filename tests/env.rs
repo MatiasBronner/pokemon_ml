@@ -549,6 +549,17 @@ fn a_move_sealed_by_imprison_is_known_to_be_the_sealers() {
     assert_eq!(ninetales(&g), [imprison, named("calmmind", move_id), ID_UNKNOWN, ID_UNKNOWN]);
 }
 
+/// The types one side's observation gives a position (its own two, then the other side's).
+/// (They come after whether a Pokémon is there, its HP, its status and its seven stat stages.)
+fn types_shown(g: &Game, view: usize, slot: usize) -> Vec<usize> {
+    let o = Obs::of(g, view);
+    (0..18).filter(|&t| o.act_feats(slot)[16 + t] == 1.0).collect()
+}
+
+fn types_of(list: &[vgc_engine::data::Type]) -> Vec<usize> {
+    list.iter().map(|&t| t as usize).collect()
+}
+
 #[test]
 fn a_type_added_to_a_disguised_pokemon_does_not_give_it_away() {
     use vgc_engine::data::Type;
@@ -573,12 +584,7 @@ fn a_type_added_to_a_disguised_pokemon_does_not_give_it_away() {
     let mut g = Game::new([ours, theirs], false).unwrap();
     g.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [1, 2, 3, 4]).unwrap();
     let mv = |slot: u8, target: i8| Choice::Move { slot, target, mega: false };
-    // (After whether it is there, its HP, its status and its seven stat stages.)
-    let types = |g: &Game, view: usize, slot: usize| {
-        let o = Obs::of(g, view);
-        (0..18).filter(|&t| o.act_feats(slot)[16 + t] == 1.0).collect::<Vec<_>>()
-    };
-    let of = |list: &[Type]| list.iter().map(|&t| t as usize).collect::<Vec<_>>();
+    let (types, of) = (types_shown, types_of);
     // (Which of the six listed the Pokémon in their first place is taken to be: the fourth.)
     let taken_for = |g: &Game| Obs::of(g, 0).i[MONS * MON_IDS + 2 * 2] as usize - 1 - ROSTER;
     assert_eq!(taken_for(&g), 3);
@@ -597,4 +603,57 @@ fn a_type_added_to_a_disguised_pokemon_does_not_give_it_away() {
     assert_eq!(types(&g, 1, 0), of(&[Type::Water]));
     // (It is still taken for Garchomp.)
     assert_eq!(taken_for(&g), 3);
+}
+
+#[test]
+fn after_reflect_type_each_side_has_the_types_it_was_told() {
+    use vgc_engine::data::Type;
+    let set = |species: &str, moves: &[&str]| PokemonSet::from_names(species, moves, "Hardy", [0; 6]).unwrap();
+    let ours = vec![
+        set("Starmie", &["Reflect Type", "Calm Mind"]),
+        set("Scizor", &["U-turn"]),
+        set("Snorlax", &["Calm Mind"]),
+        set("Arcanine", &["Calm Mind"]),
+        set("Kingambit", &["Calm Mind"]),
+        set("Volcarona", &["Calm Mind"]),
+    ];
+    // Zoroark-Hisui (Normal/Ghost) leads, looking like the last of the four brought: Garchomp (Dragon/Ground).
+    let theirs = vec![
+        set("Zoroark-Hisui", &["Calm Mind"]).ability("Illusion").unwrap(),
+        set("Stunfisk", &["Calm Mind", "Reflect Type"]),
+        set("Volcarona", &["Calm Mind"]),
+        set("Garchomp", &["Swords Dance"]),
+        set("Snorlax", &["Calm Mind"]),
+        set("Arcanine", &["Calm Mind"]),
+    ];
+    let mut g = Game::new([ours, theirs], false).unwrap();
+    g.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [1, 2, 3, 4]).unwrap();
+    let mv = |slot: u8, target: i8| Choice::Move { slot, target, mega: false };
+    let (types, of) = (types_shown, types_of);
+    let (garchomp, zoroark) = (of(&[Type::Ground, Type::Dragon]), of(&[Type::Normal, Type::Ghost]));
+    // (For side 0, Starmie is its own first position; for side 1, the other side's first.)
+    let starmie = |g: &Game| [types(g, 0, 0), types(g, 1, 2)];
+
+    // Starmie copies the types of "Garchomp". The log says whose types, not which: its own
+    // side takes them for Garchomp's; the other side knows its Zoroark. Scizor's U-turn then
+    // stops the turn for a replacement, before anything more is said.
+    g.choose([[mv(0, 1), mv(0, 2)], [mv(0, 0), mv(0, 0)]]).unwrap();
+    assert_eq!(g.phase(), Phase::Switch);
+    assert_eq!(starmie(&g), [garchomp.clone(), zoroark.clone()]);
+    // At the end of the turn Showdown says what Starmie's types have become.
+    g.choose([[Choice::Pass, Choice::Switch { to: 2 }], [Choice::Pass, Choice::Pass]]).unwrap();
+    assert_eq!(g.phase(), Phase::Move);
+    assert_eq!(starmie(&g), [zoroark.clone(), zoroark.clone()]);
+    // Copying it again changes nothing, so nothing is said: they are what they were.
+    g.choose([[mv(0, 1), mv(0, 0)], [mv(0, 0), mv(0, 0)]]).unwrap();
+    assert_eq!(starmie(&g), [zoroark.clone(), zoroark.clone()]);
+
+    // Stunfisk copies its partner, the Zoroark. Its own side knows what it has taken; the
+    // other side sees it take Garchomp's types, and is never told otherwise.
+    let stunfisk = |g: &Game| [types(g, 0, 3), types(g, 1, 1)];
+    assert_eq!(stunfisk(&g), [of(&[Type::Ground, Type::Electric]), of(&[Type::Ground, Type::Electric])]);
+    g.choose([[mv(1, 0), mv(0, 0)], [mv(0, 0), mv(1, -1)]]).unwrap();
+    assert_eq!(stunfisk(&g), [garchomp.clone(), zoroark.clone()]);
+    g.choose([[mv(1, 0), mv(0, 0)], [mv(0, 0), mv(0, 0)]]).unwrap();
+    assert_eq!(stunfisk(&g), [garchomp, zoroark]);
 }

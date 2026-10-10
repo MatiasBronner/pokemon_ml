@@ -26,6 +26,7 @@ impl Battle {
             stat_points: [0; 6],
             types: [Type::None; 2],
             added_type: Type::None,
+            said: TypesSaid::fresh([Type::None; 2]),
             level: 50,
             gender: Gender::N,
             stats: [0; 6],
@@ -180,6 +181,7 @@ impl Battle {
         mon.stat_points = set.stat_points;
         mon.types = sp.types;
         mon.added_type = Type::None;
+        mon.said = TypesSaid::fresh(sp.types);
         mon.gender = set.gender;
         mon.ability = set.ability;
         mon.base_ability = set.ability;

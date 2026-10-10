@@ -67,10 +67,28 @@
 //!   Pokémon; the other side's on an open sheet, or once seen) the
 //!   follower knows the move was never used. Where it is not, it takes it
 //!   for the move that Pokémon last used, and the simulator knows better.
+//!
+//! And one thing it is told late. A player's own Pokémon with Illusion comes
+//! in under another's name in its own log too. The follower knows which
+//! Pokémon it is from its HP, which its side is shown exactly, or from having
+//! sent it in; where it was dragged in and has the very HP of the one it
+//! passes for, the follower takes it for that one until the next request,
+//! which says who stands where.
+//!
+//! # Types
+//!
+//! Showdown says what a Pokémon's types become whenever they change, with
+//! one exception: after Reflect Type the log names the Pokémon copied and
+//! not the types. If that Pokémon is in disguise, its own side knows what
+//! was taken and the other side sees the types of the disguise. At the end
+//! of the turn Showdown says the new types if they are not the ones its log
+//! last gave (and says nothing after copying a partner). The follower keeps
+//! the types as its side has been told them, the simulator keeps both
+//! sides' (`Battle::seen_types`), and the two go by the same rules.
 
 use serde_json::Value;
 
-use crate::battle::{PokemonSet, calc_stats};
+use crate::battle::{PokemonSet, calc_stats, types_copied};
 use crate::data::*;
 use crate::env::{N_PREVIEW, OBS_M, choice_of, masks_of, preview_table};
 use crate::obs::{INFO, OBS_I, Phase, ROSTER, Timers, is_mega, observe_battle, observe_preview};
@@ -110,9 +128,17 @@ struct Spot {
     stay: u32,
     boosts: [i8; 7],
     vols: Vec<Vol>,
-    /// Its types, if something has changed them.
+    /// Its types, if something has said what they are: as this side takes them (a
+    /// Reflect Type names only the Pokémon copied, which may be in disguise).
     types: Option<[Type; 2]>,
     added: Type,
+    /// This turn it has taken another Pokémon's types (Reflect Type, Transform), the last
+    /// time by Reflect Type from a foe; and Showdown has since said what they are.
+    copied: bool,
+    copied_foe: bool,
+    told: bool,
+    /// What its types were taken to be before the first of those.
+    before: [Type; 2],
     active_turns: u16,
     last_move: u16,
     tox: u8,
@@ -122,6 +148,11 @@ struct Spot {
     begun: u8,
     /// Its move was put ahead or behind by another (After You, Quash, Round), as of this many moves begun.
     reordered: Option<usize>,
+    /// A Round was used, before the last request of this turn, while the move it has
+    /// queued was the one it still has.
+    called: bool,
+    /// A Speed Swap has been used while it has stood here: its Speed may not be its own.
+    swap_seen: bool,
     /// Its move this turn may not be the one it chose: an Encore came first, as of this many moves begun.
     overridden: Option<usize>,
     /// Its move went ahead of its bracket, and said so (Quick Claw, Quick Draw, Custap Berry).
@@ -162,12 +193,18 @@ impl Spot {
             vols: Vec::new(),
             types: None,
             added: Type::None,
+            copied: false,
+            copied_foe: false,
+            told: false,
+            before: [Type::None; 2],
             active_turns: 0,
             last_move: NO_MOVE,
             tox: 0,
             tox_new: false,
             begun: 0,
             reordered: None,
+            called: false,
+            swap_seen: false,
             overridden: None,
             quick: false,
             lost_item: false,
@@ -426,14 +463,17 @@ pub struct Follower {
     refusable: Option<Refusal>,
     /// The moves chosen with the last reply, by team index, and where each was aimed.
     chosen: Vec<(usize, u16, i8)>,
+    /// The Pokémon of its own that the last reply sent in, by position: one that comes in
+    /// under another's name (Illusion) is known by this until the next request says so.
+    sent: [Option<usize>; ACTIVE],
     /// By side: it has Mega Evolved.
     megaed: [bool; 2],
     /// The turn is ending: what the log says now comes of the end-of-turn effects.
     ending: bool,
     /// Pokémon of the other side whose number changed since the last decision (a disguise dropped): from, to.
-    renumbered: Vec<Vec<(usize, usize)>>,
-    /// Round has been used this turn, as of this many moves begun.
-    round: Option<usize>,
+    renumbered: Vec<Vec<(usize, usize, bool)>>,
+    /// Each use of Round since the last request: as of this many moves begun.
+    rounds: Vec<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
     roused: Option<(usize, usize, Status)>,
     started: bool,
@@ -630,10 +670,11 @@ impl Follower {
             mover: None,
             refusable: None,
             chosen: Vec::new(),
+            sent: [None; ACTIVE],
             megaed: [false; 2],
             ending: false,
             renumbered: Vec::new(),
-            round: None,
+            rounds: Vec::new(),
             roused: None,
             started: false,
             ended: false,
@@ -715,6 +756,41 @@ impl Follower {
         self.reader.sides[side].active[pos].as_ref().is_some_and(|l| !l.gone)
     }
 
+    /// From when in this stretch the Pokémon at a position has had the move `held` in the
+    /// queue, if it has been caught by an Encore before moving: the move an Encore holds a
+    /// Pokémon to is put in the queue in place of the one it chose, as a fresh action.
+    /// `None`: all along (no Encore; or its own Pokémon, which had chosen that very move).
+    fn queued_since(&self, side: usize, pos: usize, held: u16) -> Option<usize> {
+        let caught = self.spots[side][pos].overridden?;
+        let chose = self.chosen.iter().find(|c| side == self.side && c.0 == self.own_at[pos]).map(|c| c.1);
+        (chose != Some(held)).then_some(caught)
+    }
+
+    /// Whether the follower's own Pokémon at a position is in disguise: the log has it
+    /// under another's name.
+    fn own_disguised(&self, pos: usize) -> bool {
+        let us = &self.reader.sides[self.side];
+        match (us.active[pos].as_ref().filter(|l| !l.gone), self.own.get(self.own_at[pos])) {
+            (Some(live), Some(own)) => us.team.get(live.entry).is_some_and(|e| e.name != own.name),
+            _ => false,
+        }
+    }
+
+    /// The base types this side takes the Pokémon at a position to have: what the log has
+    /// said of them, or else its species' own. (The species it is, for one of its own; the
+    /// one it looks like, for one of the other side's.)
+    fn seen_base(&self, side: usize, pos: usize) -> [Type; 2] {
+        if let Some(types) = self.spots[side][pos].types {
+            return types;
+        }
+        let own = self.own.get(self.own_at[pos]).filter(|_| side == self.side && self.own_disguised(pos));
+        let species = match own {
+            Some(own) => Some(self.team[own.entry].species),
+            None => self.spots[side][pos].forme.or(self.reader.sides[side].active[pos].as_ref().map(|l| l.species)),
+        };
+        species.map_or([Type::None; 2], |sp| SPECIES[sp as usize].types)
+    }
+
     /// Whether the Pokémon at a position is known to hold a Choice item that is doing
     /// its work: not in a Magic Room, and not on a Pokémon that may have Klutz.
     fn choice_at_work(&self, side: usize, pos: usize) -> bool {
@@ -775,8 +851,11 @@ impl Follower {
                 // Pokémon already standing on its right; then the later one is taken for it.
                 let (mine, beside) = (&self.spots[opp][pos], &self.spots[opp][1 - pos]);
                 let later = mine.stay > beside.stay;
+                // (A Pokémon in disguise cannot Transform: one that has is the Pokémon itself.)
                 if other.gone {
                     true
+                } else if here.transformed != other.transformed {
+                    other.transformed
                 } else if here.rec.suspect != other.rec.suspect {
                     here.rec.suspect
                 } else if if later { mine.last_two } else { beside.last_two } {
@@ -812,7 +891,7 @@ impl Follower {
             if kind == "move" && !begins && to_id(arg(3)) == "round" {
                 // A Round that another move called (Copycat) calls the next one forward
                 // like any other.
-                self.round.get_or_insert(self.begun.len());
+                self.rounds.push(self.begun.len());
             }
             if begins {
                 // (The later turns of a move it is locked into say nothing the first did not.)
@@ -858,15 +937,16 @@ impl Follower {
         // dropped, and it is numbered anew, as the one beside it that it was passing for may
         // be. Or the Pokémon it passes for has come in beside it, and takes that number.
         // What was noted of either goes by the new numbers.
-        let moved: Vec<(usize, usize)> = (0..ACTIVE)
+        // (And whether a Speed Swap has been used while each has stood there.)
+        let moved: Vec<(usize, usize, bool)> = (0..ACTIVE)
             .filter(|&pos| self.spots[opp][pos].stay == were[pos].0)
-            .map(|pos| (were[pos].1, self.their_index(pos)))
-            .filter(|(was, now)| was != now)
+            .map(|pos| (were[pos].1, self.their_index(pos), self.spots[opp][pos].swap_seen))
+            .filter(|(was, now, _)| was != now)
             .collect();
         if !moved.is_empty() {
             let renumber = |r: &mut MonRef| {
                 if r.side == opp as u8
-                    && let Some(&(_, now)) = moved.iter().find(|m| m.0 == r.idx as usize)
+                    && let Some(&(_, now, _)) = moved.iter().find(|m| m.0 == r.idx as usize)
                 {
                     r.idx = now as u8;
                 }
@@ -1009,13 +1089,19 @@ impl Follower {
             (self.spots[self.side][p].stay, now)
         });
         if named == mv::ROUND {
-            // The first Round of a turn calls the next one forward.
-            match self.round {
-                Some(since) => {
-                    let spot = &mut self.spots[side][pos];
-                    spot.reordered = Some(spot.reordered.map_or(since, |t| t.min(since)));
-                }
-                None => self.round = Some(at + 1),
+            // A Round calls the next one waiting in the queue forward: this one, if a Round
+            // has been used since this was the move it had queued.
+            let from = self.queued_since(side, pos, named);
+            let spot = &mut self.spots[side][pos];
+            let called = self.rounds.iter().copied().find(|&since| from.is_none_or(|t| since > t));
+            if let Some(since) = spot.called.then_some(0).or(called) {
+                spot.reordered = Some(spot.reordered.map_or(since, |t| t.min(since)));
+            }
+            self.rounds.push(at + 1);
+        }
+        if named == mv::SPEEDSWAP {
+            for (s, p) in (0..2).flat_map(|s| (0..ACTIVE).map(move |p| (s, p))) {
+                self.spots[s][p].swap_seen |= self.present(s, p);
             }
         }
         let spot = &mut self.spots[side][pos];
@@ -1047,7 +1133,7 @@ impl Follower {
     }
 
     /// A Pokémon comes in at a position.
-    fn enter(&mut self, side: usize, pos: usize, name: &str, from: &str) {
+    fn enter(&mut self, side: usize, pos: usize, name: &str, health: &str, from: &str) {
         self.stays += 1;
         let mut fresh = Spot::new(self.stays);
         let team = &self.reader.sides[side];
@@ -1066,10 +1152,32 @@ impl Follower {
         for spot in self.spots.iter_mut().flatten() {
             spot.vols.retain(|v| v.source == 0 || v.source != left);
         }
-        if side == self.side
-            && let Some(idx) = self.own.iter().position(|o| o.name == name)
-        {
-            self.own_at[pos] = idx;
+        if side == self.side {
+            // Which of its own this is: the one of that name, unless it is one with Illusion
+            // under another's name. Its HP, which its own side is shown exactly, tells them
+            // apart unless the two have the same; so does the follower's own reply, if that
+            // is what sent it in; and so does the one named standing beside it already.
+            let named = self.own.iter().position(|o| o.name == name);
+            let beside = self.present(side, 1 - pos).then_some(self.own_at[1 - pos]);
+            let health = health.split(' ').next().and_then(|h| h.split_once('/'));
+            let health = health.and_then(|(hp, max)| Some((hp.parse::<u16>().ok()?, max.parse::<u16>().ok()?)));
+            let fits = |idx: usize| {
+                // (As the last request had it: nothing changes on the bench.)
+                let mon = self.req.as_ref().and_then(|r| r.mons.iter().find(|m| m.name == self.own[idx].name));
+                match (mon, health) {
+                    (Some(mon), Some(health)) => !mon.fainted && !mon.active && (mon.hp, mon.max_hp) == health,
+                    _ => true,
+                }
+            };
+            let disguise = |idx: usize| self.team[self.own[idx].entry].ability == ab::ILLUSION && Some(idx) != named;
+            let could: Vec<usize> = (0..self.own.len())
+                .filter(|&idx| (Some(idx) == named || disguise(idx)) && Some(idx) != beside && fits(idx))
+                .collect();
+            let sent = self.sent[pos].take().filter(|idx| could.contains(idx));
+            let only = Some(could.as_slice()).filter(|c| c.len() == 1).map(|c| c[0]);
+            if let Some(idx) = only.or(sent).or(named) {
+                self.own_at[pos] = idx;
+            }
         }
     }
 
@@ -1123,6 +1231,16 @@ impl Follower {
                             spot.active_turns += 1;
                         }
                         (spot.begun, spot.reordered, spot.overridden, spot.quick) = (0, None, None, false);
+                        spot.called = false;
+                        // Showdown says at the end of a turn what a Pokémon's types have
+                        // become, if they have changed: one of the follower's own that took
+                        // a foe's types and has heard nothing has the ones it had.
+                        let unchanged = side == self.side && spot.copied_foe && !spot.told;
+                        (spot.copied, spot.copied_foe, spot.told) = (false, false, false);
+                        if present && unchanged && !self.own_disguised(pos) {
+                            let spot = &mut self.spots[side][pos];
+                            spot.types = Some(spot.before);
+                        }
                     }
                 }
                 // Who hit whom is kept for as long as the one that hit is on the field.
@@ -1138,7 +1256,7 @@ impl Follower {
                 for slots in self.field.sides.iter_mut().flat_map(|s| s.slots.iter_mut()) {
                     slots.retain(|c| c.0 != SlotCond::Revivalblessing);
                 }
-                self.round = None;
+                self.rounds.clear();
                 self.mover = None;
                 return Ok(());
             }
@@ -1241,7 +1359,15 @@ impl Follower {
         let of =
             parts.iter().find_map(|p| p.strip_prefix("[of] ")).and_then(ident).and_then(|o| o.pos.map(|p| (o.side, p)));
         match kind {
-            "switch" | "drag" => self.enter(side, pos, id.name, from),
+            "switch" | "drag" => self.enter(side, pos, id.name, arg(4), from),
+            "replace" => {
+                // A disguise is broken: one of its own is known by its name again.
+                if side == self.side
+                    && let Some(idx) = self.own.iter().position(|o| o.name == id.name)
+                {
+                    self.own_at[pos] = idx;
+                }
+            }
             "swap" => {
                 if let Ok(to) = arg(3).parse::<usize>()
                     && to < ACTIVE
@@ -1573,6 +1699,7 @@ impl Follower {
                     spot.boosts = theirs.boosts;
                     spot.types = theirs.types.or(species.map(|sp| SPECIES[sp as usize].types));
                     spot.added = theirs.added;
+                    spot.copied = true;
                 }
             }
             "-status" => {
@@ -1592,8 +1719,9 @@ impl Follower {
                 let spot = self.spot(side, pos);
                 let effect = arg(3);
                 if parts.contains(&"[partiallytrapped]") {
-                    spot.remove(VolKind::Partiallytrapped);
-                    spot.remove(VolKind::Octolock);
+                    // The one that held it has gone: an Octolock ends under its own name, a
+                    // binding move under the move's. (It can be under both, from two Pokémon.)
+                    spot.remove(if effect == "Octolock" { VolKind::Octolock } else { VolKind::Partiallytrapped });
                 } else if effect == "typechange" {
                     spot.types = None;
                 } else if effect == "Stockpile" {
@@ -1797,14 +1925,51 @@ impl Follower {
         let at = self.begun.len();
         match effect {
             "typechange" if arg(4).starts_with('[') || arg(4).is_empty() => {
-                // Reflect Type: the types of the Pokémon named after `[of]`, as they are now.
+                // Reflect Type: the types of the Pokémon named after `[of]`, as they are now
+                // (a roosting one is not Flying) and as far as this side can see them. If
+                // that Pokémon is in disguise, they are another's: its own side knows better.
                 if let Some((s, p)) = of {
                     let theirs = &self.spots[s][p];
-                    let species = self.reader.sides[s].active[p].as_ref().map(|l| l.species);
-                    let types = theirs.types.or(species.map(|sp| SPECIES[sp as usize].types));
-                    let added = theirs.added;
+                    let roosting = theirs.vols.iter().any(|v| v.kind == VolKind::Roost);
+                    let (types, added) = (types_copied(self.seen_base(s, p), roosting), theirs.added);
+                    let before = self.seen_base(side, pos);
                     let spot = self.spot(side, pos);
-                    (spot.types, spot.added) = (types, added);
+                    if !spot.copied {
+                        spot.before = before;
+                    }
+                    (spot.types, spot.added) = (Some(types), added);
+                    (spot.copied, spot.copied_foe) = (true, s != side);
+                }
+            }
+            "typechange" if parts.contains(&"[silent]") => {
+                // Said at the end of a turn of a Pokémon whose types are not the ones the
+                // log last gave it: the types of the Pokémon named, or of the one it passes
+                // for. Of its own Pokémon the follower knows which; of the other side's, the
+                // one meant is the one that copied another's types this turn.
+                if !self.present(side, pos) {
+                    return;
+                }
+                let mut types = [Type::None; 2];
+                for (k, t) in arg(4).split('/').take(2).enumerate() {
+                    types[k] = type_named(t);
+                }
+                let partner = Some(1 - pos).filter(|&p| self.present(side, p));
+                let meant = match partner {
+                    Some(p) if side == self.side => {
+                        if self.own_disguised(pos) {
+                            p
+                        } else {
+                            pos
+                        }
+                    }
+                    Some(p) if !self.spots[side][pos].copied && self.spots[side][p].copied => p,
+                    _ => pos,
+                };
+                let spot = self.spot(side, meant);
+                (spot.types, spot.told) = (Some(types), true);
+                if meant == pos {
+                    // (Its added type, if it has one, is said again next.)
+                    spot.added = Type::None;
                 }
             }
             "typechange" => {
@@ -1840,11 +2005,18 @@ impl Follower {
             }
             _ => {
                 if let Some(kind) = VolKind::named(&name) {
+                    let held = self.spots[side][pos].last_move;
                     let spot = self.spot(side, pos);
                     spot.add(kind, Ends::Said);
                     if kind == VolKind::Encore && begun == 0 {
                         spot.overridden = Some(at);
+                        // (The move it is held to is put in the queue in place of the one
+                        // it chose, where they differ: no Round has called that forward.)
+                        if self.queued_since(side, pos, held).is_some() {
+                            self.spots[side][pos].called = false;
+                        }
                     }
+                    let spot = self.spot(side, pos);
                     if kind == VolKind::Smackdown {
                         spot.grounded();
                     }
@@ -2257,7 +2429,7 @@ impl Follower {
                     let m = b.mon_mut(r);
                     m.boosts = spot.boosts;
                     if let Some(types) = spot.types {
-                        m.types = types;
+                        (m.types, m.said.seen) = (types, [types; 2]);
                     }
                     m.added_type = spot.added;
                     m.active_turns = spot.active_turns;
@@ -2395,6 +2567,20 @@ impl Follower {
         speeds.digest(&events, b);
         self.begun.clear();
         self.items.clear();
+        // Where a turn goes on after this (a Pokémon is replaced in the middle of it), what
+        // was counted from one of the moves just digested holds from the next one on: a
+        // Pokémon held back by Quash still is, one caught by an Encore still is, and a
+        // Round has still been used.
+        for side in 0..2 {
+            for pos in 0..ACTIVE {
+                let from = self.queued_since(side, pos, self.spots[side][pos].last_move);
+                let called = self.rounds.iter().any(|&since| from.is_none_or(|t| since > t));
+                let spot = &mut self.spots[side][pos];
+                spot.called |= called;
+                (spot.reordered, spot.overridden) = (spot.reordered.map(|_| 0), spot.overridden.map(|_| 0));
+            }
+        }
+        self.rounds.clear();
         if b.request == Request::Move {
             self.chosen.clear();
         }
@@ -2441,6 +2627,7 @@ impl Follower {
         if !self.req.as_ref().is_some_and(|r| matches!(r.asked, Asked::Switch | Asked::Wait)) {
             self.chosen.clear();
         }
+        self.sent = [None; ACTIVE];
         let Some(b) = &self.battle else {
             let pick = preview_table().get(actions[0]).ok_or("not a Team Preview action")?;
             // The four brought, then the two left behind: Showdown takes the first four.
@@ -2463,6 +2650,9 @@ impl Follower {
                     m.moves[slot as usize].id
                 };
                 self.chosen.push((r.idx as usize, id, target));
+            }
+            if let Choice::Switch { to } = choice {
+                self.sent[pos] = Some(b.sides[self.side].order[to as usize] as usize);
             }
             out.push(choice.to_showdown());
         }

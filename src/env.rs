@@ -36,6 +36,7 @@ use crate::battle::{Error, PokemonSet, calc_stats, struggle_id};
 use crate::data::*;
 use crate::obs::{OBS_F, OBS_I, Phase, ROSTER, Timers, observe_battle, observe_preview};
 use crate::rng::Rng;
+use crate::speed::{self, Speeds};
 use crate::state::*;
 use crate::teams::{Pool, Sampler, Variation};
 
@@ -92,6 +93,9 @@ pub struct Game {
     open: bool,
     battle: Option<Battle>,
     timers: Timers,
+    speeds: Speeds,
+    /// What the engine noted during the last step, for `speeds` (kept to reuse the space).
+    events: Vec<speed::Event>,
 }
 
 impl Game {
@@ -110,7 +114,8 @@ impl Game {
                 stats[side][j] = calc_stats(set.species, set.nature, set.stat_points);
             }
         }
-        Ok(Game { rosters, stats, open, battle: None, timers: Timers::default() })
+        let speeds = Speeds::new([&rosters[0], &rosters[1]], open);
+        Ok(Game { rosters, stats, open, battle: None, timers: Timers::default(), speeds, events: Vec::new() })
     }
 
     pub fn phase(&self) -> Phase {
@@ -119,6 +124,16 @@ impl Game {
             Some(b) if b.request == Request::Switch => Phase::Switch,
             Some(_) => Phase::Move,
         }
+    }
+
+    /// What each side can tell of the other's Speed.
+    pub fn speeds(&self) -> &Speeds {
+        &self.speeds
+    }
+
+    /// Has [`Speeds`] check itself against the truth as the game goes, and panic on a difference: for tests.
+    pub fn check_speeds(&mut self) {
+        self.speeds.strict = true;
     }
 
     /// The battle, once Team Preview is over.
@@ -230,9 +245,13 @@ impl Game {
                     })?;
                     picks[side] = pick.map(|j| j as usize);
                 }
-                let b = Battle::with_rosters(self.rosters(), [&picks[0], &picks[1]], self.open, seed)?;
+                let rosters = [&self.rosters[0][..], &self.rosters[1][..]];
+                let b = speed::record(&mut self.events, || {
+                    Battle::with_rosters(rosters, [&picks[0], &picks[1]], self.open, seed)
+                })?;
                 self.timers = Timers::default();
                 self.timers.update(&b);
+                self.speeds.digest(&self.events, &b);
                 self.battle = Some(b);
             }
             Some(_) => {
@@ -245,8 +264,9 @@ impl Game {
                     }
                 }
                 let b = self.battle.as_mut().unwrap();
-                b.choose(choices)?;
+                speed::record(&mut self.events, || b.choose(choices))?;
                 self.timers.update(b);
+                self.speeds.digest(&self.events, b);
             }
         }
         Ok(())
@@ -255,8 +275,8 @@ impl Game {
     /// `view`'s side of the game, into buffers of [`OBS_F`], [`OBS_I`] and [`OBS_M`].
     pub fn observe(&self, view: usize, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {
         match &self.battle {
-            None => observe_preview(self.rosters(), &self.stats[view], self.open, view, f, i),
-            Some(b) => observe_battle(b, &self.timers, &self.stats[view], view, f, i),
+            None => observe_preview(self.rosters(), &self.speeds, &self.stats[view], self.open, view, f, i),
+            Some(b) => observe_battle(b, &self.timers, &self.speeds, &self.stats[view], view, f, i),
         }
         let n = self.masks(view, mask);
         let info = &mut i[OBS_I - crate::obs::INFO..];

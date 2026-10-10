@@ -2710,7 +2710,9 @@ impl Battle {
                     return;
                 }
                 trace::note(|| format!("move {} by p{}:{}", MOVES[a.move_id as usize].id, r.side + 1, r.idx));
+                self.note_move_starts(&a);
                 self.run_move(&a);
+                self.note_move_ends();
             }
             ActKind::Switch | ActKind::InstaSwitch => {
                 let out = a.mon.unwrap();

@@ -14,7 +14,8 @@ its moves, and a projection of its numbers (HP, status, stats, what is known).
 Species, moves and items are embedded as a learned vector per id plus a
 projection of static dex data (types, base stats, a move's power, accuracy,
 target and effects), so a rarely seen Pokémon or move starts from what it
-is. There is no damage calculator and no usage statistics: only the state.
+is. There is no damage calculator and no usage statistics: only the state,
+and what the order of moves has shown of each opposing Pokémon's Speed.
 What the opponent has not shown is the id "unknown".
 
 The policy:

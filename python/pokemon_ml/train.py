@@ -66,7 +66,12 @@ def main(argv=None):
     optimizer = torch.optim.Adam(model.parameters(), lr=ppo_config.lr, eps=1e-5)
     totals = {"update": 0, "decisions": 0, "games": 0, "seconds": 0.0}
     if saved:
-        model.load_state_dict(saved["model"])
+        try:
+            model.load_state_dict(saved["model"])
+        except RuntimeError as error:
+            raise SystemExit(
+                f"{path} was made with a different observation or network, so it cannot be carried on from "
+                f"(what a model is given has changed since). Start a new run with another --run directory.\n{error}")
         optimizer.load_state_dict(saved["optimizer"])
         totals = {k: saved[k] for k in totals}
         for group in optimizer.param_groups:

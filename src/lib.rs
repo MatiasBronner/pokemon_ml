@@ -25,6 +25,7 @@ pub mod replay;
 mod tables;
 pub mod rng;
 pub mod shown;
+pub mod speed;
 pub mod state;
 pub mod teams;
 pub mod trace;

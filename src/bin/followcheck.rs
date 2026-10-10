@@ -1,6 +1,6 @@
 //! Checks the log follower against recorded Showdown battles.
 //!
-//!     followcheck CASES.jsonl... [--limit N] [--battle ID]
+//!     followcheck CASES.jsonl... [--limit N] [--battle ID] [--slim OUT.jsonl]
 //!
 //! The battles must have been recorded with their logs and requests
 //! (`oracle/gen_cases.js --log --requests`). Each is played in the
@@ -10,16 +10,21 @@
 
 use std::io::{BufRead, BufReader};
 
-use vgc_engine::replay::{Case, FollowTally, Outcome, check_follow};
+use vgc_engine::replay::{FollowCase, FollowTally, Outcome, check_follow};
 
 fn main() {
     let mut files = Vec::new();
     let mut limit = usize::MAX;
     let mut only = None;
+    let mut slim = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         if arg == "--limit" {
             limit = args.next().and_then(|n| n.parse().ok()).expect("--limit takes a number");
+        } else if arg == "--slim" {
+            // Write the battles followed back out with only what this check reads.
+            let path = args.next().expect("--slim takes a file to write");
+            slim = Some(std::fs::File::create(&path).unwrap_or_else(|e| panic!("cannot write {path}: {e}")));
         } else if arg == "--battle" {
             // Every difference found in this one battle.
             only = Some(args.next().and_then(|n| n.parse::<u32>().ok()).expect("--battle takes a number"));
@@ -28,7 +33,7 @@ fn main() {
         }
     }
     if files.is_empty() {
-        eprintln!("usage: followcheck CASES.jsonl... [--limit N] [--battle ID]");
+        eprintln!("usage: followcheck CASES.jsonl... [--limit N] [--battle ID] [--slim OUT.jsonl]");
         std::process::exit(2);
     }
     let mut tally = FollowTally { verbose: only.is_some(), ..FollowTally::default() };
@@ -40,7 +45,7 @@ fn main() {
                 break 'files;
             }
             let line = line.expect("a readable line");
-            let case: Case = serde_json::from_str(&line).unwrap_or_else(|e| panic!("{path}: {e}"));
+            let case: FollowCase = serde_json::from_str(&line).unwrap_or_else(|e| panic!("{path}: {e}"));
             if only.is_some_and(|id| id != case.id) {
                 continue;
             }
@@ -48,6 +53,11 @@ fn main() {
                 Outcome::Pass(n) => {
                     battles += 1;
                     decisions += n;
+                    if let Some(out) = slim.as_mut() {
+                        use std::io::Write;
+                        writeln!(out, "{}", serde_json::to_string(&case).expect("a case is serialisable"))
+                            .expect("a writable file");
+                    }
                 }
                 Outcome::Unsupported(_) => skipped += 1,
                 Outcome::Fail(why) => failed.push(format!("battle {}: {}", case.id, why.join("; "))),
@@ -62,7 +72,7 @@ fn main() {
         println!("  {why}");
     }
     println!(
-        "{} observations compared, {} differ ({:.2}%); {} passed over (a move disabled in a way the player is not shown)",
+        "{} observations compared, {} differ ({:.2}%); {} passed over (a move or a switch barred in a way the player is not shown)",
         tally.observations,
         tally.wrong,
         100.0 * tally.wrong as f64 / tally.observations.max(1) as f64,

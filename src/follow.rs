@@ -146,6 +146,14 @@ impl Spot {
     fn remove(&mut self, kind: VolKind) {
         self.vols.retain(|v| v.kind != kind);
     }
+
+    /// A protecting move worked: the next one in a row is a third as likely to.
+    fn stalled(&mut self) {
+        match self.vols.iter_mut().find(|v| v.kind == VolKind::Stall) {
+            Some(v) => (v.data, v.ends) = ((v.data * 3).min(729), Ends::After(2)),
+            None => self.vols.push(Vol { kind: VolKind::Stall, ends: Ends::After(2), data: 3, duration: 0, source: 0 }),
+        }
+    }
 }
 
 /// The two-turn moves' own conditions, by the move's id.
@@ -295,6 +303,8 @@ struct Begun {
 enum Undo {
     Vol(VolKind),
     Slot(usize, usize, SlotCond),
+    /// The protect streak as it stood before the move.
+    Stall(Option<Vol>),
 }
 
 #[derive(Clone, Debug)]
@@ -1111,20 +1121,33 @@ impl Follower {
                     spot.vols.retain(|v| {
                         v.ends != Ends::Move && v.kind != VolKind::Mustrecharge && !CHARGING.contains(&v.kind)
                     });
-                    if from != "lockedmove" && side == self.side {
+                }
+                // Which of the user's moves pays for this one: itself if it was chosen, and the
+                // move that called it (Copycat, Sleep Talk) for what Pressure takes on top.
+                let caller = from.strip_prefix("move: ").and_then(|c| move_id(&to_id(c)));
+                let payer = match (queued, caller) {
+                    (true, _) if from != "lockedmove" => Some((used, 1)),
+                    (false, Some(c)) => Some((c, 0)),
+                    _ => None,
+                };
+                if let Some((paying, base)) = payer {
+                    if side == self.side {
                         // One PP, in case it leaves the field before the next request says so;
                         // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
                         let mut aimed: Vec<(usize, usize)> = Vec::new();
-                        let wide = matches!(
-                            MOVES[used as usize].target,
-                            Target::All | Target::FoeSide | Target::AllAdjacent | Target::AllAdjacentFoes
-                        );
+                        let data = &MOVES[used as usize];
+                        let wide = data.flags & F_MUSTPRESSURE != 0
+                            || matches!(data.target, Target::All | Target::AllAdjacent | Target::AllAdjacentFoes);
                         if wide {
-                            // A move on the whole field, or on everyone across it: whether or not it lands.
+                            // A move on the whole field, on everyone across it, or one of the few
+                            // (Imprison, Spikes) that pay to every opponent: whether or not it lands.
                             aimed.extend([(1 - side, 0), (1 - side, 1)]);
+                        } else if data.target == Target::FoeSide {
+                            // (Any other move laid on the far side of the field pays nothing extra.)
                         } else if let Some(target) = fourth {
                             aimed.push(target);
-                        } else if let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
+                        } else if queued
+                            && let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
                             && loc > 0
                         {
                             // (With nobody left where it was aimed, it goes for the other one.)
@@ -1136,18 +1159,29 @@ impl Follower {
                             .iter()
                             .filter(|&&(s, p)| {
                                 s != side
+                                    && !self.spots[s][p].has(VolKind::Gastroacid)
                                     && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
                             })
                             .count() as u8;
                         if let Some(own) = self.own.get_mut(self.own_at[pos]) {
                             let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
-                            if let Some(slot) = known.iter_mut().find(|s| s.0 == used) {
-                                slot.1 = slot.1.saturating_sub(1 + pressed);
+                            if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
+                                slot.1 = slot.1.saturating_sub(base + pressed);
                             }
                         }
                     }
                 }
                 match used {
+                    mv::WIDEGUARD | mv::QUICKGUARD => {
+                        // Over a side already covered it says nothing, and still counts
+                        // towards the user's run of protecting moves.
+                        let cond = if used == mv::WIDEGUARD { SideCond::Wideguard } else { SideCond::Quickguard };
+                        if self.field.sides[side].conds.iter().any(|c| c.0 == cond) {
+                            let spot = self.spot(side, pos);
+                            undo = Some(Undo::Stall(spot.vols.iter().find(|v| v.kind == VolKind::Stall).copied()));
+                            spot.stalled();
+                        }
+                    }
                     mv::MINIMIZE => {
                         if self.spot(side, pos).add(VolKind::Minimize, Ends::Said) {
                             undo = Some(Undo::Vol(VolKind::Minimize));
@@ -1186,6 +1220,11 @@ impl Follower {
                     match mover.undo.take() {
                         Some(Undo::Vol(kind)) => self.spots[side][pos].remove(kind),
                         Some(Undo::Slot(s, p, cond)) => self.field.sides[s].slots[p].retain(|c| c.0 != cond),
+                        Some(Undo::Stall(before)) => {
+                            let spot = &mut self.spots[side][pos];
+                            spot.remove(VolKind::Stall);
+                            spot.vols.extend(before);
+                        }
                         None => {}
                     }
                     if mover.stalling {
@@ -1293,17 +1332,7 @@ impl Follower {
                 let stalling = move_id(&effect).is_some_and(|m| MOVES[m as usize].stalling_move)
                     || matches!(effect.as_str(), "wideguard" | "quickguard");
                 if stalling {
-                    let spot = self.spot(side, pos);
-                    match spot.vols.iter_mut().find(|v| v.kind == VolKind::Stall) {
-                        Some(v) => (v.data, v.ends) = ((v.data * 3).min(729), Ends::After(2)),
-                        None => spot.vols.push(Vol {
-                            kind: VolKind::Stall,
-                            ends: Ends::After(2),
-                            data: 3,
-                            duration: 0,
-                            source: 0,
-                        }),
-                    }
+                    self.spot(side, pos).stalled();
                 }
             }
             "-activate" => {
@@ -1725,13 +1754,11 @@ impl Follower {
                 }
             }
             if let Some(active) = active {
-                m.trapped = if active.trapped {
-                    Trapped::Yes
-                } else if active.maybe_trapped {
-                    Trapped::Hidden
-                } else {
-                    Trapped::No
-                };
+                // ("Maybe trapped" is all the last one to choose is told when a foe might be
+                // holding it in by an ability not yet shown: it may try to switch, and is told
+                // then. Until it is, it is free as far as its player knows.)
+                let _ = active.maybe_trapped;
+                m.trapped = if active.trapped { Trapped::Yes } else { Trapped::No };
                 // One move listed with no PP to its name: it is locked into that, or can only struggle.
                 if listed.is_none() && active.moves.len() == 1 {
                     let only = &active.moves[0];

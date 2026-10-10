@@ -509,6 +509,15 @@ pub fn observe_preview(
 
 /// A battle from `view`'s side. `stats` are the viewer's own Pokémon's as
 /// registered (for the two left behind, which the battle does not hold).
+/// Whether nobody on `side` chooses after the Pokémon at `pos`: the one Showdown keeps
+/// in the dark about what an unseen ability or move bars it from.
+pub(crate) fn last_to_choose(b: &Battle, side: usize, pos: usize) -> bool {
+    (pos + 1..ACTIVE.min(b.sides[side].n as usize)).all(|p| {
+        let ally = b.mon(b.active(side, p));
+        !ally.is_active || ally.fainted
+    })
+}
+
 /// The last two numbers of `info` (how many joint actions are legal, and
 /// whether there is a choice to make) are left for whoever works out the
 /// legal actions.
@@ -758,7 +767,11 @@ pub fn observe_battle(
         // Kept from switching, as its player is told when it chooses a move: not if there is
         // nobody to switch to. And whether that move is chosen for it.
         let choosing = own && phase == Phase::Move;
-        w.flag(choosing && m.trapped != Trapped::No && b.living_bench(side) > 0);
+        // (Held in by an ability nobody has shown, the last of a side to choose is not told:
+        // it would give the secret away. It finds out by trying.)
+        let last = last_to_choose(b, side, pos);
+        let held = m.trapped == Trapped::Yes || (m.trapped == Trapped::Hidden && !last);
+        w.flag(choosing && held && b.living_bench(side) > 0);
         w.flag(choosing && m.locked_move != NO_MOVE);
         let vols = b.vols(r);
         debug_assert_eq!(w.at, ACT_VOLATILES);
@@ -813,10 +826,7 @@ pub fn observe_battle(
             // A move disabled by something not yet shown (a foe's Imprison) is listed as
             // usable for the last Pokémon to choose, as Showdown lists it: to say otherwise
             // would give the secret away.
-            let last = (pos + 1..ACTIVE.min(us.n as usize)).all(|p| {
-                let ally = b.mon(b.active(view, p));
-                !ally.is_active || ally.fainted
-            });
+            let last = last_to_choose(b, view, pos);
             for (k, slot) in m.moves[..m.n_moves as usize].iter().enumerate() {
                 let disabled = slot.pp == 0 || (slot.disabled && !(slot.hidden && last));
                 put(k, slot.id, slot.pp as f32 / slot.maxpp.max(1) as f32, disabled, false);

@@ -1,0 +1,78 @@
+//! The follower of Showdown's log against the simulator, on recorded battles.
+//!
+//! `tests/fixtures/followed_battles.jsonl` holds battles played in Pokémon
+//! Showdown itself, with the log and the requests each player was sent
+//! (`oracle/gen_cases.js --log --requests`, cut down by `followcheck
+//! --slim`). Each is replayed in the simulator, and beside it a follower for
+//! each side reads what Showdown sent that side. At every decision the two
+//! must come to the same observation and the same legal actions, and the
+//! follower must put the choice that was made back into Showdown's words.
+
+use std::io::{BufRead, BufReader};
+
+use vgc_engine::env::OBS_M;
+use vgc_engine::follow::Follower;
+use vgc_engine::obs::{OBS_F, OBS_I, Phase};
+use vgc_engine::replay::{FollowCase, FollowTally, Outcome, check_follow};
+
+fn cases() -> Vec<FollowCase> {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/followed_battles.jsonl");
+    let file = std::fs::File::open(path).expect("the fixture is there");
+    BufReader::new(file).lines().map(|line| serde_json::from_str(&line.unwrap()).expect("a readable battle")).collect()
+}
+
+#[test]
+fn a_follower_sees_what_the_simulator_sees() {
+    let mut tally = FollowTally::default();
+    let (mut battles, mut decisions) = (0, 0);
+    for case in cases() {
+        match check_follow(&case, &mut tally) {
+            Outcome::Pass(n) => {
+                battles += 1;
+                decisions += n;
+            }
+            Outcome::Unsupported(why) => panic!("battle {} cannot be checked: {why}", case.id),
+            Outcome::Fail(why) => panic!("battle {} was not followed: {}", case.id, why.join("; ")),
+        }
+    }
+    assert!(battles >= 20 && decisions > 300, "{battles} battles, {decisions} decisions");
+    assert!(tally.observations > 600, "{} observations", tally.observations);
+    assert_eq!(tally.wrong, 0, "observations differ: {:#?}", tally.by_feature);
+}
+
+/// The same from the outside, as a client uses it: lines and requests in,
+/// an observation and a reply out.
+#[test]
+fn a_battle_is_followed_from_first_line_to_last() {
+    let case = &cases()[0];
+    let team = case.rosters[0].iter().map(|s| s.to_set().unwrap()).collect::<Vec<_>>();
+    let mut me = Follower::new(0, team).unwrap();
+    let (mut f, mut i, mut mask) = (vec![0.0; OBS_F], vec![0; OBS_I], vec![0; OBS_M]);
+
+    // Team Preview: the other side's six are on show, and any of the 90 picks is open.
+    let cut = case.initial.log.iter().position(|l| l.starts_with("|teamsize|")).unwrap();
+    me.lines(&Follower::own_lines(0, &case.initial.log[..cut])).unwrap();
+    assert_eq!(me.observe(&mut f, &mut i, &mut mask).unwrap(), 90);
+    assert_eq!(me.choice([0, 0]).unwrap(), "team 1234");
+
+    me.lines(&Follower::own_lines(0, &case.initial.log[cut..])).unwrap();
+    me.request(&case.initial.requests[0].to_string()).unwrap();
+    assert_eq!((me.phase(), me.turn()), (Some(Phase::Move), 1));
+    let mut asked = 0;
+    for step in &case.steps {
+        // Whatever is legal can be put into Showdown's words.
+        let legal = me.observe(&mut f, &mut i, &mut mask).unwrap();
+        if legal > 0 {
+            let first = mask[..47].iter().position(|&m| m == 1).unwrap();
+            let second = mask[47 * (1 + first)..47 * (2 + first)].iter().position(|&m| m == 1).unwrap();
+            let reply = me.choice([first, second]).unwrap();
+            assert!(reply.split(", ").count() == 2, "{reply}");
+            asked += 1;
+        }
+        me.lines(&Follower::own_lines(0, &step.after.log)).unwrap();
+        me.request(&step.after.requests[0].to_string()).unwrap();
+    }
+    assert!(me.ended() && asked > 5);
+    let last = case.steps.last().unwrap().after.log.iter().rev().find(|l| l.starts_with("|win|")).unwrap();
+    assert_eq!(me.winner(), Some(if last == "|win|P1" { 0 } else { 1 }));
+}

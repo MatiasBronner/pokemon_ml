@@ -12,7 +12,7 @@ use crate::state::{ACTIVE, Cond, NO_SPECIES, NOT_LISTED, Res, Trapped};
 use crate::{Battle, Choice, Error, PokemonSet, Request, trace};
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
 pub struct SetJson {
     pub species: String,
     pub moves: Vec<String>,
@@ -1317,14 +1317,54 @@ fn id_name(index: usize) -> String {
     }
 }
 
-/// Whether one of `side`'s Pokémon on the field has a move disabled by something its player has not been shown.
+/// Whether one of `side`'s Pokémon on the field is barred from a move or from switching by
+/// something its player has not been shown (a foe's Imprison, a Shadow Tag not yet announced).
+/// Showdown then offers the choice all the same and refuses it when it is tried; the game
+/// does not offer it.
 fn hidden_disable(game: &crate::env::Game, side: usize) -> bool {
     let Some(b) = game.battle() else { return false };
     b.request == Request::Move
         && (0..ACTIVE).any(|pos| {
             let m = b.mon(b.active(side, pos));
-            m.is_active && m.moves[..m.n_moves as usize].iter().any(|slot| slot.disabled && slot.hidden)
+            let last = crate::obs::last_to_choose(b, side, pos);
+            m.is_active
+                && !m.fainted
+                && (m.moves[..m.n_moves as usize].iter().any(|slot| slot.disabled && slot.hidden)
+                    || (m.trapped == Trapped::Hidden && last && b.living_bench(side) > 0))
         })
+}
+
+/// What a recorded battle told its players at one decision: the log up to it
+/// and the request each side was sent.
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct Told {
+    #[serde(default)]
+    pub ended: bool,
+    pub log: Vec<String>,
+    pub requests: Vec<serde_json::Value>,
+}
+
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct ToldStep {
+    pub choices: [String; 2],
+    pub after: Told,
+}
+
+/// A recorded battle as [`check_follow`] needs it: the teams, what was
+/// chosen, and what the players were told. Any battle recorded with
+/// `gen_cases.js --log --requests` reads as one (the rest of what the
+/// recorder writes is passed over), and one written back out is a small
+/// fraction of the size.
+#[derive(Deserialize, serde::Serialize, Clone, Debug)]
+pub struct FollowCase {
+    pub id: u32,
+    pub seed: [u16; 4],
+    pub rosters: [Vec<SetJson>; 2],
+    pub picks: [Vec<usize>; 2],
+    #[serde(default)]
+    pub open_sheets: bool,
+    pub initial: Told,
+    pub steps: Vec<ToldStep>,
 }
 
 /// Plays a recorded battle in a [`Game`](crate::env::Game) and, beside it,
@@ -1333,13 +1373,11 @@ fn hidden_disable(game: &crate::env::Game, side: usize) -> bool {
 /// follower's observation and legal actions must be the game's. Differences
 /// are counted in `tally`; the outcome is a failure only if a follower could
 /// not read something.
-pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
+pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
     use crate::env::{Game, OBS_M};
     use crate::follow::Follower;
     use crate::obs::{OBS_F, OBS_I};
-    let (Some(rosters), Some(picks)) = (&c.rosters, &c.picks) else {
-        return Outcome::Unsupported("a battle recorded without its registered teams".into());
-    };
+    let (rosters, picks) = (&c.rosters, &c.picks);
     let sets: Result<Vec<Vec<PokemonSet>>, String> =
         rosters.iter().map(|t| t.iter().map(SetJson::to_set).collect()).collect();
     let sets = match sets {

@@ -24,6 +24,13 @@
 //! number, Mega Evolution needs nothing special: the same points and nature
 //! give the new forme's Speed.
 //!
+//! Items narrow it as well. An item that shows itself is the Pokémon's one
+//! item, so it rules out the other two classes. And under the regulation's
+//! item clause a team has each item once: when one Pokémon is found to have
+//! been registered with the Choice Scarf (it is proved to hold one, or loses
+//! one, having been handed nothing), the Scarf is struck from every
+//! team-mate that still holds what it was registered with.
+//!
 //! # What counts as an observation
 //!
 //! When a move starts, it was at the head of the queue, which Showdown sorts
@@ -137,6 +144,12 @@ impl Belief {
                     *bits = 0;
                 }
             }
+        }
+    }
+
+    fn drop_class(&mut self, class: usize) {
+        for row in &mut self.bits {
+            row[class] = 0;
         }
     }
 
@@ -575,6 +588,14 @@ pub struct Speeds {
     /// By side and team index: what was known of its ability when the turn began (the
     /// ability shown, whether it had been replaced, and the species it then was).
     began: [[(u16, bool, u16); MAX_TEAM]; 2],
+    /// By side: whether its team can be counted on to have each item once at most (the
+    /// regulation's item clause, on a team that keeps it).
+    clause: [bool; 2],
+    /// By side and registered Pokémon: an item has come to it from elsewhere, so what it
+    /// holds is no longer what it was registered with.
+    handed: [[bool; MAX_ROSTER]; 2],
+    /// By side and item class: the Pokémon that was registered with that item, once known (`NOT_LISTED` until then).
+    owner: [[u8; CLASSES]; 2],
     /// Each active Pokémon's Speed as the queue would sort by it now. Its own side knows it.
     own: [[i32; ACTIVE]; 2],
     /// Check every observation against the truth as it is used and panic on a
@@ -603,8 +624,17 @@ impl Speeds {
                 }
             }
         }
+        // The item clause is a fact about a legal team. A team put together by hand that
+        // breaks it gets no conclusions drawn from it.
+        let once = |team: &[PokemonSet]| {
+            team.iter().enumerate().all(|(k, a)| a.item == it::NONE || team[..k].iter().all(|b| b.item != a.item))
+        };
+        let clause = Format::current().team.item_clause == 1;
         Speeds {
             belief,
+            clause: [clause && once(rosters[0]), clause && once(rosters[1])],
+            handed: [[false; MAX_ROSTER]; 2],
+            owner: [[NOT_LISTED; CLASSES]; 2],
             swapped: [[false; MAX_TEAM]; 2],
             began: [[(UNKNOWN, true, 0); MAX_TEAM]; 2],
             own: [[0; ACTIVE]; 2],
@@ -635,15 +665,19 @@ impl Speeds {
                     let stone = !ITEMS[item as usize].mega.is_empty();
                     // An item it loses was its item for everything seen so far, unless it was
                     // handed the item in this same step (and the log has yet to say so).
-                    let handed = events.iter().any(|e| {
+                    let just_handed = events.iter().any(|e| {
                         matches!(*e, Event::Item { side: s2, listed: l2, item: i2, lost: false, .. }
                             if (s2, l2) == (side, listed) && ITEMS[i2 as usize].mega.is_empty())
                     });
-                    if !doubt && (stone || (lost && !handed)) {
+                    if !doubt && (stone || (lost && !just_handed)) {
                         let mut kept = *belief;
                         kept.keep_class(class_of(item));
                         if !kept.is_empty() {
                             *belief = kept;
+                            // And if nothing was ever handed to it, it was registered with the item.
+                            if lost && !self.handed[side as usize][listed as usize] && class_of(item) != 0 {
+                                self.owner[side as usize][class_of(item)] = listed;
+                            }
                         } else {
                             assert!(
                                 !self.strict,
@@ -655,12 +689,14 @@ impl Speeds {
                     }
                     if !stone {
                         belief.forget_class();
+                        self.handed[side as usize][listed as usize] |= !lost;
                         if doubt {
                             // It may be the side's Illusion Pokémon that the item went to or from.
                             let masked = b.shown_illusionists(side as usize);
                             for (j, other) in self.belief[side as usize].iter_mut().enumerate() {
                                 if masked & (1 << j) != 0 {
                                     other.forget_class();
+                                    self.handed[side as usize][j] = true;
                                 }
                             }
                         }
@@ -800,6 +836,34 @@ impl Speeds {
                     self.belief[side][rec.listed as usize] = kept;
                 } else {
                     assert!(!self.strict, "an item on record that nothing seen allows");
+                }
+            }
+        }
+        // The item clause: a team has each item once. Once it is known which Pokémon was
+        // registered with the Choice Scarf (or the Iron Ball), no other was. That holds for
+        // every Pokémon still holding what it was registered with, or nothing.
+        for side in 0..2 {
+            if !self.clause[side] {
+                continue;
+            }
+            for class in [SCARF, IRON_BALL] {
+                for j in 0..MAX_ROSTER {
+                    if !self.handed[side][j] && self.belief[side][j].items()[2 * class - 1] {
+                        self.owner[side][class] = j as u8;
+                    }
+                }
+                let owner = self.owner[side][class] as usize;
+                if owner >= MAX_ROSTER {
+                    continue;
+                }
+                for j in (0..MAX_ROSTER).filter(|&j| j != owner && !self.handed[side][j]) {
+                    let mut kept = self.belief[side][j];
+                    kept.drop_class(class);
+                    if !kept.is_empty() {
+                        self.belief[side][j] = kept;
+                    } else {
+                        assert!(!self.strict, "two Pokémon of a team with the same item, by what was seen");
+                    }
                 }
             }
         }

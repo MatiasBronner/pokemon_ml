@@ -367,6 +367,14 @@ Because the set is about how the Pokémon was built and not about one number,
 was seen, and Mega Evolution needs no special case: the same points and nature
 give the new forme's Speed.
 
+Items narrow it too. A Pokémon holds one item, so any item that shows itself
+(a Quick Claw going off, Leftovers, a berry eaten) means no Choice Scarf and
+no Iron Ball. And a team has each item once, so when one Pokémon turns out to
+have been registered with the Choice Scarf, no team-mate was: their Speed is
+their own. (That is kept from Pokémon that have since been handed an item by
+Trick or Thief, which may hold anything, and from a team that does not keep
+the item clause.)
+
 A comparison is passed over whenever something the player has not been shown
 could be at work: an ability the Pokémon may legally have that changes Speed
 or priority as things stand (Swift Swim in rain, Prankster on a status move,

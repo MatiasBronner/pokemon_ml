@@ -278,7 +278,8 @@ The pieces, from the engine up:
 | `src/obs.rs` | Rust | one side's view of a game written straight into arrays |
 | `src/python.rs` | Rust | the two above as a Python module that fills NumPy arrays in place |
 | `python/pokemon_ml/model.py` | PyTorch | embeddings, a small transformer, policy and value heads |
-| `python/pokemon_ml/ppo.py`, `train.py` | PyTorch | PPO self-play, evaluation against two fixed players, checkpoints |
+| `python/pokemon_ml/ppo.py`, `train.py` | PyTorch | PPO self-play and checkpoints |
+| `python/pokemon_ml/league.py` | PyTorch | snapshots of the network, games between them, ratings |
 
 ```sh
 python3 -m venv .venv && source .venv/bin/activate
@@ -287,14 +288,43 @@ maturin develop --release                      # builds the engine into the Pyth
 python -m pokemon_ml.train --pool teams/2027-frankfurt.json --run runs/first
 ```
 
-`train` plays `--envs` games at once (512) with the network on both sides,
-updates it every `--steps` decisions (64), and every `--eval-every` updates
-plays it against a player that picks at random and one that picks its
-strongest attack. It saves `runs/first/checkpoint.pt` as it goes, when
-`--hours` of wall-clock time are up and on Ctrl-C, and the same command
-carries on from there, so a job with a time limit loses nothing. The
-network's sizes are flags (`--width 128 --layers 3 --heads 4 --ff 256`,
-about 920,000 parameters); `--help` lists the rest.
+`train` plays `--envs` games at once (512) with the network on both sides
+and updates it every `--steps` decisions (64). It saves
+`runs/first/checkpoint.pt` as it goes, when `--hours` of wall-clock time are
+up and on Ctrl-C, and the same command carries on from there, so a job with a
+time limit loses nothing. The network's sizes are flags (`--width 128
+--layers 3 --heads 4 --ff 256`, about 920,000 parameters); `--help` lists the
+rest.
+
+### How good is it?
+
+Every `--eval-every` updates (25) a copy of the network is put aside in
+`runs/first/snapshots/` and measured two ways.
+
+**Against three scripted players**, each a higher bar than the last:
+
+| | |
+|---|---|
+| random | any legal action |
+| greedy | its strongest attack by power, type and accuracy; switches only when it must |
+| look-ahead | tries its choices out in the simulator one turn ahead, against the greedy player's reply, and keeps the one that leaves it best off. It sees the other side's real stats, items and moves, which no player does: a bar to clear, not a model of fair play. It beats greedy two games in three. |
+
+**Against earlier copies of itself**, which keeps telling something after the
+scripted players are beaten: is the new version better than the old ones?
+Each new snapshot plays the one before it, ones further and further back, and
+the first. All results, the scripted players' included, are fitted with Elo
+ratings on one scale (`runs/first/ratings.json`): the untrained network is 0,
+and 100 points more is a 64% chance of winning, 200 is 76%, 400 is 91%. The
+log then has lines of this shape (the numbers here are made up):
+
+```
+update    25  games    68,551  ...  | rating 412; wins 98% vs random, 41% vs greedy, 22% vs look-ahead
+```
+
+`python -m pokemon_ml.league --run runs/first --pool teams/2027-frankfurt.json`
+plays more games between a run's snapshots than training had time for and
+prints the table. None of this says how the network does against people: that
+takes playing them.
 
 ### What a model is given
 
@@ -996,7 +1026,7 @@ src/rng.rs         Showdown's Gen5RNG
 src/replay.rs      replays a recorded battle and reports the first difference
 src/trace.rs       optional RNG/action trace (feature `trace`)
 src/bin/difftest.rs, src/bin/bench.rs, src/bin/teamcheck.rs, src/bin/teampool.rs, src/bin/envbench.rs
-python/pokemon_ml/  the learner: env.py, model.py, ppo.py, train.py; python/tests/ checks them (pytest)
+python/pokemon_ml/  the learner: env.py, model.py, ppo.py, train.py, league.py; python/tests/ checks them (pytest)
 pyproject.toml     how maturin builds the engine into that package
 oracle/lib.js        what counts as modelled (the move properties and events the engine knows)
 oracle/gen_data.js   Showdown data  -> src/tables.rs, pool.json, coverage.json
@@ -1050,9 +1080,9 @@ likely first steps when speed starts to matter.
 
 ## What comes next
 
-1. **A league.** Past versions of the network as opponents, so that
-   self-play cannot go in circles, and a rating of each checkpoint against
-   the others.
+1. **A league.** Past versions of the network as opponents in training, so
+   that self-play cannot go in circles. (They are already kept, and rated
+   against each other: see "How good is it?".)
 2. **More for the network to go on**: what damage has shown about attack and
    bulk, kept the way Speed is; and heads that predict the opponent's hidden
    sets and next action.

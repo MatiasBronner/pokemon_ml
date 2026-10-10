@@ -1,7 +1,7 @@
 //! How fast the training environment runs: games stepped in parallel with
 //! random or greedy players, observations for both sides written at every decision.
 //!
-//!     envbench [POOL.json] [--envs N] [--steps N] [--threads N] [--greedy]
+//!     envbench [POOL.json] [--envs N] [--steps N] [--threads N] [--greedy | --lookahead]
 //!
 //! Without a pool file it plays random legal teams.
 
@@ -26,6 +26,7 @@ fn main() {
             "--steps" => steps = number("--steps"),
             "--threads" => config.threads = number("--threads"),
             "--greedy" => kind = Baseline::Greedy,
+            "--lookahead" => kind = Baseline::Lookahead,
             _ => path = Some(a),
         }
     }

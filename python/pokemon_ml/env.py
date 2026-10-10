@@ -57,7 +57,7 @@ class Env:
         self.raw.step(self._actions, self.f, self.i, self.mask, self.reward, self.done)
 
     def baseline(self, kind):
-        """What the "random" or the "greedy" player would do on every side: [2·envs, 2]."""
+        """What the "random", the "greedy" or the "lookahead" player would do on every side: [2·envs, 2]."""
         out = np.zeros((self.envs, 4), np.int32)
         self.raw.baseline(kind, out)
         return out.reshape(2 * self.envs, 2)

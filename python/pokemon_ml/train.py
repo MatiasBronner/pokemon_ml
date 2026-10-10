@@ -3,8 +3,11 @@
     python -m pokemon_ml.train --pool teams/2027-frankfurt.json --run runs/first
 
 Plays `--envs` games at once with the network on both sides, updates it with
-PPO every `--steps` decisions, and every `--eval-every` updates measures it
-against the random and the greedy player. Everything needed to carry on is
+PPO every `--steps` decisions, and every `--eval-every` updates puts a copy
+of it aside and measures that copy: against three scripted players, and
+against earlier copies, which gives every version a rating on one scale
+(pokemon_ml.league; the untrained network is 0, and 100 points more is a 64%
+chance of winning). Everything needed to carry on is
 saved to `<run>/checkpoint.pt` every `--save-every` updates, when `--hours`
 of wall-clock time are up, and on Ctrl-C; the same command picks up from
 there. The log is printed and appended to `<run>/log.jsonl`.
@@ -18,6 +21,7 @@ from dataclasses import asdict
 
 import torch
 
+from . import league
 from . import model as model_lib
 from . import ppo
 from .env import Env
@@ -46,7 +50,8 @@ def main(argv=None):
     p.add_argument("--open-sheets", type=float, default=0.5, help="share of games played with open team sheets")
     p.add_argument("--no-vary", action="store_true", help="play the pool's teams exactly as they are")
     p.add_argument("--eval-every", type=int, default=25)
-    p.add_argument("--eval-games", type=int, default=500)
+    p.add_argument("--eval-games", type=int, default=300, help="games against each scripted player and each earlier version")
+    p.add_argument("--rivals", type=int, default=3, help="earlier versions each new one plays")
     p.add_argument("--save-every", type=int, default=25)
     for name, value in {**asdict(model_lib.Config()), **asdict(ppo.Config())}.items():
         p.add_argument("--" + name.replace("_", "-"), type=type(value), default=None)
@@ -92,6 +97,27 @@ def main(argv=None):
         torch.save(state, path + ".tmp")
         os.replace(path + ".tmp", path)  # never a half-written checkpoint
 
+    make_rival = lambda seed: make(min(args.envs, 256), 7_000_000 + seed)
+    ratings = league.Ratings(args.run)
+
+    def measure(log):
+        """Puts the network aside as a snapshot and has it play the scripted players and earlier snapshots."""
+        name = league.save_snapshot(args.run, totals["update"], model)
+        results = league.measure(args.run, name, model, make_rival, device, args.eval_games, args.rivals,
+                                 seed=31 * totals["update"])
+        ratings.add(results)
+        log["rating"] = ratings.ratings[name]
+        for _, rival, share, _ in results:
+            if rival in league.SCRIPTED:
+                log["vs_" + rival] = share
+        return log
+
+    if not league.snapshots(args.run):
+        # Where the run starts from: the zero of its ratings.
+        start = measure({})
+        print("the untrained network wins " + ", ".join(
+            f"{100 * start['vs_' + kind]:.0f}% vs {kind}" for kind in league.SCRIPTED), flush=True)
+
     stop = {"now": False}
     signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
@@ -112,14 +138,13 @@ def main(argv=None):
                    per_second=ppo_config.steps * args.envs / (t2 - t0), playing=(t1 - t0) / (t2 - t0),
                    turns=stats["turns"] / max(stats["games"], 1), ties=stats["ties"] / max(stats["games"], 1))
         if totals["update"] % args.eval_every == 0 or totals["update"] == args.updates:
-            for kind in ("random", "greedy"):
-                rival = make(min(args.envs, 256), 7_000_000 + totals["update"])
-                log["vs_" + kind] = ppo.play_baseline(rival, model, kind, args.eval_games, device)
+            measure(log)
         line = (f"update {log['update']:5d}  games {log['games']:9,d}  {log['per_second']:7.0f} game-steps/s "
                 f"({100 * log['playing']:.0f}% playing)  value explains {100 * log['explained']:5.1f}%  "
                 f"entropy {log['entropy']:.2f}  kl {log['kl']:.4f}  {log['turns']:.1f} turns")
-        if "vs_random" in log:
-            line += f"  | wins {100 * log['vs_random']:.1f}% vs random, {100 * log['vs_greedy']:.1f}% vs greedy"
+        if "rating" in log:
+            line += (f"  | rating {log['rating']:.0f}; wins {100 * log['vs_random']:.0f}% vs random, "
+                     f"{100 * log['vs_greedy']:.0f}% vs greedy, {100 * log['vs_lookahead']:.0f}% vs look-ahead")
         print(line, flush=True)
         with open(os.path.join(args.run, "log.jsonl"), "a") as out:
             out.write(json.dumps(log) + "\n")

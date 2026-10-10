@@ -82,6 +82,15 @@ pub enum Baseline {
     /// power, type and accuracy alone. It switches only when it must, and
     /// brings a random four.
     Greedy,
+    /// Tries its choices out in the simulator, one turn ahead, and keeps the
+    /// one that leaves it best off: Pokémon and HP left, its own against the
+    /// other side's. It plays each against what the greedy player would
+    /// answer (twice) and against a random answer. It sees everything: the
+    /// other side's stats, items and moves are the real ones, which no
+    /// player has. Only the dice are not: each try rolls its own. A bar to
+    /// clear, then, and no model of fair play. Replacements and Team Preview
+    /// it picks at random.
+    Lookahead,
 }
 
 /// One game: Team Preview, then the battle.
@@ -294,24 +303,95 @@ impl Game {
             return legal[rng.below(legal.len() as u32) as usize];
         }
         let act = |c: Choice| self.action_of(side, c).expect("a legal choice has a number");
-        let mut best = [Choice::Pass; ACTIVE];
-        for pos in 0..ACTIVE {
-            let mut top = f32::NEG_INFINITY;
-            for c in b.legal_choices(side, pos) {
-                let mut trial = best;
-                trial[pos] = c;
-                if pos == 1 && !b.pair_ok(side, &trial) {
-                    continue;
-                }
-                // A coin's worth of noise settles ties.
-                let score = greedy_score(b, side, pos, c) + rng.below(1000) as f32 * 1e-4;
-                if score > top {
-                    (top, best[pos]) = (score, c);
+        let best = if kind == Baseline::Lookahead { lookahead(b, side, rng) } else { greedy(b, side, rng) };
+        [act(best[0]), act(best[1])]
+    }
+}
+
+/// What the greedy player does on a turn.
+fn greedy(b: &Battle, side: usize, rng: &mut Rng) -> [Choice; ACTIVE] {
+    let mut best = [Choice::Pass; ACTIVE];
+    for pos in 0..ACTIVE {
+        let mut top = f32::NEG_INFINITY;
+        for c in b.legal_choices(side, pos) {
+            let mut trial = best;
+            trial[pos] = c;
+            if pos == 1 && !b.pair_ok(side, &trial) {
+                continue;
+            }
+            // A coin's worth of noise settles ties.
+            let score = greedy_score(b, side, pos, c) + rng.below(1000) as f32 * 1e-4;
+            if score > top {
+                (top, best[pos]) = (score, c);
+            }
+        }
+    }
+    best
+}
+
+/// How well off `side` is: a point for each Pokémon it has left and up to another for that
+/// one's HP, less the same for the other side. A battle that is over outweighs any of that.
+fn standing(b: &Battle, side: usize) -> f32 {
+    if b.ended {
+        return match b.winner {
+            Some(w) if w as usize == side => 100.0,
+            Some(_) => -100.0,
+            None => 0.0,
+        };
+    }
+    let worth = |s: usize| -> f32 {
+        let team = &b.sides[s].team[..b.sides[s].n as usize];
+        team.iter().filter(|m| !m.fainted).map(|m| 1.0 + m.hp as f32 / m.max_hp().max(1) as f32).sum()
+    };
+    worth(side) - worth(1 - side)
+}
+
+/// What the look-ahead player does on a turn.
+fn lookahead(b: &Battle, side: usize, rng: &mut Rng) -> [Choice; ACTIVE] {
+    let foe = 1 - side;
+    let anything = b.joint_choices(foe);
+    let replies = [greedy(b, foe, rng), greedy(b, foe, rng), anything[rng.below(anything.len() as u32) as usize]];
+    // How things stand after a turn of `mine` against each reply, with dice of the try's own.
+    let value = |mine: [Choice; ACTIVE], rng: &mut Rng| -> f32 {
+        let mut total = 0.0;
+        for reply in replies {
+            let mut after = *b;
+            after.rng = Rng::from_words(seed_of(rng));
+            let mut choices = [[Choice::Pass; ACTIVE]; 2];
+            (choices[side], choices[foe]) = (mine, reply);
+            if after.choose(choices).is_err() {
+                return f32::NEG_INFINITY;
+            }
+            total += standing(&after, side);
+        }
+        total
+    };
+    // Each position's choices tried beside the other's greedy pick, to find the four worth pairing up.
+    let base = greedy(b, side, rng);
+    let mut short: [Vec<(f32, Choice)>; ACTIVE] = [Vec::new(), Vec::new()];
+    for (pos, list) in short.iter_mut().enumerate() {
+        for c in b.legal_choices(side, pos) {
+            let mut trial = base;
+            trial[pos] = c;
+            if b.pair_ok(side, &trial) {
+                list.push((value(trial, rng), c));
+            }
+        }
+        list.sort_by(|x, y| y.0.total_cmp(&x.0));
+        list.truncate(4);
+    }
+    let (mut best, mut top) = (base, f32::NEG_INFINITY);
+    for &(_, x) in &short[0] {
+        for &(_, y) in &short[1] {
+            if b.pair_ok(side, &[x, y]) {
+                let v = value([x, y], rng);
+                if v > top {
+                    (top, best) = (v, [x, y]);
                 }
             }
         }
-        [act(best[0]), act(best[1])]
     }
+    best
 }
 
 /// How much the greedy player likes a choice: roughly the damage a move promises.

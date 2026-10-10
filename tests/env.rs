@@ -382,26 +382,25 @@ fn many_games_run_at_once_and_start_over() {
     assert!(env.step(&actions, &mut f, &mut i, &mut m, &mut reward, &mut done).is_err());
 }
 
-#[test]
-fn the_greedy_player_beats_the_random_one() {
+/// The share of games the first kind of player wins against the second, over `steps` steps of 128 games.
+fn duel(first: Baseline, second: Baseline, steps: usize) -> (usize, usize) {
     let pool = pool(20, 3);
     let config = Config { envs: 128, seed: 9, variation: Variation::NONE, threads: 2, ..Config::default() };
     let mut env = VecEnv::new(&pool, config).unwrap();
     let n = env.len();
     let (mut f, mut i, mut m) = (vec![0f32; 2 * n * OBS_F], vec![0i16; 2 * n * OBS_I], vec![0u8; 2 * n * OBS_M]);
     let (mut reward, mut done) = (vec![0f32; 2 * n], vec![0u8; n]);
-    let (mut greedy, mut random) = (vec![0i32; 4 * n], vec![0i32; 4 * n]);
+    let (mut ours, mut theirs) = (vec![0i32; 4 * n], vec![0i32; 4 * n]);
     let (mut wins, mut games) = (0, 0);
-    for _ in 0..600 {
-        env.baseline(Baseline::Greedy, &mut greedy);
-        env.baseline(Baseline::Random, &mut random);
-        // The greedy player takes the first side of even games and the second of odd ones.
+    for _ in 0..steps {
+        env.baseline(first, &mut ours);
+        env.baseline(second, &mut theirs);
+        // The first player takes the first side of even games and the second side of odd ones.
         for g in 0..n {
-            let side = g % 2;
-            random[4 * g + 2 * side..4 * g + 2 * side + 2]
-                .copy_from_slice(&greedy[4 * g + 2 * side..4 * g + 2 * side + 2]);
+            let at = 4 * g + 2 * (g % 2);
+            theirs[at..at + 2].copy_from_slice(&ours[at..at + 2]);
         }
-        env.step(&random, &mut f, &mut i, &mut m, &mut reward, &mut done).unwrap();
+        env.step(&theirs, &mut f, &mut i, &mut m, &mut reward, &mut done).unwrap();
         for g in 0..n {
             if done[g] == 1 {
                 games += 1;
@@ -409,7 +408,16 @@ fn the_greedy_player_beats_the_random_one() {
             }
         }
     }
-    assert!(games > 1000 && wins * 100 > games * 80, "greedy won {wins} of {games}");
+    (wins, games)
+}
+
+#[test]
+fn each_scripted_player_beats_the_one_below_it() {
+    let (wins, games) = duel(Baseline::Greedy, Baseline::Random, 600);
+    assert!(games > 1000 && wins * 100 > games * 80, "greedy won {wins} of {games} against random");
+    let (wins, games) = duel(Baseline::Lookahead, Baseline::Greedy, 300);
+    println!("look-ahead won {wins} of {games} against greedy");
+    assert!(games > 1000 && wins * 100 > games * 60, "look-ahead won {wins} of {games} against greedy");
 }
 
 /// Rain from a Pelipper holding a Damp Rock lasts eight turns for five, and

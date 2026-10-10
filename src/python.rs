@@ -100,12 +100,13 @@ impl PyVecEnv {
         py.detach(|| env.step(actions, f, i, mask, reward, done)).map_err(failed)
     }
 
-    /// What a player that needs no model ("random" or "greedy") would do on each side of every game.
+    /// What a player that needs no model ("random", "greedy" or "lookahead") would do on each side of every game.
     fn baseline(&mut self, py: Python<'_>, kind: &str, mut actions: PyReadwriteArray2<'_, i32>) -> PyResult<()> {
         let kind = match kind {
             "random" => Baseline::Random,
             "greedy" => Baseline::Greedy,
-            _ => return Err(PyValueError::new_err("the baselines are \"random\" and \"greedy\"")),
+            "lookahead" => Baseline::Lookahead,
+            _ => return Err(PyValueError::new_err("the baselines are \"random\", \"greedy\" and \"lookahead\"")),
         };
         let actions = whole(&mut actions, "actions")?;
         if actions.len() != 4 * self.env.len() {

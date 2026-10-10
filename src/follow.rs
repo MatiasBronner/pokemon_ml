@@ -322,6 +322,8 @@ pub struct Follower {
     mover: Option<Mover>,
     /// The moves chosen with the last reply, by team index, and where each was aimed.
     chosen: Vec<(usize, u16, i8)>,
+    /// By side: it has Mega Evolved.
+    megaed: [bool; 2],
     /// Round has been used this turn, as of this many moves begun.
     round: Option<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
@@ -517,6 +519,7 @@ impl Follower {
             items: Vec::new(),
             mover: None,
             chosen: Vec::new(),
+            megaed: [false; 2],
             round: None,
             roused: None,
             started: false,
@@ -1001,6 +1004,7 @@ impl Follower {
                     }
                 }
             }
+            "-mega" => self.megaed[side] = true,
             "faint" => {
                 let left = self.spots[side][pos].stay;
                 for spot in self.spots.iter_mut().flatten() {
@@ -1256,9 +1260,10 @@ impl Follower {
                         )
                     });
                 } else if name == "gravity" {
-                    self.spot(side, pos)
-                        .vols
-                        .retain(|v| !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove));
+                    // Brought down to earth.
+                    self.spot(side, pos).vols.retain(|v| {
+                        !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove | VolKind::Magnetrise)
+                    });
                 } else if matches!(name.as_str(), "spite" | "eeriespell" | "leppaberry") && side == self.side {
                     // PP taken from one of its moves, or given back.
                     let n: u8 = arg(5).parse().unwrap_or(if name == "leppaberry" { 10 } else { 0 });
@@ -1568,8 +1573,10 @@ impl Follower {
             }
         }
 
+        (b.sides[0].mega_used, b.sides[1].mega_used) = (self.megaed[0], self.megaed[1]);
+
         // ---- the follower's own side, from the request
-        let megaed = req.mons.iter().any(|m| is_mega(m.species));
+        let megaed = self.megaed[me] || req.mons.iter().any(|m| is_mega(m.species));
         let us = &self.reader.sides[me];
         b.sides[me].n = req.mons.len().min(MAX_TEAM) as u8;
         for (k, mon) in req.mons.iter().take(MAX_TEAM).enumerate() {

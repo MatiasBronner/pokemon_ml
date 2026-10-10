@@ -524,7 +524,7 @@ pub fn observe_battle(
     let mut p = parts(f, i);
     let opp = 1 - view;
     let (us, them) = (&b.sides[view], &b.sides[opp]);
-    let megaed = |s: &Side| s.team[..s.n as usize].iter().any(|m| is_mega(m.species));
+    let megaed = |s: &Side| s.mega_used;
     let phase = if b.request == Request::Switch { Phase::Switch } else { Phase::Move };
 
     // ---- the field

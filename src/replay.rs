@@ -1355,7 +1355,7 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
         Err(e) => return Outcome::Fail(vec![e.to_string()]),
     };
     // The recorder gives each Pokémon a name of its own, which the first request has
-        // for those brought. (Its teams can have a species twice, which no ladder allows.)
+    // for those brought. (Its teams can have a species twice, which no ladder allows.)
     let names = |side: usize| -> Vec<String> {
         let mut out = vec![String::new(); sets[side].len()];
         let listed = c.initial.requests[side]["side"]["pokemon"].as_array();
@@ -1426,6 +1426,18 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
         }
         Ok(())
     };
+    // With closed sheets a player takes the other team for a legal one. The recorder also
+    // hands Illusion to Pokémon the regulation gives no such ability, and what a player
+    // makes of those battles is not what the game, which knows better, makes of them.
+    if !c.open_sheets {
+        let legal = |set: &PokemonSet| {
+            let rule = crate::format::Format::current().rule(set.species);
+            set.ability != ab::ILLUSION || rule.is_some_and(|r| r.abilities.contains(&ab::ILLUSION))
+        };
+        if !sets.iter().flatten().all(legal) {
+            return Outcome::Unsupported("an Illusion the regulation does not allow, with closed sheets".into());
+        }
+    }
     let result = (|| -> Result<(), String> {
         // Team Preview: everything up to the battle's start.
         let cut = c.initial.log.iter().position(|l| l.starts_with("|teamsize|")).unwrap_or(0);

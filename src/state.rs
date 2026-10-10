@@ -365,6 +365,9 @@ pub struct Side {
     pub pokemon_left: u8,
     /// How many of this side's Pokémon have fainted so far.
     pub total_fainted: u8,
+    /// One of its Pokémon has Mega Evolved, which a side does once a battle. (Everyone
+    /// sees it happen, even where an Illusion hides what the Pokémon became.)
+    pub(crate) mega_used: bool,
     /// Whether one of its Pokémon fainted this turn, and last turn.
     pub(crate) fainted_this_turn: bool,
     pub(crate) fainted_last_turn: bool,

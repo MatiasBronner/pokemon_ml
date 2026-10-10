@@ -2,12 +2,12 @@
 //! (`vgc_engine::obs`): actions and choices agree, the masks say what is
 //! legal, nothing hidden reaches the other side, and many games run at once.
 
-use vgc_engine::data::{ABILITIES, ITEMS, MOVES, SPECIES, VolKind, ab, ability_id, item_id, move_id, species_id};
+use vgc_engine::data::{ABILITIES, ITEMS, MOVES, SPECIES, ab, ability_id, item_id, move_id, species_id};
 use vgc_engine::env::{Baseline, Config, Game, N_ACTIONS, N_PREVIEW, OBS_M, VecEnv, preview_table};
 use vgc_engine::format::{Format, ShowdownSet};
 use vgc_engine::obs::{
     ACT_F, ACT_VOLATILES, ACTIVES, FIELD_F, HIDDEN_VOLATILES, ID_BASE, ID_NONE, ID_UNKNOWN, MON_F, MON_IDS, MONS,
-    OBS_F, OBS_I, Phase, ROSTER, item_table, layout, move_table, species_table, vocab,
+    MOVE_F, OBS_F, OBS_I, Phase, ROSTER, item_table, layout, move_table, species_table, vocab,
 };
 use vgc_engine::rng::Rng;
 use vgc_engine::teams::{Pool, PoolTeam, Variation};
@@ -67,6 +67,10 @@ impl Obs {
     }
     fn info(&self) -> &[i16] {
         &self.i[OBS_I - 4..]
+    }
+    fn move_feats(&self, token: usize) -> &[f32] {
+        let at = FIELD_F + MONS * MON_F + ACTIVES * ACT_F + token * MOVE_F;
+        &self.f[at..at + MOVE_F]
     }
 }
 
@@ -182,7 +186,7 @@ where
 fn the_other_side_is_given_as_the_battle_has_shown_it() {
     let mut rng = Rng::from_words([3, 1, 4, 1]);
     let (mut checked, mut unknown_items, mut known_items, mut lost) = (0, 0, 0, 0);
-    let (mut hidden_own, mut active_seen) = (0, 0);
+    let (mut disabled, mut active_seen) = (0, 0);
     for seed in 0..80 {
         let open = seed % 2 == 1;
         let mut game = Game::new(teams(300 + seed), open).unwrap();
@@ -261,14 +265,13 @@ fn the_other_side_is_given_as_the_battle_has_shown_it() {
                     assert_eq!(token < ROSTER, slot < 2, "a side's positions hold its own Pokémon");
                     assert_eq!(o.mon_feats(token)[5], 1.0, "the Pokémon in a position is on the field");
                     active_seen += 1;
-                    // What an unrevealed item or ability keeps is the holder's to know.
+                    // What the game keeps to itself is given to neither side.
                     for kind in HIDDEN_VOLATILES {
-                        let flag = o.act_feats(slot)[ACT_VOLATILES + kind as usize];
-                        if slot >= 2 {
-                            assert_eq!(flag, 0.0, "{kind:?} shown to the other side");
-                        } else {
-                            hidden_own += (flag == 1.0 && kind == VolKind::Choicelock) as usize;
-                        }
+                        assert_eq!(o.act_feats(slot)[ACT_VOLATILES + kind as usize], 0.0, "{kind:?} is given");
+                    }
+                    // What a side is told of its own instead: a move it cannot pick.
+                    if slot < 2 && o.info()[0] == 1 {
+                        disabled += (0..4).filter(|k| o.move_feats(4 * slot + k)[2] == 1.0).count();
                     }
                 }
                 let info = o.info();
@@ -282,7 +285,7 @@ fn the_other_side_is_given_as_the_battle_has_shown_it() {
         checked > 10_000 && unknown_items > 2_000 && known_items > 300 && lost > 300,
         "{checked} {unknown_items} {known_items} {lost}"
     );
-    assert!(active_seen > 5_000 && hidden_own > 5, "{active_seen} {hidden_own}");
+    assert!(active_seen > 5_000 && disabled > 50, "{active_seen} {disabled}");
     let _ = (ITEMS.len(), MOVES.len());
 }
 

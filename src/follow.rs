@@ -103,6 +103,9 @@ struct Spot {
     ability_touched: bool,
     /// Instruct has been used on it: its next move is the repeat, put in ahead of the queue.
     instructed: bool,
+    /// The forme it has changed into on the field, where the log has said so (a request
+    /// goes on giving the forme it came in as).
+    forme: Option<u16>,
 }
 
 impl Spot {
@@ -124,6 +127,7 @@ impl Spot {
             lost_item: false,
             ability_touched: false,
             instructed: false,
+            forme: None,
         }
     }
 
@@ -172,6 +176,10 @@ struct FieldTrack {
     weather_for: u16,
     terrain: Terrain,
     terrain_for: u16,
+    /// The weather, or the terrain, went up while this turn was ending: too late for the
+    /// turn's end to count against it.
+    weather_late: bool,
+    terrain_late: bool,
     /// Field conditions and the turns they have left.
     pseudo: Vec<(Pseudo, u8)>,
     sides: [SideTrack; 2],
@@ -334,6 +342,8 @@ pub struct Follower {
     chosen: Vec<(usize, u16, i8)>,
     /// By side: it has Mega Evolved.
     megaed: [bool; 2],
+    /// The turn is ending: what the log says now comes of the end-of-turn effects.
+    ending: bool,
     /// Pokémon of the other side whose number changed since the last decision (a disguise dropped): from, to.
     renumbered: Vec<(usize, usize)>,
     /// Round has been used this turn, as of this many moves begun.
@@ -515,6 +525,8 @@ impl Follower {
                 weather_for: 0,
                 terrain: Terrain::None,
                 terrain_for: 0,
+                weather_late: false,
+                terrain_late: false,
                 pseudo: Vec::new(),
                 sides: Default::default(),
             },
@@ -532,6 +544,7 @@ impl Follower {
             mover: None,
             chosen: Vec::new(),
             megaed: [false; 2],
+            ending: false,
             renumbered: Vec::new(),
             round: None,
             roused: None,
@@ -784,9 +797,8 @@ impl Follower {
         // (Whether the other side doubts who it is makes no difference to its Speed.)
         seen.doubt = live.transformed;
         let set = &self.team[own.entry];
-        // The species it is now: its own, or the Mega it has just become.
-        let same = SPECIES[live.species as usize].base_species == SPECIES[set.species as usize].base_species;
-        let species = if is_mega(live.species) && same { live.species } else { mon.species };
+        // The species it is now: as the request had it, or the forme it has taken since.
+        let species = self.spots[self.side][pos].forme.filter(|_| !is_mega(mon.species)).unwrap_or(mon.species);
         let rec = &live.rec;
         let item = match rec.item {
             ItemShown::Holds(item) => item,
@@ -960,7 +972,10 @@ impl Follower {
                 let id = to_id(arg(2));
                 if id == "none" {
                     self.field.weather = Weather::None;
-                } else if !parts.contains(&"[upkeep]") {
+                    self.ending = true;
+                } else if parts.contains(&"[upkeep]") {
+                    self.ending = true;
+                } else {
                     let weather = Weather::named(&id).or(match id.as_str() {
                         "snow" | "hail" => Some(Weather::Snowscape),
                         _ => None,
@@ -969,6 +984,7 @@ impl Follower {
                         && weather != self.field.weather
                     {
                         (self.field.weather, self.field.weather_for) = (weather, 0);
+                        self.field.weather_late = self.ending;
                     }
                 }
                 return Ok(());
@@ -979,6 +995,7 @@ impl Follower {
                 if let Some(terrain) = Terrain::named(&id) {
                     if start {
                         (self.field.terrain, self.field.terrain_for) = (terrain, 0);
+                        self.field.terrain_late = self.ending;
                     } else if self.field.terrain == terrain {
                         self.field.terrain = Terrain::None;
                     }
@@ -1043,14 +1060,27 @@ impl Follower {
                     && to < ACTIVE
                     && to != pos
                 {
+                    // (What is set on a position, a Wish on its way, stays where it was set.)
                     self.spots[side].swap(pos, to);
-                    self.field.sides[side].slots.swap(pos, to);
                     if side == self.side {
                         self.own_at.swap(pos, to);
                     }
                 }
             }
-            "-mega" => self.megaed[side] = true,
+            "-mega" => {
+                self.megaed[side] = true;
+                if side == self.side {
+                    // Its own Mega, whatever disguise the log shows it under.
+                    let species = self.own.get(self.own_at[pos]).map(|own| self.team[own.entry].species);
+                    let stone = item_id(&to_id(arg(4)));
+                    let mega = species.zip(stone).and_then(|(species, stone)| {
+                        ITEMS[stone as usize].mega.iter().find(|&&(from, _)| from == species).map(|&(_, to)| to)
+                    });
+                    if mega.is_some() {
+                        self.spot(side, pos).forme = mega;
+                    }
+                }
+            }
             "faint" => {
                 let left = self.spots[side][pos].stay;
                 for spot in self.spots.iter_mut().flatten() {
@@ -1059,8 +1089,12 @@ impl Follower {
             }
             "detailschange" | "-formechange" => {
                 // A new forme has its own types.
+                let forme = species_id(&to_id(arg(3).split(',').next().unwrap_or("")));
                 let spot = self.spot(side, pos);
                 (spot.types, spot.added) = (None, Type::None);
+                if kind == "-formechange" && forme.is_some() {
+                    spot.forme = forme;
+                }
             }
             "move" => {
                 let Some(used) = move_id(&to_id(arg(3))) else {
@@ -1081,12 +1115,12 @@ impl Follower {
                         // One PP, in case it leaves the field before the next request says so;
                         // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
                         let mut aimed: Vec<(usize, usize)> = Vec::new();
-                        if let Some(list) = parts.iter().find_map(|p| p.strip_prefix("[spread] ")) {
-                            aimed.extend(list.split(',').filter_map(|who| {
-                                Some((Follower::side_of(who)?, if who.ends_with('b') { 1 } else { 0 }))
-                            }));
-                        } else if matches!(MOVES[used as usize].target, Target::All | Target::FoeSide) {
-                            // A move on the whole field, or on the other side of it.
+                        let wide = matches!(
+                            MOVES[used as usize].target,
+                            Target::All | Target::FoeSide | Target::AllAdjacent | Target::AllAdjacentFoes
+                        );
+                        if wide {
+                            // A move on the whole field, or on everyone across it: whether or not it lands.
                             aimed.extend([(1 - side, 0), (1 - side, 1)]);
                         } else if let Some(target) = fourth {
                             aimed.push(target);
@@ -1235,6 +1269,7 @@ impl Follower {
                     spot.remove(kind);
                 } else if matches!(effect_id(effect).as_str(), "futuresight" | "doomdesire") {
                     self.field.sides[side].slots[pos].retain(|c| c.0 != SlotCond::Futuremove);
+                    self.ending = true;
                 }
             }
             "-singleturn" | "-singlemove" => {
@@ -1449,12 +1484,13 @@ impl Follower {
 
     /// A turn ends.
     fn upkeep(&mut self) {
-        if self.field.weather != Weather::None {
+        if self.field.weather != Weather::None && !self.field.weather_late {
             self.field.weather_for += 1;
         }
-        if self.field.terrain != Terrain::None {
+        if self.field.terrain != Terrain::None && !self.field.terrain_late {
             self.field.terrain_for += 1;
         }
+        (self.field.weather_late, self.field.terrain_late, self.ending) = (false, false, false);
         self.field.pseudo.iter_mut().for_each(|p| p.1 = p.1.saturating_sub(1));
         self.field.pseudo.retain(|p| p.1 > 0);
         for side in 0..2 {
@@ -1638,10 +1674,12 @@ impl Follower {
             m.transformed = live.is_some_and(|l| l.transformed);
             // The species it is now: what the request says, or what the log has it change
             // into on the field (another Pokémon's shape, a forme of its own).
-            let own_forme = |sp: u16| SPECIES[sp as usize].base_species == SPECIES[mon.species as usize].base_species;
+            // (A forme taken on the field is dropped on fainting, as on leaving.)
+            let stands = k < ACTIVE && !mon.fainted && !is_mega(mon.species);
+            let forme = if stands { self.spots[me][k].forme } else { None };
             m.species = match live {
-                Some(l) if l.transformed || own_forme(l.species) => l.species,
-                _ => mon.species,
+                Some(l) if l.transformed => l.species,
+                _ => forme.unwrap_or(mon.species),
             };
             m.base_species = mon.species;
             m.types = SPECIES[m.species as usize].types;

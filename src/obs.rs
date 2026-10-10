@@ -735,8 +735,10 @@ pub fn observe_battle(
             w.one_hot(7, status as usize);
         }
         m.boosts.iter().for_each(|&s| w.put(s as f32 / 6.0));
-        if !own && m.illusion != 0 {
-            // The types everyone takes it to have.
+        let own_types = m.types == SPECIES[m.species as usize].types && m.added_type == Type::None;
+        if !own && m.illusion != 0 && own_types {
+            // The types everyone takes it to have: those of the Pokémon it passes for. (Once
+            // something has changed its types, which is said aloud, they are what they are.)
             for t in SPECIES[m.live.species as usize].types {
                 if (t as usize) < 18 {
                     w.buf[w.at + t as usize] = 1.0;

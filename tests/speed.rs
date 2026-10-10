@@ -55,14 +55,20 @@ fn one_turn_of_moves_narrows_what_each_can_be() {
     game.act([[0, 46], [0, 46]].map(|_| [0, 0]), [1, 2, 3, 4]).unwrap();
     let (b, speeds) = (game.battle().unwrap(), game.speeds());
 
-    // Garchomp went before Milotic (101). Any Garchomp does that unless it holds an Iron Ball: so it does not.
-    let seen = speeds.belief(1, 0);
-    assert_eq!(seen.range(garchomp), (109, 253));
-    assert_eq!(seen.items(), [true, false, false, false]);
-    // Snorlax went before Milotic too, and no Snorlax reaches 101 by itself: it holds a Choice Scarf.
+    // Snorlax went before Milotic (101), and no Snorlax reaches 101 by itself: it holds a Choice Scarf.
     let seen = speeds.belief(1, 1);
     assert_eq!(seen.items(), [true, true, false, false]);
     assert_eq!(seen.range(snorlax), (102, 135));
+    // Garchomp went before Milotic as well. Any Garchomp does that unless it holds an Iron
+    // Ball, so it does not. Nor does it hold a Choice Scarf: a team has each item once, and
+    // this team's is on Snorlax. What is left is a Garchomp's own Speed, 109 to 169.
+    let seen = speeds.belief(1, 0);
+    assert_eq!(seen.items(), [false; 4]);
+    assert_eq!(seen.range(garchomp), (109, 169));
+    // The same goes for the four of theirs that have not been seen.
+    for entry in 2..6 {
+        assert!(!speeds.belief(1, entry).items()[0]);
+    }
     // So next turn, with nothing changed, both of theirs go before both of ours, as far as our side can tell...
     for (mine, theirs) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
         assert_eq!(speeds.first(b, 0, mine, theirs), Some(First::Theirs));
@@ -77,6 +83,23 @@ fn one_turn_of_moves_narrows_what_each_can_be() {
         let set = &game.rosters()[side][entry];
         assert!(speeds.belief(side, entry).has(set.nature, set.stat_points[5], set.item));
     }
+}
+
+/// The item clause is only counted on for a team that keeps it. Two Choice Scarves on one
+/// team is not a team the regulation allows, but one put together by hand can have them.
+#[test]
+fn a_team_that_breaks_the_item_clause_gets_no_conclusions_from_it() {
+    let ours = team([set("Milotic", "Hardy", 0, ""), set("Sylveon", "Hardy", 0, "")]);
+    let theirs = team([set("Garchomp", "Jolly", 32, "Choice Scarf"), set("Snorlax", "Jolly", 32, "Choice Scarf")]);
+    let mut game = Game::new([ours, theirs], false).unwrap();
+    game.check_speeds();
+    game.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+    game.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+    // Snorlax's is worked out as before, and Garchomp's stays possible.
+    assert_eq!(game.speeds().belief(1, 1).items(), [true, true, false, false]);
+    assert!(game.speeds().belief(1, 0).items()[0]);
+    let set = &game.rosters()[1][0];
+    assert!(game.speeds().belief(1, 0).has(set.nature, set.stat_points[5], set.item));
 }
 
 /// With open team sheets the nature and the item are on the sheet, and only the stat points are left to find.

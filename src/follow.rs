@@ -49,16 +49,24 @@
 //! corrected request like any other; the simulator, in training, does not
 //! offer the choice in the first place.
 //!
-//! Two things it can get wrong, each seen in one battle of the last six
-//! thousand recorded for checking it (random teams, random play). The PP of
-//! its own Pokémon comes with every request for the two on the field; for
-//! the others it is counted from the log, and a move whose target the log
-//! leaves out (a Counter that fails) may have paid a Pressure the follower
-//! cannot see, which stays wrong if the Pokémon leaves the field that turn.
-//! And a move the log shows failing is taken to have been used, where one
-//! refused by a Choice lock that Magic Room had lifted when it was chosen
-//! never began: the move that Pokémon last used is then wrong until its
-//! next.
+//! Two things it is not told, and so cannot always have right:
+//!
+//! - *What a move with no target on show paid to Pressure.* A Counter or a
+//!   Mirror Coat that fails, or a move called by another that does nothing
+//!   to be seen, was aimed at one of the other side picked at random, and
+//!   the log does not say which. Facing one Pokémon with Pressure and one
+//!   without, the follower cannot know whether a second PP went, and counts
+//!   none. Every request gives the PP of the two on the field, so this
+//!   stays wrong only for a Pokémon that left the field, or fainted, in
+//!   that same turn.
+//! - *That a move of the other side's never began*, when the Choice item
+//!   that held it back has never been shown. A Pokémon held to one move can
+//!   come to choose another (a Magic Room had its item switched off when it
+//!   chose, and ended before it moved). Showdown shows the move and that it
+//!   failed, like any move that fails. Where the item is known (its own
+//!   Pokémon; the other side's on an open sheet, or once seen) the
+//!   follower knows the move was never used. Where it is not, it takes it
+//!   for the move that Pokémon last used, and the simulator knows better.
 
 use serde_json::Value;
 
@@ -122,6 +130,8 @@ struct Spot {
     lost_item: bool,
     /// Something has been said of its ability since the last request.
     ability_touched: bool,
+    /// The item the log has given it, or left it without (`it::NONE`), since the last request.
+    item_since: Option<u16>,
     /// It has said it has Pressure, as its holder does on coming in or coming by it. (A
     /// Pokémon passing for one that has it says nothing.)
     pressing: bool,
@@ -159,6 +169,7 @@ impl Spot {
             quick: false,
             lost_item: false,
             ability_touched: false,
+            item_since: None,
             pressing: false,
             choice: None,
             no_hold: false,
@@ -770,6 +781,11 @@ impl Follower {
                 "cant" => !arg(3).starts_with("ability: "),
                 _ => false,
             };
+            if kind == "move" && !begins && to_id(arg(3)) == "round" {
+                // A Round that another move called (Copycat) calls the next one forward
+                // like any other.
+                self.round.get_or_insert(self.begun.len());
+            }
             if begins {
                 // (The later turns of a move it is locked into say nothing the first did not.)
                 let named = match kind {
@@ -899,7 +915,12 @@ impl Follower {
         // The species it is now: as the request had it, or the forme it has taken since.
         let species = self.spots[self.side][pos].forme.filter(|_| !is_mega(mon.species)).unwrap_or(mon.species);
         let rec = &live.rec;
+        // Its item: what the other side has been shown of it, and failing that what the
+        // request said. For one of its own in disguise the record is of the Pokémon it
+        // passes for, and it goes by the request and what the log has said since.
+        let disguised = self.reader.sides[self.side].team.get(live.entry).is_some_and(|e| e.name != own.name);
         let item = match rec.item {
+            _ if disguised => self.spots[self.side][pos].item_since.unwrap_or(mon.item),
             ItemShown::Holds(item) => item,
             ItemShown::Lost(_) => it::NONE,
             ItemShown::Unknown => mon.item,
@@ -1599,7 +1620,8 @@ impl Follower {
                 if effect_id(arg(3)) == "custapberry" {
                     self.spot(side, pos).quick = true;
                 }
-                self.spot(side, pos).choice = None;
+                let spot = self.spot(side, pos);
+                (spot.choice, spot.item_since) = (None, Some(it::NONE));
             }
             "-waiting" => {
                 // A Pledge waits for its partner, which goes next.
@@ -1619,8 +1641,20 @@ impl Follower {
             }
             "-item" => {
                 // (A Choice item that comes, even in place of another, starts afresh.)
+                let item = item_id(&to_id(arg(3)));
                 let spot = self.spot(side, pos);
-                (spot.choice, spot.no_hold) = (None, false);
+                spot.item_since = item.or(spot.item_since);
+                if !from.is_empty() && !from.contains("Frisk") {
+                    // (Not an item it had all along coming to light: a Choice item that
+                    // comes, even in place of another, starts afresh.)
+                    (spot.choice, spot.no_hold) = (None, false);
+                }
+                let taken = ["move: Thief", "move: Covet", "ability: Pickpocket", "ability: Magician", "ability: Symbiosis"];
+                if let Some((s, p)) = of.filter(|_| taken.contains(&from)) {
+                    // Taken from, or handed over by, the Pokémon named last.
+                    let spot = &mut self.spots[s][p];
+                    (spot.choice, spot.item_since) = (None, Some(it::NONE));
+                }
             }
             "-mustrecharge" => {
                 self.spot(side, pos).add(VolKind::Mustrecharge, Ends::Said);
@@ -1737,8 +1771,14 @@ impl Follower {
                         spot.overridden = Some(at);
                     }
                     if kind == VolKind::Smackdown {
-                        // Knocked out of the air, and out of the move that took it there.
-                        spot.vols.retain(|v| !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove));
+                        // Knocked out of the air, and out of the move or the Magnet Rise that
+                        // took it there.
+                        spot.vols.retain(|v| {
+                            !matches!(
+                                v.kind,
+                                VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove | VolKind::Magnetrise
+                            )
+                        });
                     }
                 }
             }
@@ -1851,7 +1891,7 @@ impl Follower {
             }
         }
         self.req = Some(req);
-        self.spots.iter_mut().flatten().for_each(|spot| spot.ability_touched = false);
+        self.spots.iter_mut().flatten().for_each(|spot| (spot.ability_touched, spot.item_since) = (false, None));
         let b = self.rebuild()?;
         self.digest(&b);
         if b.request == Request::Move {
@@ -2183,7 +2223,7 @@ impl Follower {
         }
         let a = b.resolve_move(begun.r, chosen, 0);
         // A Quick Claw is rolled for, and says so when it works; what always holds a move back does not.
-        Some(a.frac.min(0) + begun.quick as i8)
+        Some(if begun.quick { 1 } else { a.frac.min(0) })
     }
 
     /// A move as it stood in the queue when the `at`th of this stretch began.
@@ -2220,10 +2260,7 @@ impl Follower {
             let now = then.own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1.as_ref());
             let speed =
                 now.and_then(|n| n.agreed(|a| speed::own_speed(&n.seen, a, n.item, n.lost_item, n.stat, &then.field)));
-            let began = self.turn_start.as_ref().map(|b| b.mon(s.r).ability);
-            let priority = now
-                .zip(began)
-                .and_then(|(n, began)| n.agreed(|a| speed::own_priority(&n.seen, a, began, &then.field, q.move_id)));
+            let priority = now.and_then(|n| n.agreed(|a| speed::own_priority(&n.seen, a, &then.field, q.move_id)));
             match (speed, priority, self.own_frac(s, q.move_id)) {
                 (Some(speed), Some(priority), Some(frac)) => {
                     (q.speed, q.priority, q.frac) = (speed, priority + frac as i32, frac)

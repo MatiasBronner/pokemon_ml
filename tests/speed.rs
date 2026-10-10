@@ -117,6 +117,29 @@ fn an_open_sheet_leaves_only_the_stat_points() {
     assert_eq!(game.speeds().belief(1, 1).items(), [true, true, false, false]);
 }
 
+/// Who moves first is told by Speed alone. A Quick Claw, which now and then puts its
+/// holder's move ahead of a faster one, makes no difference to it: the holder is taken
+/// as if it held nothing.
+#[test]
+fn a_quick_claw_changes_nothing_about_who_is_said_to_move_first() {
+    let verdicts = |item: &str| {
+        let ours = team([set("Milotic", "Hardy", 0, ""), set("Sylveon", "Hardy", 0, "")]);
+        let theirs = team([set("Garchomp", "Jolly", 32, ""), set("Snorlax", "Jolly", 32, item)]);
+        let mut game = Game::new([ours, theirs], true).unwrap();
+        game.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+        let (b, speeds) = (game.battle().unwrap(), game.speeds());
+        // What our side makes of each pairing, what theirs does, and what is believed of Snorlax.
+        let ours = [(0, 0), (0, 1), (1, 0), (1, 1)].map(|(mine, theirs)| speeds.first(b, 0, mine, theirs));
+        let theirs = [(0, 0), (0, 1), (1, 0), (1, 1)].map(|(mine, theirs)| speeds.first(b, 1, mine, theirs));
+        (ours, theirs, speeds.belief(1, 1).range(game.rosters()[1][1].species))
+    };
+    let (plain, claw) = (verdicts(""), verdicts("Quick Claw"));
+    assert_eq!(plain, claw);
+    // Milotic (101) is faster than any Snorlax without a Choice Scarf (90 at most), Sylveon (80) may or may not be.
+    assert_eq!((claw.0[1], claw.0[3]), (Some(First::Mine), Some(First::Unknown)));
+    assert_eq!(claw.1[2], Some(First::Theirs));
+}
+
 fn random_teams(seed: u32) -> [Vec<PokemonSet>; 2] {
     let format = Format::current();
     let mut rng = Rng::from_words([seed as u16, (seed >> 16) as u16, 6, 7]);

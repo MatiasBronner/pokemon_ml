@@ -24,10 +24,12 @@ FIXTURE = os.path.join(REPO, "tests", "fixtures", "followed_battles.jsonl")
 
 
 def recorded():
-    """The recorded battles whose teams a ladder would allow (the recorder's can have a species twice)."""
+    """The recorded battles whose teams a ladder would allow (the recorder's can have a species
+    twice), and that are there to the end (one of the fixture's is cut short)."""
     with open(FIXTURE, encoding="utf-8") as file:
         cases = [json.loads(line) for line in file]
-    return [c for c in cases if all(len({m["species"] for m in team}) == len(team) for team in c["rosters"])]
+    whole = lambda c: any(line.startswith("|win|") for line in c["steps"][-1]["after"]["log"])
+    return [c for c in cases if whole(c) and all(len({m["species"] for m in team}) == len(team) for team in c["rosters"])]
 
 
 def own_lines(side, log):

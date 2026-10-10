@@ -611,9 +611,11 @@ pub(crate) fn own_speed(
 /// Ten times the priority a move has from a Pokémon, worked out by its own
 /// side from what it knows (its ability now, and the one it began the turn
 /// with). `None` where [`priority`] cannot say.
-pub(crate) fn own_priority(s: &Seen, ability: u16, at_start: u16, field: &FieldSeen, move_id: u16) -> Option<i32> {
+pub(crate) fn own_priority(s: &Seen, ability: u16, field: &FieldSeen, move_id: u16) -> Option<i32> {
     let known = Know::Is(if s.gastro_acid { ab::NOABILITY } else { ability });
-    priority(s, &known, &Know::Is(at_start), field, move_id)
+    // (Whether it goes last in its bracket, as with Stall, its side knows too: that is
+    // worked out apart, from how things stood when it chose.)
+    bracket(s, &known, field, move_id)
 }
 
 /// Ten times the priority `move_id` has from this Pokémon, as far as the
@@ -622,6 +624,16 @@ pub(crate) fn own_priority(s: &Seen, ability: u16, at_start: u16, field: &FieldS
 /// within its bracket is settled when it is chosen, so a Sableye that Mega
 /// Evolves, or has its ability taken, still moves last that turn if it had Stall.
 fn priority(s: &Seen, known: &Know, at_start: &Know, field: &FieldSeen, move_id: u16) -> Option<i32> {
+    // Stall goes last in its bracket and says nothing.
+    if known.could_be(ab::STALL) || at_start.could_be(ab::STALL) {
+        return None;
+    }
+    bracket(s, known, field, move_id)
+}
+
+/// Ten times the priority bracket `move_id` goes in from this Pokémon; `None` if an
+/// ability it has not shown could change it.
+fn bracket(s: &Seen, known: &Know, field: &FieldSeen, move_id: u16) -> Option<i32> {
     let d = &MOVES[move_id as usize];
     let mut p = d.priority as i32;
     if move_id == mv::GRASSYGLIDE && field.terrain == Terrain::Grassyterrain {
@@ -638,10 +650,6 @@ fn priority(s: &Seen, known: &Know, at_start: &Know, field: &FieldSeen, move_id:
         } else if known.could_be(ability) {
             return None;
         }
-    }
-    // Stall goes last in its bracket and says nothing.
-    if known.could_be(ab::STALL) || at_start.could_be(ab::STALL) {
-        return None;
     }
     Some(10 * p)
 }
@@ -998,6 +1006,10 @@ impl Speeds {
     /// Who moves first, as far as `view`'s side can tell: its Pokémon at
     /// `mine`, or the other side's at `theirs`, if both use moves of the same
     /// priority with things as they stand. `None` if either position is empty.
+    ///
+    /// This goes by Speed alone. A Quick Claw (or a Quick Draw) that may put a
+    /// move ahead of a faster Pokémon's one time in five changes nothing here:
+    /// its holder is treated as if it held nothing.
     pub fn first(&self, b: &Battle, view: usize, mine: usize, theirs: usize) -> Option<First> {
         let opp = 1 - view;
         if mine >= b.sides[view].n as usize || theirs >= b.sides[opp].n as usize {

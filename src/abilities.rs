@@ -825,7 +825,7 @@ impl Battle {
                 for &f in &foes[..n] {
                     let item = self.mon(f).item;
                     if item != it::NONE {
-                        self.show_item_gain(f, item);
+                        self.show_item_held(f, item);
                         self.show_ability(holder, ability);
                     }
                 }

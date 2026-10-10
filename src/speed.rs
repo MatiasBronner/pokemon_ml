@@ -302,6 +302,8 @@ pub(crate) struct Queued {
     /// Speed as the queue sorts by it: negated under Trick Room.
     pub speed: i32,
     pub move_id: u16,
+    /// For a move that is starting: its user is under an Encore.
+    pub encored: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -383,6 +385,7 @@ fn queued(a: &Action) -> Queued {
         frac: a.frac,
         speed: a.speed,
         move_id: a.move_id,
+        encored: false,
     }
 }
 
@@ -392,7 +395,8 @@ impl Battle {
         if !on() {
             return;
         }
-        let me = queued(a);
+        let mut me = queued(a);
+        me.encored = self.vols(me.r).has(VolKind::Encore);
         let mut rest = [me; 3];
         let mut n_rest = 0;
         for other in self.queue.as_slice() {
@@ -624,6 +628,8 @@ pub struct Speeds {
     /// By side and team index: what was known of its ability when the turn began (the
     /// ability shown, whether it had been replaced, and the species it then was).
     began: [[(u16, bool, u16); MAX_TEAM]; 2],
+    /// By side and team index: under an Encore when the turn began.
+    encored: [[bool; MAX_TEAM]; 2],
     /// By side: whether its team can be counted on to have each item once at most (the
     /// regulation's item clause, on a team that keeps it).
     clause: [bool; 2],
@@ -676,6 +682,7 @@ impl Speeds {
             owner: [[NOT_LISTED; CLASSES]; 2],
             swapped: [[false; MAX_TEAM]; 2],
             began: [[(UNKNOWN, true, 0); MAX_TEAM]; 2],
+            encored: [[false; MAX_TEAM]; 2],
             own: [[0; ACTIVE]; 2],
             watcher: None,
             strict: false,
@@ -808,8 +815,17 @@ impl Speeds {
             if moved || x.frac > 0 || other.frac != 0 {
                 continue;
             }
-            // A transformed Pokémon moves at a Speed its own side cannot put a number to.
-            if seen.iter().any(|o| o.r == other.r && o.transformed) {
+            // An Encore that caught it this turn before it moved: the move it then used is
+            // not the one it chose, and where it stood in the queue went by the one it chose.
+            let at_start = if x_first { first } else { later };
+            if at_start.encored && !self.encored[side][x.r.idx as usize] {
+                continue;
+            }
+            // A Pokémon that has transformed or had its Speed swapped moves at a Speed its own
+            // side cannot put a number to.
+            if seen.iter().any(|o| o.r == other.r && o.transformed)
+                || swapped[other.r.side as usize][other.r.idx as usize]
+            {
                 continue;
             }
             let known = know(s, listed, b.open_team_sheets);
@@ -871,6 +887,8 @@ impl Speeds {
                     } else {
                         (UNKNOWN, true, 0)
                     };
+                    self.encored[side][a] =
+                        m.is_active && b.vols(MonRef { side: side as u8, idx: a as u8 }).has(VolKind::Encore);
                 }
                 // The record of the Pokémon this one appears to be.
                 let rec = if m.is_active && m.live.seen != 0 { &m.live } else { &s.shown[a] };
@@ -951,8 +969,8 @@ impl Speeds {
         if !me.is_active || me.fainted || !s.present {
             return None;
         }
-        if me.transformed {
-            // Its Speed is the copied Pokémon's, which its side has not been told.
+        if me.transformed || self.swapped[view][b.active(view, mine).idx as usize] {
+            // Its Speed is another Pokémon's, which its side has not been told.
             return Some(First::Unknown);
         }
         let roster = &b.sides[opp].roster[..b.sides[opp].n_roster as usize];

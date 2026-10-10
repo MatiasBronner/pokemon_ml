@@ -1418,7 +1418,21 @@ pub fn check_follow(c: &Case, tally: &mut FollowTally) -> Outcome {
         decisions += 1;
         for (k, step) in c.steps.iter().enumerate() {
             let parse = |s: &str| Choice::parse_side(s).ok_or_else(|| format!("unreadable choice {s:?}"));
-            game.choose([parse(&step.choices[0])?, parse(&step.choices[1])?]).map_err(|e| e.to_string())?;
+            let choices = [parse(&step.choices[0])?, parse(&step.choices[1])?];
+            // What the game takes as actions, each follower must turn back into Showdown's words.
+            for side in 0..2 {
+                let action = |pos: usize| game.action_of(side, choices[side][pos]).ok_or("a choice with no action");
+                let reply = followers[side].choice([action(0)?, action(1)?])?;
+                if Choice::parse_side(&reply) != Some(choices[side]) {
+                    return Err(format!(
+                        "battle {} step {}: side {side} chose {:?}, and its follower would have sent {reply:?}",
+                        c.id,
+                        k + 1,
+                        step.choices[side]
+                    ));
+                }
+            }
+            game.choose(choices).map_err(|e| e.to_string())?;
             for side in 0..2 {
                 followers[side].lines(&Follower::own_lines(side, &step.after.log))?;
                 let request = step.after.requests.get(side).ok_or("a step recorded without its requests")?;

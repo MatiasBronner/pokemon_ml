@@ -294,6 +294,8 @@ pub struct Follower {
     /// Items seen to change hands since the last decision, each with how many moves had begun by then.
     items: Vec<(usize, Event)>,
     mover: Option<Mover>,
+    /// The moves chosen with the last reply, by team index.
+    chosen: Vec<(usize, u16)>,
     /// Round has been used this turn, as of this many moves begun.
     round: Option<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
@@ -305,6 +307,17 @@ pub struct Follower {
 
 fn err<T>(what: impl Into<String>) -> Result<T, String> {
     Err(what.into())
+}
+
+/// Whether a `move` line is a move from the queue: one used outright, a later
+/// turn of one, a Round another Round called forward, or the move Instruct
+/// has repeated. (Not one that another move or an ability calls: Sleep Talk's
+/// pick, a bounced Taunt.)
+fn queued_move(name: &str, from: &str) -> bool {
+    from.is_empty()
+        || from == "lockedmove"
+        || from == "move: Instruct"
+        || from.strip_prefix("move: ").is_some_and(|caller| to_id(caller) == to_id(name))
 }
 
 /// The effect a line names, without the kind it says it is (`move: Taunt`, `ability: Flash Fire`).
@@ -477,6 +490,7 @@ impl Follower {
             begun: Vec::new(),
             items: Vec::new(),
             mover: None,
+            chosen: Vec::new(),
             round: None,
             roused: None,
             started: false,
@@ -595,14 +609,14 @@ impl Follower {
         let who = ident(arg(2)).and_then(|id| id.pos.map(|pos| (id.side, pos)));
         if let Some((side, pos)) = who {
             let begins = match kind {
-                "move" => from.is_empty() || from == "lockedmove",
+                "move" => queued_move(arg(3), from),
                 "cant" => !arg(3).starts_with("ability: "),
                 _ => false,
             };
             if begins {
                 // (The later turns of a move it is locked into say nothing the first did not.)
                 let named = match kind {
-                    "move" if from.is_empty() => move_id(&to_id(arg(3))),
+                    "move" if from != "lockedmove" => move_id(&to_id(arg(3))),
                     "move" => None,
                     _ => Some(arg(4)).filter(|m| !m.is_empty() && !m.starts_with('[')).and_then(|m| move_id(&to_id(m))),
                 };
@@ -688,20 +702,27 @@ impl Follower {
             mon.species
         };
         let rec = &live.rec;
-        let ability = if rec.ability != UNKNOWN && (rec.ability_changed || is_mega(species)) {
-            rec.ability
-        } else if rec.ability_changed {
-            return None;
-        } else {
-            mon.ability
-        };
         let item = match rec.item {
             ItemShown::Holds(item) => item,
             ItemShown::Lost(_) => it::NONE,
             ItemShown::Unknown => mon.item,
         };
         let stat = calc_stats(species, set.nature, set.stat_points)[5];
-        speed::own_speed(&seen, ability, item, stat, field)
+        if rec.ability != UNKNOWN && (rec.ability_changed || is_mega(species)) {
+            return speed::own_speed(&seen, rec.ability, item, stat, field);
+        }
+        if !rec.ability_changed {
+            return speed::own_speed(&seen, mon.ability, item, stat, field);
+        }
+        // Its ability has been traded for its partner's and the log does not say which is
+        // which now. Good enough if it comes to the same Speed either way.
+        let mut speeds = (0..ACTIVE).filter_map(|p| {
+            let partner = self.own.get(self.own_at[p])?;
+            let ability = req.mons.iter().find(|m| m.name == partner.name)?.ability;
+            Some(speed::own_speed(&seen, ability, item, stat, field))
+        });
+        let first = speeds.next()??;
+        speeds.all(|other| other == Some(first)).then_some(first)
     }
 
     /// A queued move of whoever is at a position begins.
@@ -918,6 +939,12 @@ impl Follower {
                     }
                 }
             }
+            "faint" => {
+                let left = self.spots[side][pos].stay;
+                for spot in self.spots.iter_mut().flatten() {
+                    spot.vols.retain(|v| v.source == 0 || v.source != left);
+                }
+            }
             "detailschange" | "-formechange" => {
                 // A new forme has its own types.
                 let spot = self.spot(side, pos);
@@ -927,23 +954,27 @@ impl Follower {
                 let Some(used) = move_id(&to_id(arg(3))) else {
                     return Ok(());
                 };
-                let queued = from.is_empty() || from == "lockedmove";
+                let queued = queued_move(arg(3), from);
                 let stay = self.spots[side][pos].stay;
                 let mut undo = None;
                 if queued {
                     let spot = self.spot(side, pos);
                     spot.last_move = used;
+                    // (A charging move's own condition goes as it strikes; that it is a
+                    // two-turn move stays on the books until the turn is over.)
                     spot.vols.retain(|v| {
-                        v.ends != Ends::Move
-                            && !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge)
-                            && !CHARGING.contains(&v.kind)
+                        v.ends != Ends::Move && v.kind != VolKind::Mustrecharge && !CHARGING.contains(&v.kind)
                     });
-                    if from.is_empty() && side == self.side {
-                        // One PP, in case it leaves the field before the next request says so.
+                    if from != "lockedmove" && side == self.side {
+                        // One PP, in case it leaves the field before the next request says so;
+                        // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
+                        let pressed = other(4).is_some_and(|(s, p)| {
+                            s != side && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
+                        });
                         if let Some(own) = self.own.get_mut(self.own_at[pos]) {
                             let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
                             if let Some(slot) = known.iter_mut().find(|s| s.0 == used) {
-                                slot.1 = slot.1.saturating_sub(1);
+                                slot.1 = slot.1.saturating_sub(1 + pressed as u8);
                             }
                         }
                     }
@@ -1110,6 +1141,32 @@ impl Follower {
                     spot.reordered = Some(spot.reordered.map_or(begun, |t| t.min(begun)));
                 } else if matches!(name.as_str(), "quickclaw" | "quickdraw" | "custapberry") {
                     self.spot(side, pos).quick = true;
+                } else if name == "feint" || parts.contains(&"[broken]") {
+                    // Its protection is broken, and with it the run of protecting moves.
+                    self.spot(side, pos).vols.retain(|v| {
+                        !matches!(
+                            v.kind,
+                            VolKind::Protect
+                                | VolKind::Banefulbunker
+                                | VolKind::Kingsshield
+                                | VolKind::Spikyshield
+                                | VolKind::Stall
+                        )
+                    });
+                } else if name == "gravity" {
+                    self.spot(side, pos)
+                        .vols
+                        .retain(|v| !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove));
+                } else if matches!(name.as_str(), "spite" | "eeriespell" | "leppaberry") && side == self.side {
+                    // PP taken from one of its moves, or given back.
+                    let n: u8 = arg(5).parse().unwrap_or(if name == "leppaberry" { 10 } else { 0 });
+                    if let (Some(id), Some(own)) = (move_id(&to_id(arg(4))), self.own.get_mut(self.own_at[pos])) {
+                        let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
+                        if let Some(slot) = known.iter_mut().find(|s| s.0 == id) {
+                            slot.1 =
+                                if name == "leppaberry" { (slot.1 + n).min(slot.2) } else { slot.1.saturating_sub(n) };
+                        }
+                    }
                 }
             }
             "-enditem" => {
@@ -1137,7 +1194,7 @@ impl Follower {
             "-prepare" => {
                 if !parts.contains(&"[premajor]") {
                     let spot = self.spot(side, pos);
-                    spot.add(VolKind::Twoturnmove, Ends::Said);
+                    spot.add(VolKind::Twoturnmove, Ends::After(2));
                     if let Some(own) = VolKind::named(&to_id(arg(3))) {
                         spot.add(own, Ends::Said);
                     }
@@ -1146,6 +1203,12 @@ impl Follower {
             "-anim" => {
                 // The move goes off at once after all (Power Herb, Solar Beam in the sun).
                 self.spot(side, pos).vols.retain(|v| v.kind != VolKind::Twoturnmove && !CHARGING.contains(&v.kind));
+            }
+            "-damage" if from == "confusion" => {
+                // It hurt itself in place of moving: a move it was charging is off.
+                self.spot(side, pos).vols.retain(|v| {
+                    !matches!(v.kind, VolKind::Twoturnmove | VolKind::Mustrecharge) && !CHARGING.contains(&v.kind)
+                });
             }
             "-heal" => {
                 let cond = match effect_id(from).as_str() {
@@ -1168,6 +1231,17 @@ impl Follower {
         let name = effect_id(effect);
         let begun = self.spots[side][pos].begun;
         match effect {
+            "typechange" if arg(4).starts_with('[') || arg(4).is_empty() => {
+                // Reflect Type: the types of the Pokémon named after `[of]`, as they are now.
+                if let Some((s, p)) = of {
+                    let theirs = &self.spots[s][p];
+                    let species = self.reader.sides[s].active[p].as_ref().map(|l| l.species);
+                    let types = theirs.types.or(species.map(|sp| SPECIES[sp as usize].types));
+                    let added = theirs.added;
+                    let spot = self.spot(side, pos);
+                    (spot.types, spot.added) = (types, added);
+                }
+            }
             "typechange" => {
                 let mut types = [Type::None; 2];
                 for (k, t) in arg(4).split('/').take(2).enumerate() {
@@ -1205,6 +1279,10 @@ impl Follower {
                     spot.add(kind, Ends::Said);
                     if kind == VolKind::Encore && begun == 0 {
                         spot.overridden = true;
+                    }
+                    if kind == VolKind::Smackdown {
+                        // Knocked out of the air, and out of the move that took it there.
+                        spot.vols.retain(|v| !matches!(v.kind, VolKind::Fly | VolKind::Bounce | VolKind::Twoturnmove));
                     }
                 }
             }
@@ -1397,11 +1475,17 @@ impl Follower {
             let mut m = b.new_mon(set, k).map_err(|e| e.to_string())?;
             let live = if k < ACTIVE { us.active[k].as_ref().filter(|l| !l.gone) } else { None };
             m.transformed = live.is_some_and(|l| l.transformed);
-            m.species = if m.transformed { live.unwrap().species } else { mon.species };
+            // The species it is now: what the request says, or what the log has it change
+            // into on the field (another Pokémon's shape, a forme of its own).
+            let own_forme = |sp: u16| SPECIES[sp as usize].base_species == SPECIES[mon.species as usize].base_species;
+            m.species = match live {
+                Some(l) if l.transformed || own_forme(l.species) => l.species,
+                _ => mon.species,
+            };
             m.base_species = mon.species;
             m.types = SPECIES[m.species as usize].types;
             if !m.transformed {
-                m.stats = calc_stats(mon.species, set.nature, set.stat_points);
+                m.stats = calc_stats(m.species, set.nature, set.stat_points);
             }
             m.stats[0] = if mon.fainted { self.stats[own.entry][0] } else { mon.max_hp };
             (m.hp, m.status, m.fainted) = (mon.hp, mon.status, mon.fainted);
@@ -1622,12 +1706,12 @@ impl Follower {
 
     /// Ten times the priority the follower's own Pokémon had for a move it
     /// chose this turn, with what its item or ability does within the bracket.
-    fn own_priority(&self, begun: &Begun) -> Option<(i32, i8)> {
+    fn own_priority(&self, begun: &Begun, chosen: u16) -> Option<(i32, i8)> {
         let mut b = *self.turn_start.as_ref()?;
         if begun.named == NO_MOVE || !b.mon(begun.r).is_active {
             return None;
         }
-        let a = b.resolve_move(begun.r, begun.named, 0);
+        let a = b.resolve_move(begun.r, chosen, 0);
         // A Quick Claw is rolled for, and says so when it works; what always holds a move back does not.
         let frac = a.frac.min(0) + begun.quick as i8;
         Some((10 * a.move_priority as i32 + frac as i32, frac))
@@ -1643,13 +1727,21 @@ impl Follower {
             frac: s.quick as i8,
             speed: 0,
             move_id: if s.named == NO_MOVE { 0 } else { s.named },
+            encored: s.overridden,
         };
-        if s.again || s.overridden || s.reordered.is_some_and(|t| t <= at) {
+        if s.again || s.reordered.is_some_and(|t| t <= at) {
             q.order = 3;
         }
         if s.side == self.side {
+            // Its own choice it knows, where the reply was made here; otherwise an Encore
+            // leaves the move it queued in doubt.
+            match self.chosen.iter().find(|c| c.0 == s.r.idx as usize) {
+                Some(&(_, chosen)) => q.move_id = chosen,
+                None if s.overridden => q.order = 3,
+                None => {}
+            }
             let speed = self.begun[at].own.iter().find(|o| o.0 == s.stay).and_then(|o| o.1);
-            match (speed, self.own_priority(s)) {
+            match (speed, self.own_priority(s, q.move_id)) {
                 (Some(speed), Some((priority, frac))) => (q.speed, q.priority, q.frac) = (speed, priority, frac),
                 _ => q.order = 0,
             }
@@ -1698,6 +1790,9 @@ impl Follower {
         self.speeds.as_mut().unwrap().digest(&events, b);
         self.begun.clear();
         self.items.clear();
+        if b.request == Request::Move {
+            self.chosen.clear();
+        }
         self.timers = self.count_timers();
     }
 
@@ -1735,7 +1830,8 @@ impl Follower {
 
     /// The reply to send Showdown (after `/choose `) for a pair of actions
     /// (at Team Preview, the first of the pair alone counts).
-    pub fn choice(&self, actions: [usize; 2]) -> Result<String, String> {
+    pub fn choice(&mut self, actions: [usize; 2]) -> Result<String, String> {
+        self.chosen.clear();
         let Some(b) = &self.battle else {
             let pick = preview_table().get(actions[0]).ok_or("not a Team Preview action")?;
             // The four brought, then the two left behind: Showdown takes the first four.
@@ -1746,6 +1842,18 @@ impl Follower {
             let choice = choice_of(b, self.side, action).ok_or_else(|| format!("{action} is not an action"))?;
             if !b.legal_choices(self.side, pos).contains(&choice) {
                 return err(format!("action {action} is not open to position {pos}"));
+            }
+            if let Choice::Move { slot, .. } = choice {
+                let r = b.active(self.side, pos);
+                let m = b.mon(r);
+                let id = if m.locked_move != NO_MOVE {
+                    m.locked_move
+                } else if !b.usable_moves(r) {
+                    mv::STRUGGLE
+                } else {
+                    m.moves[slot as usize].id
+                };
+                self.chosen.push((r.idx as usize, id));
             }
             out.push(choice.to_showdown());
         }

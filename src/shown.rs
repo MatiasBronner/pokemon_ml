@@ -650,6 +650,16 @@ impl Battle {
         }
     }
 
+    /// `r` has been shown to hold `item`, which it held already: Frisk has found
+    /// it, or it has announced itself. (Nothing has changed hands, so there is
+    /// nothing to note for [`crate::speed`].)
+    #[track_caller]
+    pub(crate) fn show_item_held(&mut self, r: MonRef, item: u16) {
+        if item != it::NONE {
+            self.show(r, ITEMS[item as usize].id, |rec| rec.item = ItemShown::Holds(item));
+        }
+    }
+
     /// The line that says `item` has reached `r` comes after it was handed over,
     /// and something may have happened to it in between (a White Herb used at
     /// once has had its own `-enditem`): then that stands.

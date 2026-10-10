@@ -587,15 +587,13 @@ pub fn observe_battle(
         tok.active = m.is_active && !m.fainted;
         tok.hp = m.hp as f32 / m.max_hp().max(1) as f32;
         tok.status = m.status;
-        tok.tox = m.tox_stage;
-        // Transformed, it has another Pokémon's stats, which nobody tells its player: its own are given.
-        let known = if m.transformed {
-            let mut own = calc_stats(m.base_species, m.nature, m.stat_points);
-            own[0] = m.stats[0];
-            own
-        } else {
-            m.stats
-        };
+        // (The count starts over whenever it comes in.)
+        tok.tox = if m.is_active && m.status == Status::Tox { m.tox_stage } else { 0 };
+        // Its stats as its player is told them: its own, for the forme it is in. What a
+        // battle does to them is not said (after Transform or Power Split they are partly
+        // another Pokémon's).
+        let mut known = calc_stats(if m.transformed { m.base_species } else { m.species }, m.nature, m.stat_points);
+        known[0] = m.stats[0];
         tok.stats = Some(known);
         tok.item = id(m.item);
         // The item it was seen to lose, as the other side knows it.
@@ -809,8 +807,16 @@ pub fn observe_battle(
         } else if !b.usable_moves(r) {
             put(0, crate::battle::struggle_id(), 1.0, false, true);
         } else {
+            // A move disabled by something not yet shown (a foe's Imprison) is listed as
+            // usable for the last Pokémon to choose, as Showdown lists it: to say otherwise
+            // would give the secret away.
+            let last = (pos + 1..ACTIVE.min(us.n as usize)).all(|p| {
+                let ally = b.mon(b.active(view, p));
+                !ally.is_active || ally.fainted
+            });
             for (k, slot) in m.moves[..m.n_moves as usize].iter().enumerate() {
-                put(k, slot.id, slot.pp as f32 / slot.maxpp.max(1) as f32, !Battle::slot_usable(slot), false);
+                let disabled = slot.pp == 0 || (slot.disabled && !(slot.hidden && last));
+                put(k, slot.id, slot.pp as f32 / slot.maxpp.max(1) as f32, disabled, false);
             }
         }
     }

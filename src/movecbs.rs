@@ -999,7 +999,7 @@ impl Battle {
             (mv::POLTERGEIST, Ev::TryHit) => {
                 if let Some(target) = e.target {
                     let item = self.mon(target).item;
-                    self.show_item_gain(target, item);
+                    self.show_item_held(target, item);
                 }
                 Res::Undef
             }

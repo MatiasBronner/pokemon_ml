@@ -4,6 +4,8 @@
 //! worked out about the other never rules out the truth, and what it says
 //! about who moves first is never wrong.
 
+#![allow(clippy::needless_range_loop)]
+
 use vgc_engine::env::{Baseline, Game, preview_table};
 use vgc_engine::format::{Format, ShowdownSet};
 use vgc_engine::obs::{ACT_F, ACTIVES, FIELD_F, MON_F, MONS, OBS_F, OBS_I, ROSTER};

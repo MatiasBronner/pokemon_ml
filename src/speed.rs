@@ -47,6 +47,9 @@
 //! Nothing here reads what the watcher has not been shown, bar the fields
 //! marked as the truth, which only the self-check ([`Speeds::strict`]) reads.
 
+// Natures, item classes and events are looked up by index in several arrays at once.
+#![allow(clippy::needless_range_loop)]
+
 use std::cell::{Cell, RefCell};
 
 use crate::battle::{PokemonSet, boosted, modify};

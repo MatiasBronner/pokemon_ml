@@ -735,8 +735,8 @@ pub fn observe_battle(
         }
         // Against each position across the field, with moves of the same priority: this one
         // goes first, goes second, or the viewer cannot tell.
-        for across in 0..ACTIVE {
-            match if own { firsts[pos][across] } else { firsts[across][pos] } {
+        for (across, row) in firsts.iter().enumerate() {
+            match if own { firsts[pos][across] } else { row[pos] } {
                 None => w.skip(3),
                 Some(First::Unknown) => w.one_hot(3, 2),
                 Some(who) => w.one_hot(3, ((who == First::Mine) != own) as usize),

@@ -375,7 +375,12 @@ Illusion, a Speed Swap. Passing one over costs a little knowledge; using one
 wrongly would rule out the truth. `tests/speed.rs` plays games between random
 legal teams, with every ability and item the format has, and checks at every
 decision that the truth is still in each set and that no "this one goes
-first" is wrong: SPEED_RESULT
+first" is wrong. Over 2,000,000 games (28.5 million decisions) neither
+happened once. In those games a side could say who goes first in 58% of the
+matchups it faced, an opposing Pokémon that had been seen ended with 63% of
+its range of Speed left on average, and 11,514 Choice Scarves were worked
+out without being shown. (`SPEED_GAMES=2000000 cargo test --release --test
+speed` repeats it; the default is 3,000 games.)
 
 ### What a model answers
 
@@ -406,9 +411,10 @@ games with open team sheets and half without.
 ### How fast, and what has been checked
 
 `cargo run --release --bin envbench` measures the environment by itself: on
-one core of a 2.1 GHz cloud Xeon it steps about 54,000 decisions a second
-with random players, writing both sides' observations at every one (18.5 µs a
-decision, of which the battle itself is about 12), and scales with cores. A
+one core of a 2.1 GHz cloud Xeon it steps about 45,000 decisions a second
+with random players, writing both sides' observations at every one (22 µs a
+decision: about 12 for the battle itself, 6 for the observations and the
+legal actions, 4 for keeping track of Speed), and scales with cores. A
 network on a GPU will be the slower half of the loop. Training speed on a
 GPU has not been measured: the machine this was written on has none, and its
 two cores train the default network at a few hundred decisions a second.

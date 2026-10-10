@@ -38,6 +38,27 @@
 //! observation leaves them out for both sides so that training and play see
 //! the same: conditions the game keeps to itself (a Choice lock, a flinch
 //! waiting to happen), and the exact turns a rampage has left.
+//!
+//! # Where it and the simulator part
+//!
+//! Showdown keeps one thing from the last Pokémon of a side to choose: that
+//! it is barred from a move or from switching by something not yet shown (a
+//! foe's Imprison, a Shadow Tag that has not announced itself). It lists the
+//! choice all the same, refuses it if it is made, and sends the request
+//! again put right. The follower offers what Showdown lists, and takes the
+//! corrected request like any other; the simulator, in training, does not
+//! offer the choice in the first place.
+//!
+//! Two things it can get wrong, each seen in one battle of the last six
+//! thousand recorded for checking it (random teams, random play). The PP of
+//! its own Pokémon comes with every request for the two on the field; for
+//! the others it is counted from the log, and a move whose target the log
+//! leaves out (a Counter that fails) may have paid a Pressure the follower
+//! cannot see, which stays wrong if the Pokémon leaves the field that turn.
+//! And a move the log shows failing is taken to have been used, where one
+//! refused by a Choice lock that Magic Room had lifted when it was chosen
+//! never began: the move that Pokémon last used is then wrong until its
+//! next.
 
 use serde_json::Value;
 

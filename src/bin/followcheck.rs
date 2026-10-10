@@ -38,6 +38,7 @@ fn main() {
     }
     let mut tally = FollowTally { verbose: only.is_some(), ..FollowTally::default() };
     let (mut battles, mut decisions, mut skipped, mut failed) = (0, 0, 0, Vec::new());
+    let mut reasons = std::collections::BTreeMap::new();
     'files: for path in &files {
         let file = std::fs::File::open(path).unwrap_or_else(|e| panic!("cannot read {path}: {e}"));
         for line in BufReader::new(file).lines() {
@@ -59,7 +60,10 @@ fn main() {
                             .expect("a writable file");
                     }
                 }
-                Outcome::Unsupported(_) => skipped += 1,
+                Outcome::Unsupported(why) => {
+                    skipped += 1;
+                    *reasons.entry(why).or_insert(0usize) += 1;
+                }
                 Outcome::Fail(why) => failed.push(format!("battle {}: {}", case.id, why.join("; "))),
             }
         }
@@ -68,6 +72,9 @@ fn main() {
         "{battles} battles followed to the end ({decisions} decisions), {skipped} skipped, {} not followed",
         failed.len()
     );
+    for (why, n) in &reasons {
+        println!("  skipped {n}: {why}");
+    }
     for why in failed.iter().take(20) {
         println!("  {why}");
     }

@@ -46,7 +46,7 @@ def userid(name):
 
 
 class RandomPolicy:
-    """Any legal action, each as likely as the next."""
+    """Any legal pair of actions, each as likely as the next (the simulator's "random" player)."""
 
     def __init__(self, seed=None):
         self.rng = random.Random(seed)
@@ -54,9 +54,8 @@ class RandomPolicy:
     def act(self, f, i, mask, preview):
         if preview:
             return self.rng.randrange(_engine.layout()["preview_actions"]), 0
-        first = self.rng.choice(np.flatnonzero(mask[:N_ACTIONS]).tolist())
-        row = mask[N_ACTIONS * (1 + first):N_ACTIONS * (2 + first)]
-        return first, self.rng.choice(np.flatnonzero(row).tolist())
+        pairs = np.flatnonzero(mask[N_ACTIONS:])
+        return divmod(int(self.rng.choice(pairs.tolist())), N_ACTIONS)
 
 
 class ModelPolicy:
@@ -203,6 +202,8 @@ class Client:
 
     def __init__(self, server, name, password=None, policy=None, teams=None, secure=None, open_sheets=True,
                  records=None, quiet=False, seed=None):
+        if userid(name).startswith("guest") or not 0 < len(userid(name)) <= 18 or len(name) > 18:
+            raise SystemExit(f"Showdown will not give the name {name!r}: a name is 1 to 18 characters and cannot begin with Guest")
         local = server.split(":")[0] in ("localhost", "127.0.0.1")
         self.secure = (not local) if secure is None else secure
         self.uri = f"{'wss' if self.secure else 'ws'}://{server}/showdown/websocket"
@@ -283,6 +284,8 @@ class Client:
                 if timeout and time.monotonic() - began > timeout:
                     self.say(f"{self.name}: stopping after {timeout:.0f} seconds with {len(self.results)} battles played")
                     break
+                if not self.logged_in and time.monotonic() - began > 30:
+                    raise SystemExit(f"{self.name}: {self.uri} has not let it log in after 30 seconds")
                 try:
                     message = await asyncio.wait_for(ws.recv(), 0.25)
                 except asyncio.TimeoutError:

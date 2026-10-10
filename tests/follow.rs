@@ -10,6 +10,7 @@
 
 use std::io::{BufRead, BufReader};
 
+use vgc_engine::Choice;
 use vgc_engine::env::OBS_M;
 use vgc_engine::follow::Follower;
 use vgc_engine::obs::{OBS_F, OBS_I, Phase};
@@ -75,4 +76,68 @@ fn a_battle_is_followed_from_first_line_to_last() {
     assert!(me.ended() && asked > 5);
     let last = case.steps.last().unwrap().after.log.iter().rev().find(|l| l.starts_with("|win|")).unwrap();
     assert_eq!(me.winner(), Some(if last == "|win|P1" { 0 } else { 1 }));
+}
+
+/// A follower for one side of a recorded battle. (The recorder names each
+/// Pokémon, and its teams can have a species twice.)
+fn follower_for(case: &FollowCase, side: usize) -> Follower {
+    let team = case.rosters[side].iter().map(|s| s.to_set().unwrap()).collect::<Vec<_>>();
+    let mut names = vec![String::new(); team.len()];
+    let listed = case.initial.requests[side]["side"]["pokemon"].as_array().unwrap();
+    for (k, mon) in listed.iter().enumerate() {
+        names[case.picks[side][k]] = mon["ident"].as_str().unwrap().split_once(": ").unwrap().1.to_string();
+    }
+    Follower::new(side, team).unwrap().with_names(names)
+}
+
+/// The last of a side to choose is told only that it *may* be trapped, when
+/// a foe could be holding it in by an ability not yet shown. It may try to
+/// switch; if it cannot, Showdown sends the request again saying so.
+#[test]
+fn a_request_put_right_is_followed() {
+    let switches = |me: &Follower, pos: usize| {
+        let b = me.battle().unwrap();
+        b.legal_choices(me.side(), pos).iter().any(|c| matches!(c, Choice::Switch { .. }))
+    };
+    let observed = |me: &Follower| {
+        let (mut f, mut i, mut mask) = (vec![0.0; OBS_F], vec![0; OBS_I], vec![0; OBS_M]);
+        me.observe(&mut f, &mut i, &mut mask).unwrap();
+        (f, i, mask)
+    };
+    let mut met = 0;
+    for case in cases() {
+        for side in 0..2 {
+            let mut me = follower_for(&case, side);
+            me.lines(&Follower::own_lines(side, &case.initial.log)).unwrap();
+            me.request(&case.initial.requests[side].to_string()).unwrap();
+            for step in &case.steps {
+                me.lines(&Follower::own_lines(side, &step.after.log)).unwrap();
+                let request = &step.after.requests[side];
+                me.request(&request.to_string()).unwrap();
+                let unsure =
+                    request["active"].as_array().and_then(|a| a.iter().position(|m| m["maybeTrapped"] == true));
+                let bench = request["side"]["pokemon"].as_array().is_some_and(|mons| {
+                    mons.iter().skip(2).any(|m| !m["condition"].as_str().unwrap_or("fnt").ends_with("fnt"))
+                });
+                let (Some(pos), true) = (unsure, bench) else { continue };
+                // As far as it has been told, it can switch.
+                assert!(switches(&me, pos), "battle {}", case.id);
+                // The same request a second time changes nothing.
+                let before = observed(&me);
+                me.request(&request.to_string()).unwrap();
+                assert!(before == observed(&me), "battle {}", case.id);
+                // Put right: it is trapped, and the switch is gone.
+                let mut fixed = request.clone();
+                let active = fixed["active"][pos].as_object_mut().unwrap();
+                active.remove("maybeTrapped");
+                active.insert("trapped".into(), true.into());
+                let mut told = me.clone();
+                told.request(&fixed.to_string()).unwrap();
+                assert!(!switches(&told, pos), "battle {}", case.id);
+                assert!(before != observed(&told), "battle {}", case.id);
+                met += 1;
+            }
+        }
+    }
+    assert!(met > 0, "no battle of the fixture has a Pokémon that may be trapped");
 }

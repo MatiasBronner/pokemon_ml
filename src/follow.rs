@@ -101,6 +101,9 @@ struct Spot {
     lost_item: bool,
     /// Something has been said of its ability since the last request.
     ability_touched: bool,
+    /// It has said it has Pressure, as its holder does on coming in or coming by it. (A
+    /// Pokémon passing for one that has it says nothing.)
+    pressing: bool,
     /// Instruct has been used on it: its next move is the repeat, put in ahead of the queue.
     instructed: bool,
     /// The forme it has changed into on the field, where the log has said so (a request
@@ -126,6 +129,7 @@ impl Spot {
             quick: false,
             lost_item: false,
             ability_touched: false,
+            pressing: false,
             instructed: false,
             forme: None,
         }
@@ -317,6 +321,8 @@ struct Mover {
     undo: Option<Undo>,
     /// Its move is one that protects, which works less often in a row.
     stalling: bool,
+    /// The protection that move puts up: the log calls every kind "Protect".
+    shield: Option<VolKind>,
 }
 
 /// Follows one player's side of a battle on Showdown. See the module notes.
@@ -692,7 +698,7 @@ impl Follower {
                     "move" => None,
                     // (A Focus Punch that lost its focus was named when the focusing began.)
                     _ => Some(arg(4))
-                        .filter(|m| !m.is_empty() && !m.starts_with('[') && to_id(m) != to_id(arg(3)))
+                        .filter(|m| !m.is_empty() && !m.starts_with('[') && to_id(arg(3)) != "focuspunch")
                         .and_then(|m| move_id(&to_id(m))),
                 };
                 // A sleeping Pokémon that goes on to use Sleep Talk has both lines for the one move.
@@ -1130,44 +1136,45 @@ impl Follower {
                     (false, Some(c)) => Some((c, 0)),
                     _ => None,
                 };
-                if let Some((paying, base)) = payer {
-                    if side == self.side {
-                        // One PP, in case it leaves the field before the next request says so;
-                        // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
-                        let mut aimed: Vec<(usize, usize)> = Vec::new();
-                        let data = &MOVES[used as usize];
-                        let wide = data.flags & F_MUSTPRESSURE != 0
-                            || matches!(data.target, Target::All | Target::AllAdjacent | Target::AllAdjacentFoes);
-                        if wide {
-                            // A move on the whole field, on everyone across it, or one of the few
-                            // (Imprison, Spikes) that pay to every opponent: whether or not it lands.
-                            aimed.extend([(1 - side, 0), (1 - side, 1)]);
-                        } else if data.target == Target::FoeSide {
-                            // (Any other move laid on the far side of the field pays nothing extra.)
-                        } else if let Some(target) = fourth {
-                            aimed.push(target);
-                        } else if queued
-                            && let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
-                            && loc > 0
-                        {
-                            // (With nobody left where it was aimed, it goes for the other one.)
-                            let there = loc as usize - 1;
-                            let other = !self.present(1 - side, there) && self.present(1 - side, 1 - there);
-                            aimed.push((1 - side, if other { 1 - there } else { there }));
-                        }
-                        let pressed = aimed
-                            .iter()
-                            .filter(|&&(s, p)| {
-                                s != side
-                                    && !self.spots[s][p].has(VolKind::Gastroacid)
-                                    && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
-                            })
-                            .count() as u8;
-                        if let Some(own) = self.own.get_mut(self.own_at[pos]) {
-                            let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
-                            if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
-                                slot.1 = slot.1.saturating_sub(base + pressed);
-                            }
+                if let Some((paying, base)) = payer
+                    && side == self.side
+                {
+                    // One PP, in case it leaves the field before the next request says so;
+                    // two if it is aimed at a Pokémon with Pressure, which says so on coming in.
+                    let mut aimed: Vec<(usize, usize)> = Vec::new();
+                    let data = &MOVES[used as usize];
+                    let wide = data.flags & F_MUSTPRESSURE != 0
+                        || matches!(data.target, Target::All | Target::AllAdjacent | Target::AllAdjacentFoes);
+                    if wide {
+                        // A move on the whole field, on everyone across it, or one of the few
+                        // (Imprison, Spikes) that pay to every opponent: whether or not it lands.
+                        aimed.extend([(1 - side, 0), (1 - side, 1)]);
+                    } else if data.target == Target::FoeSide {
+                        // (Any other move laid on the far side of the field pays nothing extra.)
+                    } else if let Some(target) = fourth {
+                        aimed.push(target);
+                    } else if queued
+                        && let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
+                        && loc > 0
+                    {
+                        // (With nobody left where it was aimed, it goes for the other one.)
+                        let there = loc as usize - 1;
+                        let other = !self.present(1 - side, there) && self.present(1 - side, 1 - there);
+                        aimed.push((1 - side, if other { 1 - there } else { there }));
+                    }
+                    let pressed = aimed
+                        .iter()
+                        .filter(|&&(s, p)| {
+                            s != side
+                                && self.spots[s][p].pressing
+                                && !self.spots[s][p].has(VolKind::Gastroacid)
+                                && self.reader.live_record(s, p).is_some_and(|rec| rec.ability == ab::PRESSURE)
+                        })
+                        .count() as u8;
+                    if let Some(own) = self.own.get_mut(self.own_at[pos]) {
+                        let known = if own.copied.is_empty() { &mut own.pp } else { &mut own.copied };
+                        if let Some(slot) = known.iter_mut().find(|s| s.0 == paying) {
+                            slot.1 = slot.1.saturating_sub(base + pressed);
                         }
                     }
                 }
@@ -1202,7 +1209,8 @@ impl Follower {
                     _ => {}
                 }
                 let stalling = MOVES[used as usize].stalling_move;
-                self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling });
+                let shield = MOVES[used as usize].volatile.filter(|_| stalling);
+                self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling, shield });
             }
             "cant" => {
                 if !arg(3).starts_with("ability: ") {
@@ -1324,6 +1332,9 @@ impl Follower {
                         conds.push((cond, 1, 0));
                     }
                 } else if let Some(vol) = VolKind::named(&effect) {
+                    // (Spiky Shield, Baneful Bunker and King's Shield go up under Protect's name.)
+                    let own = self.mover.as_ref().filter(|m| (m.side, m.pos) == (side, pos)).and_then(|m| m.shield);
+                    let vol = if vol == VolKind::Protect { own.unwrap_or(vol) } else { vol };
                     self.spot(side, pos).add(vol, ends);
                 } else if effect == "instruct" {
                     self.spot(side, pos).instructed = true;
@@ -1362,6 +1373,14 @@ impl Follower {
                     spot.reordered = Some(spot.reordered.map_or(begun, |t| t.min(begun)));
                 } else if matches!(name.as_str(), "quickclaw" | "quickdraw" | "custapberry") {
                     self.spot(side, pos).quick = true;
+                } else if matches!(name.as_str(), "skillswap" | "wanderingspirit" | "mummy" | "lingeringaroma") {
+                    // Abilities change hands (and one of them says so again if it is Pressure):
+                    // both Pokémon's for a swap, the attacker's for one that rubs off.
+                    let swap = matches!(name.as_str(), "skillswap" | "wanderingspirit");
+                    for (s, p) in of.into_iter().chain(swap.then_some((side, pos))) {
+                        let spot = &mut self.spots[s][p];
+                        (spot.pressing, spot.lost_item) = (false, false);
+                    }
                 } else if name == "feint" || parts.contains(&"[broken]") {
                     // Its protection is broken, and with it the run of protecting moves.
                     self.spot(side, pos).vols.retain(|v| {
@@ -1409,9 +1428,20 @@ impl Follower {
                 if arg(3).is_empty() || arg(3).starts_with('[') {
                     self.spot(side, pos).add(VolKind::Gastroacid, Ends::Said);
                 }
+                let spot = self.spot(side, pos);
+                (spot.pressing, spot.lost_item) = (false, false);
             }
             "-mustrecharge" => {
                 self.spot(side, pos).add(VolKind::Mustrecharge, Ends::Said);
+            }
+            "-ability" => {
+                let spot = self.spot(side, pos);
+                spot.pressing = to_id(arg(3)) == "pressure";
+                if !from.is_empty() {
+                    // It has come by this ability in place of its own (Trace, Role Play, Worry
+                    // Seed): an Unburden at work ends with the ability, whatever replaces it.
+                    spot.lost_item = false;
+                }
             }
             "-prepare" => {
                 if !parts.contains(&"[premajor]") {
@@ -1924,9 +1954,9 @@ impl Follower {
     /// The timers the observation reads, from the turns counted.
     fn count_timers(&self) -> Timers {
         let mut screens = [[None; 3]; 2];
-        for side in 0..2 {
+        for (side, row) in screens.iter_mut().enumerate() {
             for (k, kind) in [SideCond::Reflect, SideCond::Lightscreen, SideCond::Auroraveil].into_iter().enumerate() {
-                screens[side][k] = self.field.sides[side].conds.iter().find(|c| c.0 == kind).map(|c| c.2);
+                row[k] = self.field.sides[side].conds.iter().find(|c| c.0 == kind).map(|c| c.2);
             }
         }
         Timers::counted(

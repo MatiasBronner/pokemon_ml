@@ -902,7 +902,9 @@ impl Speeds {
     fn settle(&mut self, b: &Battle) {
         for side in 0..2 {
             let s = &b.sides[side];
-            for a in 0..s.n as usize {
+            // (Every place on the team, brought or not: a follower of Showdown's log keeps a
+            // Pokémon it knows to be in disguise in one past the last it has seen.)
+            for a in 0..MAX_TEAM {
                 let m = &s.team[a];
                 if !m.is_active {
                     self.swapped[side][a] = false;

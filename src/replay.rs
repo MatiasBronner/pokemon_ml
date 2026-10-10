@@ -1373,6 +1373,8 @@ pub struct FollowCase {
 /// follower's observation and legal actions must be the game's. Differences
 /// are counted in `tally`; the outcome is a failure only if a follower could
 /// not read something.
+// (The two sides, and the two versions of an observation, are indexed side by side.)
+#[allow(clippy::needless_range_loop)]
 pub fn check_follow(c: &FollowCase, tally: &mut FollowTally) -> Outcome {
     use crate::env::{Game, OBS_M};
     use crate::follow::Follower;

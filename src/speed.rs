@@ -24,6 +24,13 @@
 //! number, Mega Evolution needs nothing special: the same points and nature
 //! give the new forme's Speed.
 //!
+//! Items narrow it as well. An item that shows itself is the Pokémon's one
+//! item, so it rules out the other two classes. And under the regulation's
+//! item clause a team has each item once: when one Pokémon is found to have
+//! been registered with the Choice Scarf (it is proved to hold one, or loses
+//! one, having been handed nothing), the Scarf is struck from every
+//! team-mate that still holds what it was registered with.
+//!
 //! # What counts as an observation
 //!
 //! When a move starts, it was at the head of the queue, which Showdown sorts

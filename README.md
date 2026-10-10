@@ -591,13 +591,18 @@ honest number before anything it turned up was fixed:
 | 4,000 | 181,864 | 16 (0.009%), in 2 |
 | 4,000 | 183,355 | 19 (0.010%), in 2 |
 | 4,000 | 184,110 | 9 (0.005%), in 1 |
+| 4,000 | 182,779 | 5 (0.003%), in 2 |
 
-Every battle of the four was followed to its end, and each difference was
-traced to its cause and fixed, a dozen causes in all: with that, none of
-the 828,876 observations differs. So the rate to expect from battles not
-yet seen is the one in the last rows, about one observation in 10,000 to
-20,000, from something rare that is still to be found. (The first 10,600
-were not kept and have not been run again since.)
+Every battle of the five was followed to its end. Each difference in the
+first four was traced to its cause and fixed, a dozen causes in all: with
+that, none of their 828,876 observations differs. The two causes the fifth
+turned up are known and not yet fixed (a type added to a Pokémon in
+disguise by Forest's Curse or Trick-or-Treat; a Smack Down on a Pokémon
+charging Sky Attack, which the follower takes to end the charge). So the
+rate to expect from battles not yet seen is the one in the last rows, about
+one observation in 10,000 to 40,000, from something rare that is still to
+be found. (The first 10,600 were not kept and have not been run again
+since.)
 
 Rare things can be made common, too. Two kinds of battle were recorded to
 lean on the two differences known to remain (below): 2,400 with Pressure on

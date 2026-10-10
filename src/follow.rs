@@ -149,6 +149,9 @@ struct Spot {
     /// The forme it has changed into on the field, where the log has said so (a request
     /// goes on giving the forme it came in as).
     forme: Option<u16>,
+    /// It came in on the left with none of its side left in reserve: the one case in
+    /// which an Illusion copies the Pokémon standing beside it.
+    last_two: bool,
 }
 
 impl Spot {
@@ -176,6 +179,7 @@ impl Spot {
             hit_by: Vec::new(),
             instructed: false,
             forme: None,
+            last_two: false,
         }
     }
 
@@ -418,7 +422,7 @@ pub struct Follower {
     /// The turn is ending: what the log says now comes of the end-of-turn effects.
     ending: bool,
     /// Pokémon of the other side whose number changed since the last decision (a disguise dropped): from, to.
-    renumbered: Vec<(usize, usize)>,
+    renumbered: Vec<Vec<(usize, usize)>>,
     /// Round has been used this turn, as of this many moves begun.
     round: Option<usize>,
     /// The Pokémon that has just woken or thawed to move, with the status it had.
@@ -754,14 +758,22 @@ impl Follower {
         let copy = match s.active[1 - pos].as_ref() {
             Some(other) if other.entry == here.entry && !here.gone => {
                 // The one that has fainted was the Pokémon itself. Of two still standing, the
-                // copy is the one the record has its doubts about, if it doubts just one;
-                // otherwise the one that came in second.
+                // copy is the one the record has its doubts about, if it doubts just one.
+                // Otherwise it goes by who came first. Illusion copies the last healthy
+                // Pokémon to its user's right, which as a rule is one in reserve: so the
+                // copy was there first, and the Pokémon itself came in beside it. Only one
+                // that came in on the left, with nobody left in reserve, can have copied the
+                // Pokémon already standing on its right; then the later one is taken for it.
+                let (mine, beside) = (&self.spots[opp][pos], &self.spots[opp][1 - pos]);
+                let later = mine.stay > beside.stay;
                 if other.gone {
                     true
                 } else if here.rec.suspect != other.rec.suspect {
                     here.rec.suspect
+                } else if if later { mine.last_two } else { beside.last_two } {
+                    later
                 } else {
-                    self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+                    !later
                 }
             }
             _ => false,
@@ -826,21 +838,25 @@ impl Follower {
             })
         };
         let before = held(self);
-        let unmasked = match who {
-            Some((side, pos)) if kind == "replace" && side != self.side => {
-                Some([(pos, self.their_index(pos)), (1 - pos, self.their_index(1 - pos))])
-            }
-            _ => None,
-        };
+        // The other side's Pokémon as they are numbered now, each with its stay on the field.
+        let opp = 1 - self.side;
+        let were: [(u32, usize); ACTIVE] =
+            std::array::from_fn(|pos| (self.spots[opp][pos].stay, self.their_index(pos)));
         self.reader.line(line)?;
-        if let Some(were) = unmasked {
-            // A disguise dropped: the Pokémon is numbered anew, and so may be the one beside
-            // it that it was passing for. What was noted of either goes by the new numbers.
-            let moved: Vec<(usize, usize)> =
-                were.iter().map(|&(pos, was)| (was, self.their_index(pos))).filter(|(was, now)| was != now).collect();
-            let opp = (1 - self.side) as u8;
+        let after = held(self);
+        self.track(kind, &parts, from)?;
+        // One of them that is still where it stood may go by another number now. A disguise
+        // dropped, and it is numbered anew, as the one beside it that it was passing for may
+        // be. Or the Pokémon it passes for has come in beside it, and takes that number.
+        // What was noted of either goes by the new numbers.
+        let moved: Vec<(usize, usize)> = (0..ACTIVE)
+            .filter(|&pos| self.spots[opp][pos].stay == were[pos].0)
+            .map(|pos| (were[pos].1, self.their_index(pos)))
+            .filter(|(was, now)| was != now)
+            .collect();
+        if !moved.is_empty() {
             let renumber = |r: &mut MonRef| {
-                if r.side == opp
+                if r.side == opp as u8
                     && let Some(&(_, now)) = moved.iter().find(|m| m.0 == r.idx as usize)
                 {
                     r.idx = now as u8;
@@ -850,10 +866,8 @@ impl Follower {
                 renumber(&mut begun.r);
                 begun.seen.iter_mut().for_each(|seen| renumber(&mut seen.r));
             }
-            self.renumbered.extend(moved);
+            self.renumbered.push(moved);
         }
-        let after = held(self);
-        self.track(kind, &parts, from)?;
         if !matches!(kind, "switch" | "drag" | "replace" | "swap") {
             for k in 0..4 {
                 let (Some(was), Some(is)) = (before[k], after[k]) else { continue };
@@ -1027,6 +1041,9 @@ impl Follower {
     fn enter(&mut self, side: usize, pos: usize, name: &str, from: &str) {
         self.stays += 1;
         let mut fresh = Spot::new(self.stays);
+        let team = &self.reader.sides[side];
+        let brought = if team.size == 0 { 4 } else { team.size };
+        fresh.last_two = pos == 0 && brought.saturating_sub(team.fainted) <= 2;
         let old = &self.spots[side][pos];
         if from.contains("Baton Pass") {
             fresh.boosts = old.boosts;
@@ -1318,6 +1335,13 @@ impl Follower {
                         // Nor does one left with nobody to aim at, whoever the line goes on to name.)
                     } else if let Some(target) = fourth {
                         aimed.push(target);
+                        // Dragon Darts goes for both of the other side while two are standing,
+                        // and pays to both; the line names only one of them (the partner of the
+                        // one it was aimed at).
+                        let partner = (target.0, 1 - target.1);
+                        if data.smart_target && target.0 != side && self.present(partner.0, partner.1) {
+                            aimed.push(partner);
+                        }
                     } else if queued
                         && let Some(&(_, _, loc)) = self.chosen.iter().find(|c| c.0 == self.own_at[pos])
                         && loc > 0
@@ -2366,8 +2390,8 @@ impl Follower {
             });
         }
         let speeds = self.speeds.as_mut().unwrap();
-        for (from, to) in self.renumbered.drain(..) {
-            speeds.renumber(1 - self.side, from, to);
+        for moved in self.renumbered.drain(..) {
+            speeds.renumber(1 - self.side, &moved);
         }
         speeds.digest(&events, b);
         self.begun.clear();

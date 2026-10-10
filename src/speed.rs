@@ -732,13 +732,22 @@ impl Speeds {
         self.clause[side] = on;
     }
 
-    /// The Pokémon numbered `from` on `side` goes by the number `to` from now on, and
+    /// Each Pokémon of `side` numbered `from` goes by the number `to` from now on, and
     /// what was noted of it this turn with it. (A follower of Showdown's log numbers the
-    /// other side's Pokémon as they appear; one that drops a disguise appears anew.)
-    pub(crate) fn renumber(&mut self, side: usize, from: usize, to: usize) {
-        self.began[side][to] = self.began[side][from];
-        self.swapped[side][to] = self.swapped[side][from];
-        self.encored[side][to] = self.encored[side][from];
+    /// other side's Pokémon as they appear. One that drops a disguise appears anew, and
+    /// one in disguise gives its number up when the Pokémon it passes for comes in.)
+    pub(crate) fn renumber(&mut self, side: usize, moved: &[(usize, usize)]) {
+        // (All at once: two that stand side by side can trade numbers. A number given up
+        // and not taken by the other is nobody's until someone comes in under it.)
+        let (began, swapped, encored) = (self.began[side], self.swapped[side], self.encored[side]);
+        for &(from, _) in moved {
+            (self.began[side][from], self.swapped[side][from], self.encored[side][from]) =
+                ((UNKNOWN, true, 0), false, false);
+        }
+        for &(from, to) in moved {
+            (self.began[side][to], self.swapped[side][to], self.encored[side][to]) =
+                (began[from], swapped[from], encored[from]);
+        }
     }
 
     /// Keeps track for `side` alone: what it can tell of the other side's Speed.

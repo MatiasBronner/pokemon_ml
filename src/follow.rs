@@ -753,9 +753,16 @@ impl Follower {
         };
         let copy = match s.active[1 - pos].as_ref() {
             Some(other) if other.entry == here.entry && !here.gone => {
-                // The one that has fainted was the Pokémon itself. Of two still standing,
-                // the one that came in second is taken for the copy.
-                other.gone || self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+                // The one that has fainted was the Pokémon itself. Of two still standing, the
+                // copy is the one the record has its doubts about, if it doubts just one;
+                // otherwise the one that came in second.
+                if other.gone {
+                    true
+                } else if here.rec.suspect != other.rec.suspect {
+                    here.rec.suspect
+                } else {
+                    self.spots[opp][pos].stay > self.spots[opp][1 - pos].stay
+                }
             }
             _ => false,
         };
@@ -820,15 +827,30 @@ impl Follower {
         };
         let before = held(self);
         let unmasked = match who {
-            Some((side, pos)) if kind == "replace" && side != self.side => Some((pos, self.their_index(pos))),
+            Some((side, pos)) if kind == "replace" && side != self.side => {
+                Some([(pos, self.their_index(pos)), (1 - pos, self.their_index(1 - pos))])
+            }
             _ => None,
         };
         self.reader.line(line)?;
-        if let Some((pos, was)) = unmasked {
-            let now = self.their_index(pos);
-            if now != was {
-                self.renumbered.push((was, now));
+        if let Some(were) = unmasked {
+            // A disguise dropped: the Pokémon is numbered anew, and so may be the one beside
+            // it that it was passing for. What was noted of either goes by the new numbers.
+            let moved: Vec<(usize, usize)> =
+                were.iter().map(|&(pos, was)| (was, self.their_index(pos))).filter(|(was, now)| was != now).collect();
+            let opp = (1 - self.side) as u8;
+            let renumber = |r: &mut MonRef| {
+                if r.side == opp
+                    && let Some(&(_, now)) = moved.iter().find(|m| m.0 == r.idx as usize)
+                {
+                    r.idx = now as u8;
+                }
+            };
+            for begun in &mut self.begun {
+                renumber(&mut begun.r);
+                begun.seen.iter_mut().for_each(|seen| renumber(&mut seen.r));
             }
+            self.renumbered.extend(moved);
         }
         let after = held(self);
         self.track(kind, &parts, from)?;
@@ -1649,7 +1671,8 @@ impl Follower {
                     // comes, even in place of another, starts afresh.)
                     (spot.choice, spot.no_hold) = (None, false);
                 }
-                let taken = ["move: Thief", "move: Covet", "ability: Pickpocket", "ability: Magician", "ability: Symbiosis"];
+                let taken =
+                    ["move: Thief", "move: Covet", "ability: Pickpocket", "ability: Magician", "ability: Symbiosis"];
                 if let Some((s, p)) = of.filter(|_| taken.contains(&from)) {
                     // Taken from, or handed over by, the Pokémon named last.
                     let spot = &mut self.spots[s][p];

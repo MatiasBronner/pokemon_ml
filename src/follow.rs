@@ -93,12 +93,14 @@ struct Spot {
     begun: u8,
     /// Its move was put ahead or behind by another (After You, Quash, Round), as of this many moves begun.
     reordered: Option<usize>,
-    /// Its move this turn may not be the one it chose (Encore came first).
-    overridden: bool,
+    /// Its move this turn may not be the one it chose: an Encore came first, as of this many moves begun.
+    overridden: Option<usize>,
     /// Its move went ahead of its bracket, and said so (Quick Claw, Quick Draw, Custap Berry).
     quick: bool,
     /// It has been seen to lose an item since it came in (Unburden asks).
     lost_item: bool,
+    /// Something has been said of its ability since the last request.
+    ability_touched: bool,
 }
 
 impl Spot {
@@ -115,9 +117,10 @@ impl Spot {
             tox_new: false,
             begun: 0,
             reordered: None,
-            overridden: false,
+            overridden: None,
             quick: false,
             lost_item: false,
+            ability_touched: false,
         }
     }
 
@@ -266,7 +269,7 @@ struct Begun {
     /// All that has been said of it is that its user is asleep.
     asleep: bool,
     reordered: Option<usize>,
-    overridden: bool,
+    overridden: Option<usize>,
     quick: bool,
     seen: [Seen; 4],
     field: FieldSeen,
@@ -659,7 +662,10 @@ impl Follower {
                 let named = match kind {
                     "move" if from != "lockedmove" => move_id(&to_id(arg(3))),
                     "move" => None,
-                    _ => Some(arg(4)).filter(|m| !m.is_empty() && !m.starts_with('[')).and_then(|m| move_id(&to_id(m))),
+                    // (A Focus Punch that lost its focus was named when the focusing began.)
+                    _ => Some(arg(4))
+                        .filter(|m| !m.is_empty() && !m.starts_with('[') && to_id(m) != to_id(arg(3)))
+                        .and_then(|m| move_id(&to_id(m))),
                 };
                 // A sleeping Pokémon that goes on to use Sleep Talk has both lines for the one move.
                 let named = named.unwrap_or(NO_MOVE);
@@ -678,8 +684,10 @@ impl Follower {
         if !(kind == "-curestatus" && parts.contains(&"[msg]")) {
             self.roused = None;
         }
-        let held = |me: &Follower| -> [Option<ItemShown>; 4] {
-            std::array::from_fn(|k| me.reader.live_record(k / 2, k % 2).map(|rec| rec.item))
+        let held = |me: &Follower| -> [Option<(ItemShown, u16, bool)>; 4] {
+            std::array::from_fn(|k| {
+                me.reader.live_record(k / 2, k % 2).map(|rec| (rec.item, rec.ability, rec.ability_changed))
+            })
         };
         let before = held(self);
         let unmasked = match who {
@@ -697,8 +705,12 @@ impl Follower {
         self.track(kind, &parts, from)?;
         if !matches!(kind, "switch" | "drag" | "replace" | "swap") {
             for k in 0..4 {
-                if before[k] != after[k] && matches!(after[k], Some(ItemShown::Lost(_))) {
+                let (Some(was), Some(is)) = (before[k], after[k]) else { continue };
+                if was.0 != is.0 && matches!(is.0, ItemShown::Lost(_)) {
                     self.spots[k / 2][k % 2].lost_item = true;
+                }
+                if (was.1, was.2) != (is.1, is.2) {
+                    self.spots[k / 2][k % 2].ability_touched = true;
                 }
             }
         }
@@ -778,10 +790,12 @@ impl Follower {
         };
         let stat = calc_stats(species, set.nature, set.stat_points)[5];
         let mut abilities = Vec::new();
-        if rec.ability != UNKNOWN && (rec.ability_changed || is_mega(species)) {
-            abilities.push(rec.ability);
-        } else if !rec.ability_changed {
+        if !self.spots[self.side][pos].ability_touched {
+            // Nothing has been said of it since the request, which has it exactly. (For one
+            // that has come in since, that is the ability it came in with.)
             abilities.push(mon.ability);
+        } else if rec.ability != UNKNOWN {
+            abilities.push(rec.ability);
         } else {
             // Its ability has been traded for its partner's and the log does not say which
             // is which now: either, then, which is good enough where both come to the same.
@@ -912,7 +926,7 @@ impl Follower {
                         if present {
                             spot.active_turns += 1;
                         }
-                        (spot.begun, spot.reordered, spot.overridden, spot.quick) = (0, None, false, false);
+                        (spot.begun, spot.reordered, spot.overridden, spot.quick) = (0, None, None, false);
                     }
                 }
                 self.round = None;
@@ -1361,6 +1375,7 @@ impl Follower {
         let arg = |i: usize| parts.get(i).copied().unwrap_or("");
         let name = effect_id(effect);
         let begun = self.spots[side][pos].begun;
+        let at = self.begun.len();
         match effect {
             "typechange" if arg(4).starts_with('[') || arg(4).is_empty() => {
                 // Reflect Type: the types of the Pokémon named after `[of]`, as they are now.
@@ -1409,7 +1424,7 @@ impl Follower {
                     let spot = self.spot(side, pos);
                     spot.add(kind, Ends::Said);
                     if kind == VolKind::Encore && begun == 0 {
-                        spot.overridden = true;
+                        spot.overridden = Some(at);
                     }
                     if kind == VolKind::Smackdown {
                         // Knocked out of the air, and out of the move that took it there.
@@ -1519,6 +1534,7 @@ impl Follower {
             }
         }
         self.req = Some(req);
+        self.spots.iter_mut().flatten().for_each(|spot| spot.ability_touched = false);
         let b = self.rebuild()?;
         self.digest(&b);
         if b.request == Request::Move {
@@ -1863,7 +1879,7 @@ impl Follower {
             frac: s.quick as i8,
             speed: 0,
             move_id: if s.named == NO_MOVE { 0 } else { s.named },
-            encored: s.overridden,
+            encored: s.overridden.is_some(),
         };
         if s.again || s.reordered.is_some_and(|t| t <= at) {
             q.order = 3;
@@ -1871,9 +1887,11 @@ impl Follower {
         if s.side == self.side {
             // Its own choice it knows, where the reply was made here; otherwise an Encore
             // leaves the move it queued in doubt.
+            // (Once an Encore has caught it, the move in the queue is the one it is held to.)
             match self.chosen.iter().find(|c| c.0 == s.r.idx as usize) {
+                _ if s.overridden.is_some_and(|t| t <= at) => {}
                 Some(&(_, chosen, _)) => q.move_id = chosen,
-                None if s.overridden => q.order = 3,
+                None if s.overridden.is_some() => q.order = 3,
                 None => {}
             }
             // Speed and priority as they stood when the `at`th began: the queue is sorted
@@ -1933,6 +1951,23 @@ impl Follower {
                 field: self.begun[i].field,
                 named: self.begun[i].named,
             });
+        }
+        if std::env::var("FOLLOW_DEBUG").is_ok() {
+            for e in &events {
+                match e {
+                    Event::Start { me, rest, n_rest, named, .. } => eprintln!(
+                        "DBG side {} turn {} start {:?} named {named} rest {:?}",
+                        self.side,
+                        b.turn,
+                        (me.r.side, me.r.idx, me.order, me.priority, me.frac, me.speed, me.move_id, me.encored),
+                        rest[..*n_rest as usize]
+                            .iter()
+                            .map(|q| (q.r.side, q.r.idx, q.order, q.priority, q.frac, q.speed, q.move_id))
+                            .collect::<Vec<_>>()
+                    ),
+                    other => eprintln!("DBG side {} {other:?}", self.side),
+                }
+            }
         }
         let speeds = self.speeds.as_mut().unwrap();
         for (from, to) in self.renumbered.drain(..) {

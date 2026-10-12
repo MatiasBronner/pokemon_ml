@@ -119,6 +119,10 @@ impl PyVecEnv {
         Ok(())
     }
 
+    fn episode_info(&self) -> Vec<[u64; 2]> {
+        self.env.last_episodes().to_vec()
+    }
+
     /// Totals since the environment was made.
     fn stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let s = self.env.stats();
@@ -127,6 +131,7 @@ impl PyVecEnv {
         d.set_item("decisions", s.decisions)?;
         d.set_item("turns", s.turns)?;
         d.set_item("ties", s.ties)?;
+        d.set_item("timeouts", s.timeouts)?;
         d.set_item("first_wins", s.first_wins)?;
         Ok(d)
     }

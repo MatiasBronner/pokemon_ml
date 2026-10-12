@@ -13,6 +13,7 @@ run started from is the zero.
 plays more games between a run's snapshots than training had time for, fits
 the ratings again and prints the table.
 """
+
 import argparse
 import json
 import math
@@ -22,7 +23,6 @@ import numpy as np
 import torch
 
 from . import model as model_lib
-from . import ppo
 from .env import Env
 
 SCRIPTED = ("random", "greedy", "lookahead")
@@ -31,24 +31,10 @@ START = "000000"
 
 @torch.no_grad()
 def play_models(env, first, second, games, device):
-    """The share of at least `games` games that `first` wins against `second`, ties counting as
-    half. `first` takes the first side of even-numbered games and the second of odd ones."""
-    first.eval(), second.eval()
-    side = torch.arange(env.envs) % 2
-    mine = (2 * torch.arange(env.envs) + side).numpy()
-    theirs = (2 * torch.arange(env.envs) + 1 - side).numpy()
-    points = played = 0.0
-    actions = torch.zeros(2 * env.envs, 2, dtype=torch.long)
-    while played < games:
-        f, i, mask = ppo.to_device(env, device)
-        actions[mine] = first.act(f[mine], i[mine], mask[mine])[0].cpu()
-        actions[theirs] = second.act(f[theirs], i[theirs], mask[theirs])[0].cpu()
-        env.step(actions.numpy())
-        over = env.done.astype(bool)
-        result = env.reward[over, side.numpy()[over]]
-        points += float((result > 0).sum()) + 0.5 * float((result == 0).sum())
-        played += float(over.sum())
-    return points / played, int(played)
+    from .evaluation import play
+
+    report = play(env, first, second, games, device)
+    return report["score"], report["games"]
 
 
 def play_scripted(env, first, second, games):
@@ -67,11 +53,14 @@ def play_scripted(env, first, second, games):
     return points / played, int(played)
 
 
-def scripted_results(make_env, games, seed=0):
+def scripted_results(make_env, games, seed=0, kinds=SCRIPTED):
     """The scripted players against each other, so that their ratings do not rest on how
     badly early networks lose to each of them."""
-    pairs = [(a, b) for k, a in enumerate(SCRIPTED) for b in SCRIPTED[:k]]
-    return [(a, b, *play_scripted(make_env(seed + k), a, b, games)) for k, (a, b) in enumerate(pairs)]
+    pairs = [(a, b) for k, a in enumerate(kinds) for b in kinds[:k]]
+    return [
+        (a, b, *play_scripted(make_env(seed + k), a, b, games))
+        for k, (a, b) in enumerate(pairs)
+    ]
 
 
 def expected(rating, other):
@@ -106,7 +95,9 @@ def fit(results, anchor=START, rounds=400):
                 slope += won - n * p
                 curve += n * p * (1 - p)
             if curve > 0:
-                rating[name] += max(-200.0, min(200.0, slope / curve * 400.0 / math.log(10)))
+                rating[name] += max(
+                    -200.0, min(200.0, slope / curve * 400.0 / math.log(10))
+                )
     shift = rating.get(anchor, 0.0)
     return {name: r - shift for name, r in rating.items()}
 
@@ -118,20 +109,36 @@ def snapshot_path(run, name):
 def snapshots(run):
     """The names of a run's snapshots, oldest first."""
     folder = os.path.join(run, "snapshots")
-    return sorted(f[:-3] for f in os.listdir(folder) if f.endswith(".pt")) if os.path.isdir(folder) else []
+    return (
+        sorted((f[:-3] for f in os.listdir(folder) if f.endswith(".pt")), key=int)
+        if os.path.isdir(folder)
+        else []
+    )
 
 
 def save_snapshot(run, update, model):
     name = f"{update:06d}"
     os.makedirs(os.path.join(run, "snapshots"), exist_ok=True)
     path = snapshot_path(run, name)
-    torch.save({"model": model.state_dict(), "model_config": model.save_config()}, path + ".tmp")
+    from .checkpoint import contract
+
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "model_config": model.save_config(),
+            "contract": contract(),
+        },
+        path + ".tmp",
+    )
     os.replace(path + ".tmp", path)
     return name
 
 
 def load_snapshot(run, name, device):
     saved = torch.load(snapshot_path(run, name), map_location="cpu", weights_only=False)
+    from .checkpoint import verify_contract
+
+    verify_contract(saved)
     net = model_lib.Model(model_lib.Config(**saved["model_config"])).to(device)
     net.load_state_dict(saved["model"])
     return net.eval()
@@ -163,24 +170,76 @@ class Ratings:
     def add(self, results):
         self.results += [tuple(r) for r in results]
         self.ratings = fit(self.results)
+        matrix = {}
+        for a, b, share, games in self.results:
+            cell = matrix.setdefault(a, {}).setdefault(b, {"points": 0, "games": 0})
+            cell["points"] += share * games
+            cell["games"] += games
+        for row in matrix.values():
+            for cell in row.values():
+                cell["score"] = cell["points"] / cell["games"]
         with open(self.path + ".tmp", "w") as file:
-            json.dump({"results": self.results, "ratings": self.ratings}, file, indent=1)
+            json.dump(
+                {
+                    "results": self.results,
+                    "ratings": self.ratings,
+                    "matchup_matrix": matrix,
+                },
+                file,
+                indent=1,
+            )
         os.replace(self.path + ".tmp", self.path)
 
 
-def measure(run, name, model, make_env, device, games, rivals=4, seed=0):
+def measure(
+    run,
+    name,
+    model,
+    make_env,
+    device,
+    games,
+    rivals=4,
+    seed=0,
+    archetypes=None,
+    include_lookahead=True,
+):
     """Plays the snapshot `name` (the network `model`) against the three scripted players and
     some earlier snapshots. Returns the results, as `fit` takes them. With a run's first
     snapshot come the scripted players' games against each other."""
-    results = [] if snapshots(run)[:1] != [name] else scripted_results(make_env, 2 * games, seed + 50)
-    for k, kind in enumerate(SCRIPTED):
-        share = ppo.play_baseline(make_env(seed + k), model, kind, games, device)
-        results.append((name, kind, share, games))
-    before = [s for s in snapshots(run) if s < name]
+    kinds = SCRIPTED if include_lookahead else SCRIPTED[:2]
+    results = (
+        []
+        if snapshots(run)[:1] != [name]
+        else scripted_results(make_env, 2 * games, seed + 50, kinds)
+    )
+    for k, kind in enumerate(kinds):
+        from .evaluation import play
+
+        report = play(
+            make_env(seed + k), model, kind, games, device, archetypes=archetypes
+        )
+        results.append((name, kind, report["score"], report["games"]))
+        save_report(run, name, kind, report, seed + k)
+    before = [s for s in snapshots(run) if int(s) < int(name)]
     for k, rival in enumerate(earlier(before, rivals)):
-        share, played = play_models(make_env(seed + 10 + k), model, load_snapshot(run, rival, device), games, device)
-        results.append((name, rival, share, played))
+        report = play(
+            make_env(seed + 10 + k),
+            model,
+            load_snapshot(run, rival, device),
+            games,
+            device,
+            archetypes=archetypes,
+        )
+        results.append((name, rival, report["score"], report["games"]))
+        save_report(run, name, rival, report, seed + 10 + k)
     return results
+
+
+def save_report(run, name, rival, report, seed):
+    folder = os.path.join(run, "evaluation")
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, f"{name}-vs-{rival}.json"), "w") as f:
+        json.dump(dict(evaluation_offset=seed, **report), f, indent=2)
 
 
 def table(ratings, results):
@@ -195,27 +254,181 @@ def table(ratings, results):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--run", required=True, help="the run whose snapshots to rate")
     p.add_argument("--pool", required=True, help="team pool to play with")
-    p.add_argument("--games", type=int, default=400, help="games for each pair of versions that meet")
-    p.add_argument("--rivals", type=int, default=6, help="earlier versions each one plays")
+    p.add_argument(
+        "--games",
+        type=int,
+        default=400,
+        help="games for each pair of versions that meet",
+    )
+    p.add_argument(
+        "--rivals", type=int, default=6, help="earlier versions each one plays"
+    )
     p.add_argument("--envs", type=int, default=256)
     p.add_argument("--device", default="auto")
     p.add_argument("--threads", type=int, default=0)
     args = p.parse_args(argv)
     from .train import pick_device
+
     device = pick_device(args.device)
     names = snapshots(args.run)
     if not names:
-        raise SystemExit(f"{args.run} has no snapshots yet (training puts one aside every --eval-every updates)")
-    make_env = lambda seed: Env(args.pool, args.envs, 9_000_000 + seed, threads=args.threads)
+        raise SystemExit(
+            f"{args.run} has no snapshots yet (training puts one aside every --eval-every updates)"
+        )
+    make_env = lambda seed: Env(
+        args.pool, args.envs, 9_000_000 + seed, threads=args.threads
+    )
     ratings = Ratings(args.run)
     for k, name in enumerate(names):
         net = load_snapshot(args.run, name, device)
-        ratings.add(measure(args.run, name, net, make_env, device, args.games, args.rivals, seed=100 * k))
+        ratings.add(
+            measure(
+                args.run,
+                name,
+                net,
+                make_env,
+                device,
+                args.games,
+                args.rivals,
+                seed=100 * k,
+            )
+        )
         print(f"{name}: {ratings.ratings[name]:.0f}", flush=True)
     print(table(ratings.ratings, ratings.results))
+
+
+class TrainingLeague:
+    """Episode-stable opponents. Frozen/scripted rows never enter PPO updates."""
+
+    def __init__(
+        self,
+        run,
+        envs,
+        device,
+        seed=1,
+        weights=(0.5, 0.4, 0.1),
+        cache_size=4,
+        state=None,
+    ):
+        from collections import OrderedDict
+
+        if any(w < 0 for w in weights) or abs(sum(weights) - 1) > 1e-6:
+            raise ValueError("league weights must be nonnegative and sum to one")
+        if cache_size < 1:
+            raise ValueError("league cache size must be positive")
+        self.run, self.device, self.weights = run, device, tuple(weights)
+        self.cache_size, self.cache = cache_size, OrderedDict()
+        self.rng = np.random.default_rng(seed)
+        if state:
+            self.rng.bit_generator.state = state["rng"]
+            if tuple(state["weights"]) != self.weights:
+                raise ValueError("league weights changed on resume")
+        self.assigned = ["current"] * envs
+        self.side = np.arange(envs) % 2
+        if state and not set(state["snapshots"]).issubset(set(snapshots(run))):
+            raise ValueError(
+                "a saved league snapshot is missing; restore the run snapshot directory"
+            )
+        self.allowed = set(state["snapshots"]) if state else None
+        self.initialized = False
+        self.counts = (
+            state["counts"].copy()
+            if state
+            else {"current": 0, "frozen": 0, "scripted": 0}
+        )
+
+    def assign(self, done):
+        names = [
+            n for n in snapshots(self.run) if self.allowed is None or n in self.allowed
+        ]
+        # A bounded diverse candidate pool: recent plus geometrically older.
+        candidates = list(
+            dict.fromkeys(
+                names[-2:] + ([names[len(names) // 2], names[0]] if names else [])
+            )
+        )
+        for game in np.flatnonzero(done):
+            kind = int(self.rng.choice(3, p=self.weights))
+            opponent = (
+                "current"
+                if kind == 0 or (kind == 1 and not candidates)
+                else "snapshot:" + str(self.rng.choice(candidates))
+                if kind == 1
+                else str(self.rng.choice(("random", "greedy")))
+            )
+            self.assigned[game] = opponent
+            self.side[game] = int(self.rng.integers(2))
+            self.counts[
+                "current"
+                if opponent == "current"
+                else "frozen"
+                if opponent.startswith("snapshot:")
+                else "scripted"
+            ] += 1
+        self.initialized = True
+
+    def learner_rows(self):
+        learn = np.ones(2 * len(self.assigned), dtype=bool)
+        for g, name in enumerate(self.assigned):
+            if name != "current":
+                learn[2 * g + 1 - self.side[g]] = False
+        return torch.as_tensor(learn, device=self.device)
+
+    @torch.no_grad()
+    def replace_actions(self, env, f, i, mask, actions, history=None):
+        import time
+
+        self.scripted_seconds = 0.0
+        if not self.initialized:
+            self.assign(np.ones(env.envs, dtype=bool))
+        for name in sorted(set(self.assigned) - {"current"}):
+            games = np.array([g for g, n in enumerate(self.assigned) if n == name])
+            rows = torch.as_tensor(2 * games + 1 - self.side[games], device=self.device)
+            if name.startswith("snapshot:"):
+                if name not in self.cache:
+                    net = load_snapshot(self.run, name.split(":", 1)[1], self.device)
+                    net.requires_grad_(False)
+                    self.cache[name] = net
+                    while len(self.cache) > self.cache_size:
+                        self.cache.popitem(last=False)
+                self.cache.move_to_end(name)
+                net = self.cache[name]
+                hist = (
+                    None
+                    if history is None or not net.config.history
+                    else tuple(h[rows] for h in history)
+                )
+                actions[rows] = net.act(f[rows], i[rows], mask[rows], history=hist)[0]
+            else:
+                started = time.perf_counter()
+                baseline = torch.as_tensor(
+                    env.baseline(name), device=self.device, dtype=torch.long
+                )
+                self.scripted_seconds += time.perf_counter() - started
+                actions[rows] = baseline[rows]
+        return self.learner_rows()
+
+    def register_snapshot(self, name):
+        if self.allowed is not None:
+            self.allowed.add(name)
+
+    def state_dict(self):
+        # Live episodes intentionally restart; RNG restored before new assignments.
+        return {
+            "rng": self.rng.bit_generator.state,
+            "weights": self.weights,
+            "snapshots": [
+                n
+                for n in snapshots(self.run)
+                if self.allowed is None or n in self.allowed
+            ],
+            "counts": self.counts,
+        }
 
 
 if __name__ == "__main__":

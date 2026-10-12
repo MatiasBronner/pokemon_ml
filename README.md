@@ -474,8 +474,8 @@ what it can pick: a move's logits from the move's token and its target's, a
 switch's from the token of the Pokémon coming in, Team Preview from pairs of
 the player's own six. The value is read off the field token.
 
-Learning is PPO with generalized advantage estimation on games the network
-plays against itself. The only reward is the result (1 for a win, -1 for a
+Learning is PPO with generalized advantage estimation against the current
+policy, frozen checkpoints and scripted opponents. The only reward is the result (1 for a win, -1 for a
 loss, when the game ends), undiscounted, with an entropy bonus and
 Jaxcalibur's term that keeps every legal action from dying out. Teams come
 from the pool, [varied from game to game](#teams-from-tournaments), half the
@@ -505,11 +505,14 @@ about 20% to about 50% against the greedy one, and stopped and resumed from
 its checkpoint. That shows the loop learns. It says nothing yet about how
 strong the default network gets on real teams with a GPU.
 
-This is a first learner, kept simple on purpose. Not in it yet: a league of
-past versions to play against (self-play against only the current network
-can go in circles), tokens for what happened on earlier turns, heads that
-predict the opponent's hidden sets and next action (which Jaxcalibur found
-worth a lot), and search at play time.
+Training now includes an episode-stable league of current, frozen-checkpoint
+and scripted opponents. Small/medium/large model presets, a Speed-feature
+ablation, public decision-history tokens, opponent/hidden-set prediction,
+semantic action conditioning and joint preview scoring are configurable.
+Experiments are off by default; the small model, Speed features and league
+are on. Search is not implemented. See [the training guide](docs/policy-training.md)
+for held-out splits, calibration and matchup reports, benchmarking,
+checkpoint contracts and the Oscar job template.
 
 ## Playing on Showdown
 

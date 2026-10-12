@@ -1,30 +1,22 @@
-"""Trains a network by self-play.
+"""Multi-team doubles PPO with episode-stable checkpoint opponents.
 
-    python -m pokemon_ml.train --pool teams/2027-frankfurt.json --run runs/first
-
-Plays `--envs` games at once with the network on both sides, updates it with
-PPO every `--steps` decisions, and every `--eval-every` updates puts a copy
-of it aside and measures that copy: against three scripted players, and
-against earlier copies, which gives every version a rating on one scale
-(pokemon_ml.league; the untrained network is 0, and 100 points more is a 64%
-chance of winning). Everything needed to carry on is
-saved to `<run>/checkpoint.pt` every `--save-every` updates, when `--hours`
-of wall-clock time are up, and on Ctrl-C; the same command picks up from
-there. The log is printed and appended to `<run>/log.jsonl`.
+python -m pokemon_ml.train --pool teams/train.json --eval-pool teams/eval.json --run runs/small
 """
+
 import argparse
 import json
 import os
+import random
 import signal
 import time
 from dataclasses import asdict
-
+from pathlib import Path
+import numpy as np
 import torch
 
-from . import league
-from . import model as model_lib
-from . import ppo
+from . import league, model as model_lib, ppo, checkpoint
 from .env import Env
+from .team_splits import assert_disjoint
 
 
 def pick_device(name):
@@ -32,129 +24,356 @@ def pick_device(name):
         return torch.device(name)
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+    if (
+        getattr(torch.backends, "mps", None) is not None
+        and torch.backends.mps.is_available()
+    ):
         return torch.device("mps")
     return torch.device("cpu")
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--pool", required=True, help="team pool to draw teams from (teams/<name>.json)")
-    p.add_argument("--run", default="runs/first", help="directory for the checkpoint and the log")
-    p.add_argument("--envs", type=int, default=512, help="games played at once")
-    p.add_argument("--updates", type=int, default=1000, help="stop after this many updates in all")
-    p.add_argument("--hours", type=float, default=None, help="stop (and save) after this much wall-clock time")
-    p.add_argument("--device", default="auto", help="auto, cuda, mps or cpu")
-    p.add_argument("--threads", type=int, default=0, help="threads stepping the games; 0 for one per core")
+def parser():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--pool", required=True)
+    p.add_argument(
+        "--eval-pool",
+        help="disjoint species-composition pool; default evaluates training distribution",
+    )
+    p.add_argument(
+        "--archetypes",
+        help="JSON composition-key to archetype mapping for held-out evaluation",
+    )
+    p.add_argument("--run", default="runs/first")
+    p.add_argument(
+        "--model-size",
+        choices=model_lib.PRESETS,
+        default=None,
+        help="small by default; resume uses saved sizes",
+    )
+    p.add_argument("--envs", type=int, default=512)
+    p.add_argument("--updates", type=int, default=1000)
+    p.add_argument("--hours", type=float)
+    p.add_argument("--device", default="auto")
+    p.add_argument("--threads", type=int, default=0)
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--open-sheets", type=float, default=0.5, help="share of games played with open team sheets")
-    p.add_argument("--no-vary", action="store_true", help="play the pool's teams exactly as they are")
+    p.add_argument("--eval-seed", type=int, default=7000000)
+    p.add_argument("--open-sheets", type=float, default=0.5)
+    p.add_argument("--no-vary", action="store_true")
     p.add_argument("--eval-every", type=int, default=25)
-    p.add_argument("--eval-games", type=int, default=300, help="games against each scripted player and each earlier version")
-    p.add_argument("--rivals", type=int, default=3, help="earlier versions each new one plays")
+    p.add_argument("--eval-games", type=int, default=300)
+    p.add_argument("--rivals", type=int, default=3)
+    p.add_argument(
+        "--no-lookahead-eval",
+        action="store_true",
+        help="omit expensive privileged lookahead evaluation during training",
+    )
     p.add_argument("--save-every", type=int, default=25)
+    p.add_argument(
+        "--snapshot-every",
+        type=int,
+        default=25,
+        help="checkpoint opponent cadence independent of evaluation",
+    )
+    p.add_argument("--league-current", type=float, default=0.5)
+    p.add_argument("--league-frozen", type=float, default=0.4)
+    p.add_argument("--league-scripted", type=float, default=0.1)
+    p.add_argument("--max-turns", type=int, default=100)
     for name, value in {**asdict(model_lib.Config()), **asdict(ppo.Config())}.items():
-        p.add_argument("--" + name.replace("_", "-"), type=type(value), default=None)
+        if isinstance(value, bool):
+            p.add_argument(
+                "--" + name.replace("_", "-"),
+                action=argparse.BooleanOptionalAction,
+                default=None,
+            )
+        else:
+            p.add_argument(
+                "--" + name.replace("_", "-"), type=type(value), default=None
+            )
+    p.add_argument("--no-speed", dest="use_speed", action="store_false", default=None)
+    return p
+
+
+def main(argv=None):
+    p = parser()
     args = p.parse_args(argv)
-
+    if (
+        min(
+            args.envs,
+            args.updates,
+            args.eval_every,
+            args.eval_games,
+            args.save_every,
+            args.snapshot_every,
+            args.max_turns,
+        )
+        < 1
+    ):
+        p.error("counts and cadences must be positive")
+    if not 0 <= args.open_sheets <= 1 or (args.hours is not None and args.hours <= 0):
+        p.error("open-sheets must be in [0,1] and hours positive")
     device = pick_device(args.device)
-    os.makedirs(args.run, exist_ok=True)
-    path = os.path.join(args.run, "checkpoint.pt")
-    saved = torch.load(path, map_location="cpu", weights_only=False) if os.path.exists(path) else None
-
-    # Sizes come from the checkpoint when there is one, so that a run carries on as it began.
-    given = lambda config: {k: getattr(args, k) for k in asdict(config()) if getattr(args, k) is not None}
-    net_config = model_lib.Config(**{**(saved["model_config"] if saved else {}), **given(model_lib.Config)})
-    ppo_config = ppo.Config(**{**(saved["ppo_config"] if saved else {}), **given(ppo.Config)})
-    torch.manual_seed(args.seed + (saved["update"] if saved else 0))
+    Path(args.run).mkdir(parents=True, exist_ok=True)
+    path = Path(args.run) / "checkpoint.pt"
+    saved = (
+        torch.load(path, map_location="cpu", weights_only=False)
+        if path.exists()
+        else None
+    )
+    explicit = lambda config: {
+        k: getattr(args, k) for k in asdict(config()) if getattr(args, k) is not None
+    }
+    overrides = explicit(model_lib.Config)
+    if args.model_size:
+        overrides = {**model_lib.PRESETS[args.model_size], **overrides}
+    if saved:
+        checkpoint.verify_contract(saved)
+        old = asdict(model_lib.Config(**saved["model_config"]))
+        if any(old[k] != v for k, v in overrides.items()):
+            p.error(
+                "model/feature options differ from checkpoint; use a new --run for an ablation"
+            )
+        net_config = model_lib.Config(**old)
+    else:
+        net_config = model_lib.preset(
+            args.model_size or "small", **explicit(model_lib.Config)
+        )
+    ppo_config = ppo.Config(
+        **{**(saved["ppo_config"] if saved else {}), **explicit(ppo.Config)}
+    )
+    if (
+        min(ppo_config.steps, ppo_config.epochs, ppo_config.minibatch) < 1
+        or ppo_config.lr <= 0
+    ):
+        p.error("PPO counts and learning rate must be positive")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     model = model_lib.Model(net_config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=ppo_config.lr, eps=1e-5)
-    totals = {"update": 0, "decisions": 0, "games": 0, "seconds": 0.0}
+    totals = dict(update=0, decisions=0, games=0, seconds=0.0, wall_seconds=0.0)
+    provenance = dict(
+        pool_sha256=checkpoint.file_hash(args.pool),
+        eval_pool_sha256=checkpoint.file_hash(args.eval_pool or args.pool),
+        open_sheets=args.open_sheets,
+        variation=not args.no_vary,
+        seed=args.seed,
+        max_turns=args.max_turns,
+        envs=args.envs,
+        eval_seed=args.eval_seed,
+    )
+    if args.eval_pool:
+        assert_disjoint(
+            json.loads(Path(args.pool).read_text()),
+            json.loads(Path(args.eval_pool).read_text()),
+        )
     if saved:
-        try:
-            model.load_state_dict(saved["model"])
-        except RuntimeError as error:
-            raise SystemExit(
-                f"{path} was made with a different observation or network, so it cannot be carried on from "
-                f"(what a model is given has changed since). Start a new run with another --run directory.\n{error}")
+        if saved.get("provenance", provenance) != provenance:
+            p.error("pool or rollout settings differ from saved run; start a new --run")
+        model.load_state_dict(saved["model"])
         optimizer.load_state_dict(saved["optimizer"])
-        totals = {k: saved[k] for k in totals}
+        totals = {k: saved.get(k, 0) for k in totals}
         for group in optimizer.param_groups:
             group["lr"] = ppo_config.lr
-
-    # A different seed each time a run is picked up, so that it does not replay the same games.
-    env_seed = args.seed + 1000 * totals["update"]
-    make = lambda envs, seed: Env(args.pool, envs, seed, args.open_sheets, not args.no_vary, threads=args.threads)
-    env = make(args.envs, env_seed)
-    roll = ppo.Rollout(ppo_config.steps, 2 * args.envs, device)
-    parameters = sum(p.numel() for p in model.parameters())
-    print(f"{parameters:,} parameters on {device}; {args.envs} games at once on {env.raw.threads} threads; "
-          f"{'resuming at' if saved else 'starting at'} update {totals['update']}", flush=True)
+    env = Env(
+        args.pool,
+        args.envs,
+        args.seed + 1000 * totals["update"],
+        args.open_sheets,
+        not args.no_vary,
+        max_turns=args.max_turns,
+        threads=args.threads,
+    )
+    roll = ppo.Rollout(
+        ppo_config.steps,
+        2 * args.envs,
+        device,
+        net_config.history,
+        net_config.opponent_prediction or net_config.hidden_prediction,
+    )
+    weights = (args.league_current, args.league_frozen, args.league_scripted)
+    training_league = league.TrainingLeague(
+        args.run,
+        args.envs,
+        device,
+        args.seed,
+        weights,
+        state=saved.get("league") if saved else None,
+    )
+    if saved and "rng" in saved:
+        checkpoint.restore_rng(saved["rng"])
+    print(
+        f"{sum(p.numel() for p in model.parameters()):,} parameters on {device}; Speed={net_config.use_speed}; "
+        f"{args.envs} games; league weights={weights}; update={totals['update']}",
+        flush=True,
+    )
+    configuration = dict(
+        model=asdict(net_config),
+        ppo=asdict(ppo_config),
+        provenance=provenance,
+        args=vars(args),
+        contract=checkpoint.contract(),
+        resume="live episodes restart; optimizer, RNG, league and counters restored",
+    )
+    (Path(args.run) / "config.json").write_text(
+        json.dumps(configuration, indent=2) + "\n"
+    )
 
     def save():
-        state = {"model": model.state_dict(), "optimizer": optimizer.state_dict(),
-                 "model_config": asdict(net_config), "ppo_config": asdict(ppo_config), **totals}
-        torch.save(state, path + ".tmp")
-        os.replace(path + ".tmp", path)  # never a half-written checkpoint
+        state = dict(
+            model=model.state_dict(),
+            optimizer=optimizer.state_dict(),
+            model_config=asdict(net_config),
+            ppo_config=asdict(ppo_config),
+            contract=checkpoint.contract(),
+            rng=checkpoint.rng_state(),
+            league=training_league.state_dict(),
+            provenance=provenance,
+            **totals,
+        )
+        torch.save(state, str(path) + ".tmp")
+        os.replace(str(path) + ".tmp", path)
 
-    make_rival = lambda seed: make(min(args.envs, 256), 7_000_000 + seed)
     ratings = league.Ratings(args.run)
+    make_rival = lambda seed: Env(
+        args.eval_pool or args.pool,
+        min(args.envs, 128),
+        args.eval_seed + seed,
+        args.open_sheets,
+        False,
+        max_turns=args.max_turns,
+        threads=args.threads,
+    )
+    archetypes = (
+        json.loads(Path(args.archetypes).read_text()) if args.archetypes else None
+    )
 
     def measure(log):
-        """Puts the network aside as a snapshot and has it play the scripted players and earlier snapshots."""
-        name = league.save_snapshot(args.run, totals["update"], model)
-        results = league.measure(args.run, name, model, make_rival, device, args.eval_games, args.rivals,
-                                 seed=31 * totals["update"])
-        ratings.add(results)
-        log["rating"] = ratings.ratings[name]
-        for _, rival, share, _ in results:
-            if rival in league.SCRIPTED:
-                log["vs_" + rival] = share
-        return log
+        state = checkpoint.rng_state()
+        try:
+            torch.manual_seed(args.eval_seed)
+            name = league.save_snapshot(args.run, totals["update"], model)
+            training_league.register_snapshot(name)
+            results = league.measure(
+                args.run,
+                name,
+                model,
+                make_rival,
+                device,
+                args.eval_games,
+                args.rivals,
+                seed=0,
+                archetypes=archetypes,
+                include_lookahead=not args.no_lookahead_eval,
+            )
+            ratings.add(results)
+            log["rating"] = ratings.ratings[name]
+            report = json.loads(
+                (Path(args.run) / "evaluation" / f"{name}-vs-greedy.json").read_text()
+            )
+            log["value_brier"] = report["calibration"]["brier"]
+            log["value_ece"] = report["calibration"]["ece"]
+            for _, rival, share, _ in results:
+                if rival in league.SCRIPTED:
+                    log["vs_" + rival] = share
+        finally:
+            checkpoint.restore_rng(state)
 
+    began = time.perf_counter()
+    previous_wall = totals["wall_seconds"]
     if not league.snapshots(args.run):
-        # Where the run starts from: the zero of its ratings.
-        start = measure({})
-        print("the untrained network wins " + ", ".join(
-            f"{100 * start['vs_' + kind]:.0f}% vs {kind}" for kind in league.SCRIPTED), flush=True)
-
+        measure({})
     stop = {"now": False}
-    signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
-    signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
-    began = time.time()
-    while totals["update"] < args.updates and not stop["now"]:
-        t0 = time.time()
-        games_before = env.stats()["games"]
-        ppo.collect(env, model, roll)
-        t1 = time.time()
-        log = ppo.update(model, optimizer, roll, ppo_config)
-        t2 = time.time()
-        stats = env.stats()
-        totals["update"] += 1
-        totals["decisions"] += log["decisions"]
-        totals["games"] += stats["games"] - games_before
-        totals["seconds"] += t2 - t0
-        log.update(update=totals["update"], games=totals["games"], hours=totals["seconds"] / 3600,
-                   per_second=ppo_config.steps * args.envs / (t2 - t0), playing=(t1 - t0) / (t2 - t0),
-                   turns=stats["turns"] / max(stats["games"], 1), ties=stats["ties"] / max(stats["games"], 1))
-        if totals["update"] % args.eval_every == 0 or totals["update"] == args.updates:
-            measure(log)
-        line = (f"update {log['update']:5d}  games {log['games']:9,d}  {log['per_second']:7.0f} game-steps/s "
-                f"({100 * log['playing']:.0f}% playing)  value explains {100 * log['explained']:5.1f}%  "
-                f"entropy {log['entropy']:.2f}  kl {log['kl']:.4f}  {log['turns']:.1f} turns")
-        if "rating" in log:
-            line += (f"  | rating {log['rating']:.0f}; wins {100 * log['vs_random']:.0f}% vs random, "
-                     f"{100 * log['vs_greedy']:.0f}% vs greedy, {100 * log['vs_lookahead']:.0f}% vs look-ahead")
-        print(line, flush=True)
-        with open(os.path.join(args.run, "log.jsonl"), "a") as out:
-            out.write(json.dumps(log) + "\n")
-        out_of_time = args.hours is not None and time.time() - began > args.hours * 3600
-        if totals["update"] % args.save_every == 0 or out_of_time:
+    previous_handlers = {}
+    for sig in (
+        signal.SIGINT,
+        signal.SIGTERM,
+        getattr(signal, "SIGUSR1", signal.SIGTERM),
+    ):
+        previous_handlers[sig] = signal.signal(sig, lambda *_: stop.update(now=True))
+    failed = False
+    try:
+        while totals["update"] < args.updates and not stop["now"]:
+            t0 = time.perf_counter()
+            before = env.stats()
+            ppo.collect(env, model, roll, training_league)
+            t1 = time.perf_counter()
+            log = ppo.update(model, optimizer, roll, ppo_config)
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+            t2 = time.perf_counter()
+            stats = env.stats()
+            totals["update"] += 1
+            totals["decisions"] += log["decisions"]
+            totals["games"] += stats["games"] - before["games"]
+            totals["seconds"] += t2 - t0
+            games = stats["games"] - before["games"]
+            log.update(
+                update=totals["update"],
+                games=totals["games"],
+                hours=totals["seconds"] / 3600,
+                per_second=ppo_config.steps * args.envs / (t2 - t0),
+                learner_decisions_per_second=log["decisions"] / (t2 - t0),
+                playing=(t1 - t0) / (t2 - t0),
+                update_seconds=t2 - t1,
+                turns=(stats["turns"] - before["turns"]) / max(games, 1),
+                ties=(stats["ties"] - before["ties"]) / max(games, 1),
+                timeouts=stats.get("timeouts", 0) - before.get("timeouts", 0),
+                league_assignments=training_league.counts.copy(),
+            )
+            if device.type == "cuda":
+                log["cuda_peak_allocated_bytes"] = torch.cuda.max_memory_allocated(
+                    device
+                )
+                log["cuda_peak_reserved_bytes"] = torch.cuda.max_memory_reserved(device)
+                try:
+                    log["gpu_utilization_percent"] = torch.cuda.utilization(device)
+                except (AttributeError, ImportError, RuntimeError):
+                    log["gpu_utilization_percent"] = None
+            if totals["update"] % args.snapshot_every == 0:
+                training_league.register_snapshot(
+                    league.save_snapshot(args.run, totals["update"], model)
+                )
+            evaluation_start = time.perf_counter()
+            out_of_time = (
+                args.hours is not None
+                and time.perf_counter() - began >= args.hours * 3600
+            )
+            if (
+                not stop["now"]
+                and not out_of_time
+                and (
+                    totals["update"] % args.eval_every == 0
+                    or totals["update"] == args.updates
+                )
+            ):
+                measure(log)
+            log["evaluation_seconds"] = time.perf_counter() - evaluation_start
+            totals["wall_seconds"] = previous_wall + time.perf_counter() - began
+            log["wall_hours"] = totals["wall_seconds"] / 3600
+            print(
+                f"update {totals['update']} games {totals['games']:,} "
+                f"learner decisions/s {log['learner_decisions_per_second']:.0f} KL {log['kl']:.4f}"
+                + (f" rating {log['rating']:.0f}" if "rating" in log else ""),
+                flush=True,
+            )
+            with open(Path(args.run) / "log.jsonl", "a") as f:
+                f.write(json.dumps(log) + "\n")
+            if totals["update"] % args.save_every == 0:
+                save()
+            if (
+                args.hours is not None
+                and time.perf_counter() - began >= args.hours * 3600
+            ):
+                break
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        if not failed:
+            totals["wall_seconds"] = previous_wall + time.perf_counter() - began
             save()
-        if out_of_time:
-            print(f"{args.hours} hours are up", flush=True)
-            break
-    save()
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
     print(f"saved {path} at update {totals['update']}", flush=True)
 
 

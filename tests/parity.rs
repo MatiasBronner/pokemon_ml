@@ -150,3 +150,17 @@ fn illegal_choices_are_rejected_without_changing_state() {
     assert_eq!(b.rng, before);
     assert_eq!(b.turn, 1);
 }
+
+#[test]
+fn targeted_patterns_match_continuously_and_when_rebuilt() {
+    for line in include_str!("fixtures/targeted_pattern_regressions.jsonl").lines() {
+        let case: Case = serde_json::from_str(line).unwrap();
+        for mode in [Rebuild::No, Rebuild::ByHand] {
+            match check_case_with(&case, mode) {
+                Outcome::Pass(_) => {}
+                Outcome::Fail(why) => panic!("case {}: {}", case.id, why.join("; ")),
+                Outcome::Unsupported(why) => panic!("case {} unsupported: {why}", case.id),
+            }
+        }
+    }
+}

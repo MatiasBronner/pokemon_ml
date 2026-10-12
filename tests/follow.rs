@@ -655,3 +655,13 @@ fn private_items_track_symbiosis_transfers_between_requests() {
     assert_eq!(tally.observations, 1103);
     assert_eq!(tally.wrong, 0);
 }
+
+#[test]
+fn targeted_pattern_regressions_have_matching_public_observations() {
+    let mut tally = FollowTally::default();
+    for line in include_str!("fixtures/targeted_pattern_regressions.jsonl").lines() {
+        let case: FollowCase = serde_json::from_str(line).unwrap();
+        assert!(matches!(check_follow(&case, &mut tally), Outcome::Pass(_)), "case {}", case.id);
+    }
+    assert_eq!(tally.wrong, 0, "{:?}", tally.by_feature);
+}

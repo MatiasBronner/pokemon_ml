@@ -891,7 +891,8 @@ impl BattleState {
                 m.trapped = Trapped::No;
                 m.locked_move.clear();
                 m.is_active = None;
-                m.faint_queued = None;
+                // Zero HP can precede the faint event, even after a battle ends.
+                m.faint_queued = (m.hp == Some(0) && !m.fainted).then_some(true);
                 if m.fainted {
                     // (That the fainted are to be replaced goes without saying.)
                     m.switch_flag = false;
@@ -1555,7 +1556,7 @@ impl Battle {
                 stats
             }
         };
-        mon.fainted = ps.fainted || ps.hp == Some(0);
+        mon.fainted = ps.fainted || (ps.hp == Some(0) && ps.faint_queued.is_none());
         mon.hp = if mon.fainted {
             0
         } else if let Some(hp) = ps.hp {
@@ -1692,7 +1693,9 @@ impl Battle {
                 b.sides[s].team[names.order[s][p] as usize] = mon;
             }
             b.sides[s].mega_used = side_has_mega;
-            let fainted = side.pokemon.iter().filter(|ps| ps.fainted || ps.hp == Some(0)).count() as u8;
+            let fainted =
+                side.pokemon.iter().filter(|ps| ps.fainted || (ps.hp == Some(0) && ps.faint_queued.is_none())).count()
+                    as u8;
             b.sides[s].total_fainted = side.total_fainted.unwrap_or(fainted);
             b.sides[s].pokemon_left = side.pokemon_left.unwrap_or(side.pokemon.len() as u8 - fainted);
             b.sides[s].fainted_this_turn = side.fainted_this_turn;
@@ -2164,6 +2167,10 @@ impl Battle {
         b.active_pokemon = None;
         b.active_target = None;
         b.faint_queue = blank.faint_queue;
+        // A finished battle never processes leftover faint entries.
+        if b.ended {
+            b.n_faint = 0;
+        }
         for i in b.queue.len as usize..QUEUE_CAP {
             b.queue.items[i] = blank.queue.items[i];
         }

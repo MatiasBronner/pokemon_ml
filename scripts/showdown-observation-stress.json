@@ -1,0 +1,548 @@
+{
+  "schema_version": 1,
+  "description": "Fresh stress battles around previously observed public-information bugs; not saved fixture replays.",
+  "themes": [
+    {
+      "name": "toxic-replacement",
+      "options": [
+        "--moves",
+        "toxic,protect,uturn,voltswitch,roar,whirlwind",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "emergencyexit,innerfocus",
+        "--items",
+        "ejectbutton,redcard,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained toxic-replacement regression family."
+    },
+    {
+      "name": "confusion-instruct",
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,confuseray,swagger,teeterdance,protect,encore",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained confusion-instruct regression family."
+    },
+    {
+      "name": "psychic-mega-pressure",
+      "options": [
+        "--species",
+        "delphox,hatterene",
+        "--abilities",
+        "pressure,innerfocus",
+        "--moves",
+        "expandingforce,psychicterrain,encore,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained psychic-mega-pressure regression family."
+    },
+    {
+      "name": "solar-animation",
+      "options": [
+        "--abilities",
+        "pressure,innerfocus",
+        "--moves",
+        "solarbeam,solarblade,sunnyday,encore,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "choicescarf,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained solar-animation regression family."
+    },
+    {
+      "name": "illusion-hunger-switch",
+      "options": [
+        "--species",
+        "morpeko,zoroark,zoroarkhisui",
+        "--moves",
+        "aurawheel,round,uturn,protect,confuseray",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained illusion-hunger-switch regression family."
+    },
+    {
+      "name": "reflected-heal-knowledge",
+      "options": [
+        "--abilities",
+        "magicbounce,innerfocus",
+        "--moves",
+        "healpulse,psychicnoise,protect,transform",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained reflected-heal-knowledge regression family."
+    },
+    {
+      "name": "called-speed-swap",
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "speedswap,copycat,instruct,encore,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained called-speed-swap regression family."
+    },
+    {
+      "name": "baton-suppression",
+      "options": [
+        "--abilities",
+        "battlebond,innerfocus,pressure",
+        "--moves",
+        "batonpass,gastroacid,skillswap,entrainment,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained baton-suppression regression family."
+    },
+    {
+      "name": "encore-quick-claw",
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained encore-quick-claw regression family."
+    },
+    {
+      "name": "future-sight-recoil",
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained future-sight-recoil regression family."
+    },
+    {
+      "name": "ripen-leppa",
+      "options": [
+        "--abilities",
+        "ripen,pressure,innerfocus",
+        "--items",
+        "leppaberry,mentalherb,choicescarf",
+        "--moves",
+        "guardswap,protect,encore,spite,skillswap,trick",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained ripen-leppa regression family."
+    },
+    {
+      "name": "instruct-sleep",
+      "options": [
+        "--species",
+        "oranguru,alcremie",
+        "--moves",
+        "instruct,snore,sleeptalk,rest,encore,round",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained instruct-sleep regression family."
+    },
+    {
+      "name": "waking-attract",
+      "options": [
+        "--moves",
+        "rest,sleeptalk,attract,hypnosis,protect,dig",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,innerfocus"
+      ],
+      "purpose": "Fresh randomized coverage of the retained waking-attract regression family."
+    },
+    {
+      "name": "court-change",
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained court-change regression family."
+    },
+    {
+      "name": "reflected-healing",
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,solarblade,solarbeam,fly,dig,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,innerfocus"
+      ],
+      "purpose": "Fresh randomized coverage of the retained reflected-healing regression family."
+    },
+    {
+      "name": "instruct-quick-claw",
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained instruct-quick-claw regression family."
+    },
+    {
+      "name": "illusion-focus-punch",
+      "options": [
+        "--species",
+        "zoroark,zoroarkhisui,machamp",
+        "--moves",
+        "focuspunch,substitute,uturn,headsmash,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained illusion-focus-punch regression family."
+    },
+    {
+      "name": "illusion-form",
+      "options": [
+        "--species",
+        "zoroark,zoroarkhisui,aegislash",
+        "--moves",
+        "uturn,kingsshield,willowisp,toxic,bounce,ironhead",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained illusion-form regression family."
+    },
+    {
+      "name": "illusion-items",
+      "options": [
+        "--species",
+        "zoroark,zoroarkhisui,aegislash",
+        "--moves",
+        "trick,switcheroo,uturn,protect,scaryface",
+        "--moves-per",
+        "3",
+        "--items",
+        "choicescarf,ironball,focusband,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained illusion-items regression family."
+    },
+    {
+      "name": "residual-weather",
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained residual-weather regression family."
+    },
+    {
+      "name": "broken-guards",
+      "options": [
+        "--species",
+        "sirfetchd,golisopod,arcanine",
+        "--abilities",
+        "emergencyexit,innerfocus",
+        "--moves",
+        "feint,quickguard,wideguard,protect,uturn",
+        "--moves-per",
+        "3",
+        "--items",
+        "ejectbutton,redcard,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained broken-guards regression family."
+    },
+    {
+      "name": "types",
+      "options": [
+        "--moves",
+        "reflecttype,soak,trickortreat,forestscurse,burnup,doubleshock,roost",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained types regression family."
+    },
+    {
+      "name": "pressure",
+      "options": [
+        "--abilities",
+        "pressure,innerfocus",
+        "--moves",
+        "encore,expandingforce,curse,comeuppance,metalburst"
+      ],
+      "purpose": "Fresh randomized coverage of the retained pressure regression family."
+    },
+    {
+      "name": "choice-swap",
+      "options": [
+        "--abilities",
+        "klutz,innerfocus,pressure",
+        "--items",
+        "choicescarf,mentalherb,leftovers",
+        "--moves",
+        "skillswap,encore,magicroom,trick,switcheroo,instruct"
+      ],
+      "purpose": "Fresh randomized coverage of the retained choice-swap regression family."
+    },
+    {
+      "name": "mental-herb",
+      "options": [
+        "--abilities",
+        "innerfocus,pressure,klutz",
+        "--items",
+        "mentalherb,choicescarf,leftovers",
+        "--moves",
+        "encore,taunt,disable,torment,throatchop,imprison",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained mental-herb regression family."
+    },
+    {
+      "name": "trapping",
+      "options": [
+        "--moves",
+        "octolock,bind,wrap,uturn,voltswitch,quash,afteryou,round",
+        "--moves-per",
+        "3",
+        "--items",
+        "ejectbutton,redcard,bindingband,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained trapping regression family."
+    },
+    {
+      "name": "called-moves",
+      "options": [
+        "--moves",
+        "instruct,copycat,sleeptalk,encore,transform,uproar",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus,prankster"
+      ],
+      "purpose": "Fresh randomized coverage of the retained called-moves regression family."
+    },
+    {
+      "name": "confusion-endure-instruct",
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro"
+      ],
+      "purpose": "Confusion self-hits during Endure, including instructed actions and Encore."
+    },
+    {
+      "name": "pressure-ability-swap",
+      "options": [
+        "--moves",
+        "skillswap,roleplay,entrainment,expandingforce,psychicterrain,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,levitate,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers"
+      ],
+      "purpose": "Grounding and PP inference after allied or opposing ability changes."
+    },
+    {
+      "name": "solar-suppression",
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers"
+      ],
+      "purpose": "Solar animation targets after suppression, ability exchange or Encore."
+    },
+    {
+      "name": "toxic-baton-exit",
+      "options": [
+        "--moves",
+        "toxic,batonpass,uturn,roar,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "emergencyexit,innerfocus",
+        "--items",
+        "ejectbutton,redcard,leftovers"
+      ],
+      "purpose": "Poison counters across forced replacements and Baton Pass."
+    },
+    {
+      "name": "illusion-form-speed",
+      "options": [
+        "--moves",
+        "aurawheel,kingsshield,speedswap,copycat,uturn,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "choicescarf,ironball,leftovers",
+        "--species",
+        "morpeko,aegislash,zoroark,zoroarkhisui"
+      ],
+      "purpose": "Disguise identity and frozen forms while speed or items change."
+    },
+    {
+      "name": "reflected-heal-encore",
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers"
+      ],
+      "purpose": "Move ownership and PP when reflected or called healing is blocked."
+    },
+    {
+      "name": "called-speed-priority",
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Successful versus failed called swaps and promoted action order."
+    },
+    {
+      "name": "baton-hidden-ability",
+      "options": [
+        "--moves",
+        "batonpass,gastroacid,skillswap,roleplay,entrainment,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "battlebond,pressure,levitate,innerfocus",
+        "--items",
+        "mentalherb,leftovers"
+      ],
+      "purpose": "Public suppression knowledge before and after ability revelation."
+    },
+    {
+      "name": "herb-instruct-disable",
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Herb consumption, item locking, rerolled actions and allied swaps."
+    },
+    {
+      "name": "ripen-solar-pp",
+      "options": [
+        "--moves",
+        "solarbeam,sunnyday,spite,encore,skillswap,trick",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "ripen,pressure,innerfocus",
+        "--items",
+        "leppaberry,choicescarf,leftovers"
+      ],
+      "purpose": "PP restoration and solar target evidence around changing abilities."
+    },
+    {
+      "name": "sleep-confusion-priority",
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Wake and confusion boundaries during called or replaced actions."
+    },
+    {
+      "name": "trap-type-pivot",
+      "options": [
+        "--moves",
+        "octolock,soak,reflecttype,roost,uturn,voltswitch",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "ejectbutton,redcard,bindingband,leftovers"
+      ],
+      "purpose": "Trapping observations as typing changes and replacements occur."
+    },
+    {
+      "name": "future-weather-guard",
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian"
+      ],
+      "purpose": "Delayed hits and guard knowledge across weather, recoil and replacement."
+    }
+  ],
+  "mega_rates": [
+    0.0,
+    1.0
+  ]
+}

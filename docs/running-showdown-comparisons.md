@@ -138,3 +138,53 @@ python3 scripts/compare-showdown.py --battles 300000 --seed 3184072951 --workers
 
 This uses a new base seed, builds current sources and preserves failure recordings
 and provenance using the existing mixed profile. Upload its `differences.tar.gz`.
+
+## 100,000 fresh games focused on past bug families
+
+After merging the targeted-suite PR:
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only origin main
+python3 scripts/run-showdown-targeted-100000.py --seed 1379264805
+```
+
+The new `scripts/showdown-observation-stress.json` suite contains 40 themes:
+27 historical regression families and 13 additional combinations. These include
+confusion/Endure/Instruct, Pressure/grounding/ability exchange, solar PP/suppression,
+Toxic/Baton/forced switches, Illusion/forms/Speed Swap, reflected healing/Encore,
+called Speed Swap/promotion, hidden suppression/revelation, Mental Herb/Disable/
+allied Skill Swap, Ripen/solar PP, sleep/confusion/priority, trapping/type changes,
+and Future Sight/weather/guards. Each theme's `purpose` explains its target.
+
+This generates new random teams, battle seeds and choices, rather than replaying
+saved failures. It uses 400 batches of 250 battles: 2,500 per theme, split equally
+between open and closed sheets. Successive pairs of closed/open cycles alternate
+Mega probability between 0 and 1 (60,000 games with Megas disabled and 40,000
+with all eligible native stone holders opting into Mega selection). Species that
+have no Mega remain unchanged; forced items can also prevent a Mega Stone.
+The ordinary random action policy still supplies varied attacks and switches.
+There are no unthemed general batches. Targeting increases the chance of the
+interactions; it does not guarantee that every game executes them. These stress
+teams are deliberately unusual, rather than a legal competitive training pool.
+Existing single-Illusion restrictions remain in effect.
+
+The launcher builds the current checkout and checks both observations and mechanics.
+It chooses and prints a random seed if `--seed` is omitted. A fresh seed reduces
+accidental overlap but cannot guarantee every individual battle is globally new.
+Results default to `~/showdown-runs/observation-stress-SEED`; use `--out` to change
+that directory and `--workers` to change concurrency. Existing directories are
+never overwritten. All differing recordings, seeds and reproduction commands are
+saved automatically; passing recordings are discarded to limit disk use. Send
+`differences.tar.gz` when the run completes. `manifest.json`, a copied suite and
+its provenance hash record the exact batch settings.
+
+To inspect the configuration without generating battles or building binaries:
+
+```bash
+python3 scripts/run-showdown-targeted-100000.py --plan-only
+```
+
+This suite was prepared with configuration and syntax checks only; its battles
+were not run in the cloud.

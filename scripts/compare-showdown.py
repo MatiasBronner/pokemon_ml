@@ -82,11 +82,21 @@ def main():
     parser.add_argument('--batch-size', type=int, default=1000)
     parser.add_argument('--workers', type=int, default=min(4, os.cpu_count() or 1))
     parser.add_argument('--profile', choices=['mixed', 'general', 'regressions'], default='mixed', help='mixed uses general and targeted stress battles; regressions targets retained observation failures')
+    parser.add_argument('--themes-file', type=Path, help='JSON stress suite; requires --profile regressions')
     parser.add_argument('--keep-passing', action='store_true', help='keep complete passing recordings too (large)')
     parser.add_argument('--no-build', action='store_true', help='use existing release binaries; their hashes are always recorded')
     args = parser.parse_args()
     if min(args.battles, args.batch_size, args.workers) < 1 or not 0 < args.seed < 2**32:
         parser.error('counts must be positive and seed must be between 1 and 4294967295')
+    themes, mega_rates = REGRESSION_THEMES, []
+    if args.themes_file:
+        if args.profile != 'regressions':
+            parser.error('--themes-file requires --profile regressions')
+        from showdown_stress_suite import load_suite
+        try:
+            themes, mega_rates = load_suite(args.themes_file, REPO / 'oracle/pool.json')
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
     out = args.out.resolve()
     if out.exists():
         parser.error(f'{out} already exists; choose a new directory')
@@ -113,6 +123,9 @@ def main():
         node_version=subprocess.check_output(['node', '--version'], text=True).strip(),
         generator_hashes={p: hashlib.sha256((REPO / p).read_bytes()).hexdigest() for p in oracle_sources},
         binaries=binary_hashes, build_requested=not args.no_build, command=sys.argv, scope='complete stress battles; single initially brought Illusion per side; closed sheets exclude rosters with non-native Illusion')
+    if args.themes_file:
+        provenance['stress_suite'] = dict(path=str(args.themes_file.resolve()), sha256=hashlib.sha256(args.themes_file.read_bytes()).hexdigest())
+        shutil.copy2(args.themes_file, out / 'stress-suite.json')
     write_json(out / 'provenance.json', provenance)
     (out / 'working-tree.patch').write_text(git('diff', 'HEAD'))
     pool = json.loads((REPO / 'oracle/pool.json').read_text())
@@ -128,11 +141,14 @@ def main():
             options = list(options)
             targeted += 1
         if args.profile == 'regressions':
-            label, options = REGRESSION_THEMES[i % len(REGRESSION_THEMES)]
+            label, options = themes[i % len(themes)]
             options = list(options)
-            open_sheets = (i // len(REGRESSION_THEMES)) % 2 == 1
+            open_sheets = (i // len(themes)) % 2 == 1
         else:
             open_sheets = i % 2 == 1
+        if args.profile == 'regressions' and mega_rates:
+            cycle = i // len(themes)
+            options += ['--mega-rate', str(mega_rates[(cycle // 2) % len(mega_rates)])]
         if open_sheets:
             options += ['--open-sheets']
         # Space batch seeds apart so adjacent base seeds do not reuse whole batches.
@@ -256,6 +272,8 @@ def main():
         return 2
     provenance['completed_utc'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     provenance['generator_unchanged'] = all(hashlib.sha256((REPO / p).read_bytes()).hexdigest() == h for p, h in provenance['generator_hashes'].items())
+    if args.themes_file:
+        provenance['stress_suite_unchanged'] = hashlib.sha256(args.themes_file.read_bytes()).hexdigest() == provenance['stress_suite']['sha256']
     write_json(out / 'provenance.json', provenance)
     bundle = out / 'differences.tar.gz'
     with tarfile.open(bundle, 'w:gz') as archive:

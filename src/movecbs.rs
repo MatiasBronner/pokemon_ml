@@ -96,10 +96,17 @@ impl Battle {
                 mv::PROTECT | mv::DETECT | mv::ENDURE | mv::BANEFULBUNKER | mv::KINGSSHIELD | mv::SPIKYSHIELD,
                 Ev::PrepareHit,
             ) => {
-                if !self.will_act() {
-                    return FALSE;
+                let result = if !self.will_act() {
+                    FALSE
+                } else {
+                    self.run_event(Ev::StallMove, e.target, None, Eff::None, Res::Undef)
+                };
+                if !result.truthy()
+                    && let Some(r) = e.target
+                {
+                    self.note_public(crate::public_actions::PublicEvent::Failure { r, visible: self.public_visible() });
                 }
-                self.run_event(Ev::StallMove, e.target, None, Eff::None, Res::Undef)
+                result
             }
             // onHit(pokemon)
             (
@@ -114,7 +121,13 @@ impl Battle {
 
             // ---- Wide Guard, Quick Guard
             // onTry(): fails if nothing else is left to act this turn.
-            (mv::WIDEGUARD | mv::QUICKGUARD, Ev::Try) => Res::Bool(self.will_act()),
+            (mv::WIDEGUARD | mv::QUICKGUARD, Ev::Try) => {
+                let result = self.will_act();
+                if !result && let Some(r) = e.target {
+                    self.note_public(crate::public_actions::PublicEvent::Failure { r, visible: self.public_visible() });
+                }
+                Res::Bool(result)
+            }
             // onHitSide(side, source): counts as a use of Protect for the user's next one.
             (mv::WIDEGUARD | mv::QUICKGUARD, Ev::HitSide) => {
                 if let Some(source) = e.source {

@@ -692,6 +692,9 @@ impl Battle {
             return;
         }
         self.note_move_named(r, move_id);
+        if MOVES[move_id as usize].stalling_move {
+            self.note_public(crate::public_actions::PublicEvent::Attempt(r));
+        }
         if move_id == crate::battle::struggle_id() || self.mon(r).transformed {
             return;
         }
@@ -792,6 +795,7 @@ impl Battle {
 
     /// The `switch` or `drag` line: `r` appears, as whoever it passes for.
     pub(crate) fn shown_enter(&mut self, r: MonRef) {
+        self.note_public(crate::public_actions::PublicEvent::Switch { r, pos: self.mon(r).position as usize });
         let a = self.shown_as(r);
         let side = &mut self.sides[r.side as usize];
         if side.shown[a].seen == 0 {

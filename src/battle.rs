@@ -2835,6 +2835,9 @@ impl Battle {
                     n_residual += 1;
                 }
                 self.field_event(Ev::Residual, None);
+                if !self.ended {
+                    self.note_public(crate::public_actions::PublicEvent::Upkeep);
+                }
             }
         }
 
@@ -2954,6 +2957,7 @@ impl Battle {
     /// `Battle#endTurn`.
     fn end_turn(&mut self) {
         self.turn += 1;
+        self.note_public(crate::public_actions::PublicEvent::Turn(self.public_visible()));
         for side in 0..2 {
             for pos in 0..ACTIVE {
                 let r = self.active(side, pos);

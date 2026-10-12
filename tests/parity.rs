@@ -164,3 +164,17 @@ fn targeted_patterns_match_continuously_and_when_rebuilt() {
         }
     }
 }
+
+#[test]
+fn observer_scripted_references_keep_battle_mechanics_unchanged() {
+    for line in include_str!("fixtures/observer_scripted_public_knowledge.jsonl").lines() {
+        let case: Case = serde_json::from_str(line).unwrap();
+        for mode in [Rebuild::No, Rebuild::ByHand] {
+            match check_case_with(&case, mode) {
+                Outcome::Pass(_) => {}
+                Outcome::Fail(why) => panic!("case {}: {}", case.id, why.join("; ")),
+                Outcome::Unsupported(why) => panic!("case {}: {why}", case.id),
+            }
+        }
+    }
+}

@@ -737,6 +737,7 @@ impl Battle {
                 }
                 if broke {
                     self.drop_vol(t, VolKind::Stall);
+                    self.note_public(crate::public_actions::PublicEvent::Reset(t));
                 }
             }
         }

@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "7f1f70d85211f1284e1a4a96f76c454d5bafe936",
+  "showdown_commit": "ad7ca5d51c03865e6829dbec3a7875df71480fb8",
+  "final_binaries_sha256": {
+    "followcheck": "66f90965a888ab74b9b601d926754f5e79b167ededbc464b83255fb062fa4584",
+    "difftest": "a66c6fafa0a29ae843f6cd9317c4970d25c607cfec11a77d2365b482cea4d837"
+  },
+  "uploaded_failure_replay": {
+    "actionable_differences": 0,
+    "decisions": 2030,
+    "differences": 0,
+    "failed": 0,
+    "followed": 55,
+    "observations": 4159,
+    "passed_over": 11,
+    "unsupported": 0
+  },
+  "final_targeted_runs": [
+    {
+      "seed": 2087456193,
+      "kind": "final observation replay of retained targeted recordings",
+      "summary": {
+        "actionable_differences": 0,
+        "decisions": 76568,
+        "differences": 0,
+        "failed": 0,
+        "followed": 2400,
+        "observations": 157312,
+        "passed_over": 624,
+        "unsupported": 0
+      }
+    },
+    {
+      "seed": 427193086,
+      "kind": "fresh final-binary targeted sweep",
+      "summary": {
+        "completed_batches": 96,
+        "compared_battles": 4800,
+        "failing_battles": 0,
+        "elapsed_seconds": 548,
+        "observations_actionable_differences": 0,
+        "observations_decisions": 151541,
+        "observations_differences": 0,
+        "observations_failed": 0,
+        "observations_followed": 4800,
+        "observations_observations": 311340,
+        "observations_passed_over": 1342,
+        "observations_unsupported": 0,
+        "mechanics_decisions": 151541,
+        "mechanics_diverged": 0,
+        "mechanics_matched": 4800,
+        "mechanics_unsupported": 0
+      }
+    }
+  ],
+  "supporting_candidate_run": {
+    "seed": 3618042751,
+    "limitation": "Precedes final terminal-upkeep trace guard; not final-binary validation.",
+    "summary": {
+      "completed_batches": 96,
+      "compared_battles": 9600,
+      "failing_battles": 0,
+      "elapsed_seconds": 670,
+      "observations_actionable_differences": 0,
+      "observations_decisions": 302581,
+      "observations_differences": 0,
+      "observations_failed": 0,
+      "observations_followed": 9600,
+      "observations_observations": 621557,
+      "observations_passed_over": 2805,
+      "observations_unsupported": 0,
+      "mechanics_decisions": 302581,
+      "mechanics_diverged": 0,
+      "mechanics_matched": 9600,
+      "mechanics_unsupported": 0
+    }
+  },
+  "scripted_cases": {
+    "total": 18,
+    "perish_receiver": 16,
+    "indistinguishable_public_protection_pair": 2,
+    "continuous_and_rebuilt_mechanics": "passed"
+  },
+  "coverage_first_2400": {
+    "battles_per_theme": {
+      "called-charge-choice": 100,
+      "called-speed-priority": 100,
+      "charge-ability-failures": 100,
+      "confusion-endure-instruct": 100,
+      "court-change": 100,
+      "encore-claw-reroll": 100,
+      "encore-quick-claw": 100,
+      "encore-same-choice": 100,
+      "faint-pending-protection": 100,
+      "future-sight-recoil": 100,
+      "future-weather-guard": 100,
+      "guards-court-pivot": 100,
+      "heal-block-action-order": 100,
+      "herb-instruct-disable": 100,
+      "instruct-last-protection": 100,
+      "instruct-quick-claw": 100,
+      "perish-receiver-phase": 100,
+      "receiver-residual-weather": 100,
+      "reflected-heal-encore": 100,
+      "residual-weather": 100,
+      "sleep-confusion-priority": 100,
+      "solar-suppression": 100,
+      "terminal-delayed-recoil": 100,
+      "tracking-ally-switch-pp": 100
+    },
+    "observed_step_sequences": {
+      "instruct_steps": 1374,
+      "instruct_and_faint_steps": 244,
+      "ally_switch_steps": 280,
+      "perish_zero_steps": 14,
+      "receiver_and_weather_steps": 61,
+      "perish_receiver_weather_steps": 0,
+      "draining_move_heal_block_steps": 19,
+      "failed_stat_ability_steps": 274
+    },
+    "note": "Counts record occurrence of public sequences; semantic expectations are asserted separately in the deterministic regression tests."
+  },
+  "notes": [
+    "Passed-over observations are logged separately; all decisions were compared.",
+    "Passing recordings in fresh 4800 and supporting 9600 were not retained; run seeds, themes and provenance are recorded.",
+    "No broad new random sweep or performance benchmark."
+  ],
+  "source_sha256": {
+    "src/battle.rs": "83553ef90f2eb00cea0630474da7d0a437f15e8d1c1afd749890e079fcdad81c",
+    "src/conditions.rs": "53da6076f811b236ffd2b9c72000242788181381047e1f6487549b5fdcf71565",
+    "src/follow.rs": "c4c77a139624f4b84b3d0b04ef56f4b9f873dc669999b9d4f4f2fe69228078d2",
+    "src/lib.rs": "bcefa93617cd28681624c37d90289b6195ba18f1290147e5cea735e8ed3febf0",
+    "src/movecbs.rs": "26f37db3ac7f9fec3f87f9b6b7b70542b10ad8b0b528f6320fa2ed5016b23ccb",
+    "src/moves.rs": "b317e388ca2c96291d1184e3933293abf13b7e6aee11574432554a0b1ad44c45",
+    "src/obs.rs": "4be9297c445cf31d137c3a96e19f954cb2dec50e5820331b68b52366d0776816",
+    "src/observer.rs": "2136ee4c28621d66eff188b8231a4bd53e6a3fbda1cde9ff44091a879bd5a1d6",
+    "src/public_actions.rs": "caa0807260a6b53b248e6908bf697e841a599e34caa98743a7ec69ec6d14ed0b",
+    "src/shown.rs": "60fd6c17e9528d2b1674bd15be0f3d597f15d16b2d1077a896fff74fc6278238",
+    "src/speed.rs": "c622d446ead62d02fec0b88e31912572b711a5389d3b0d3b0310394360ddffe9"
+  },
+  "uploaded_mechanics": {
+    "continuous": {
+      "decisions": 2030,
+      "diverged": 0,
+      "matched": 55,
+      "unsupported": 0
+    },
+    "by-hand": {
+      "decisions": 2030,
+      "diverged": 0,
+      "matched": 55,
+      "unsupported": 0
+    }
+  },
+  "retained_2400_final_mechanics": {
+    "continuous": {
+      "matched": 2400,
+      "diverged": 0,
+      "unsupported": 0,
+      "decisions": 76568
+    },
+    "by-hand": {
+      "matched": 2400,
+      "diverged": 0,
+      "unsupported": 0,
+      "decisions": 76568
+    }
+  },
+  "rust_checks": {
+    "public_actions_unit": 4,
+    "follow_integration": 22,
+    "parity_integration": 9,
+    "speed_integration": 5,
+    "failed": 0
+  }
+}

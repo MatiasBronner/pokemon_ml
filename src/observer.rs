@@ -476,7 +476,10 @@ impl Observer {
     pub(crate) fn borrowed_cant(&self, side: usize, pos: usize, reason: &str, named: &str) -> bool {
         reason == "move: Heal Block"
             && self.current_move.is_some_and(|(user, target, mv)| {
-                user != (side, pos) && target == (side, pos) && MOVES[mv as usize].id == to_id(named)
+                user != (side, pos)
+                    && target == (side, pos)
+                    && MOVES[mv as usize].flags & F_REFLECTABLE != 0
+                    && MOVES[mv as usize].id == to_id(named)
             })
     }
 

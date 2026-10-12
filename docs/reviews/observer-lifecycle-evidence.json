@@ -1,0 +1,2948 @@
+{
+  "review_date": "2026-10-12",
+  "code_changed": false,
+  "new_battles_generated": 0,
+  "uploaded_summary": {
+    "completed_batches": 400,
+    "compared_battles": 100000,
+    "failing_battles": 55,
+    "elapsed_seconds": 1632,
+    "observations_actionable_differences": 160,
+    "observations_decisions": 3116339,
+    "observations_differences": 222,
+    "observations_failed": 0,
+    "observations_followed": 100000,
+    "observations_observations": 6403616,
+    "observations_passed_over": 29062,
+    "observations_unsupported": 0,
+    "mechanics_decisions": 3116339,
+    "mechanics_diverged": 0,
+    "mechanics_matched": 100000,
+    "mechanics_unsupported": 0
+  },
+  "uploaded_provenance": {
+    "schema_version": 1,
+    "started_utc": "2026-10-12T16:07:46Z",
+    "engine_commit": "7f1f70d85211f1284e1a4a96f76c454d5bafe936",
+    "working_tree": "?? .DS_Store\n?? oracle/.DS_Store\n?? python/.DS_Store\n?? teams/",
+    "showdown_commit": "ad7ca5d51c03865e6829dbec3a7875df71480fb8",
+    "showdown_working_tree": "",
+    "node_version": "v24.8.0",
+    "generator_hashes": {
+      "oracle/gen_cases.js": "b290695409d2057ada41cb21fc657071a340b31635bec97bdd4e61d0aa695da4",
+      "oracle/lib.js": "8ffe4fd4b3d21c73cabfa6b25ae68186567bed60acd4e1be1a59bbc26ac61acd",
+      "oracle/pool.json": "0e26bee959fabdfb4c645469120c12167c0287f919d0d30a311e8d7650f5f784"
+    },
+    "binaries": {
+      "followcheck": "7fe359dfefab957eda46113005fd71ae7355bac076cca8fffe9a9512cce28ca6",
+      "difftest": "ae012dafeba34264a8b3e50d1543491ee1bd88defaba7e5c2c2f5bca6481324f"
+    },
+    "build_requested": true,
+    "command": [
+      "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/compare-showdown.py",
+      "--battles",
+      "100000",
+      "--batch-size",
+      "250",
+      "--profile",
+      "regressions",
+      "--themes-file",
+      "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/showdown-pattern-stress.json",
+      "--seed",
+      "2947610837",
+      "--workers",
+      "4",
+      "--out",
+      "/Users/matiasbronner/showdown-runs/observation-stress-2947610837"
+    ],
+    "scope": "complete stress battles; single initially brought Illusion per side; closed sheets exclude rosters with non-native Illusion",
+    "stress_suite": {
+      "path": "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/showdown-pattern-stress.json",
+      "sha256": "adab239c4de34af6092d09bedc8cab0ae8a3ed182833c954d5cf5f31586b0f11"
+    },
+    "completed_utc": "2026-10-12T16:41:46Z",
+    "generator_unchanged": true,
+    "stress_suite_unchanged": true
+  },
+  "read_only_replay_summary": {
+    "actionable_differences": 160,
+    "decisions": 2030,
+    "differences": 222,
+    "failed": 0,
+    "followed": 55,
+    "observations": 4159,
+    "passed_over": 11,
+    "unsupported": 0
+  },
+  "first_mismatch_groups": {
+    "protection_counter": 51,
+    "failure_context": 1,
+    "speed_inference": 1,
+    "target_identity_pp": 1,
+    "residual_phase": 1
+  },
+  "failures": [
+    {
+      "key": "0046-confusion-endure-instruct-battle-39",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 2992610972,
+        "original_id": 38,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        28395,
+        25136,
+        42294,
+        35773
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 47,
+        "decisions": 25,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 39 step 9 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 39,
+        "observations": 52,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 25,
+        "errors": [],
+        "id": 39,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0066-confusion-endure-instruct-battle-104",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3012611032,
+        "original_id": 103,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        6433,
+        2437,
+        12249,
+        16733
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 5,
+        "actionable_observations": 75,
+        "decisions": 38,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 104 step 20 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 104,
+        "observations": 78,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 38,
+        "errors": [],
+        "id": 104,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0066-confusion-endure-instruct-battle-245",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3012611032,
+        "original_id": 244,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        43016,
+        23899,
+        30348,
+        55448
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 74,
+        "decisions": 44,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 245 step 2 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 245,
+        "observations": 90,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 44,
+        "errors": [],
+        "id": 245,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0066-confusion-endure-instruct-battle-85",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3012611032,
+        "original_id": 84,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        46111,
+        39916,
+        21086,
+        19610
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 88,
+        "decisions": 48,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 85 step 12 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 85,
+        "observations": 98,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 48,
+        "errors": [],
+        "id": 85,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0086-confusion-endure-instruct-battle-240",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3032611092,
+        "original_id": 240,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        29503,
+        14615,
+        63613,
+        26259
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 100,
+        "decisions": 67,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 240 step 32 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 240,
+        "observations": 129,
+        "passed_over": 7,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 67,
+        "errors": [],
+        "id": 240,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0095-instruct-last-protection-battle-115",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3041611119,
+        "original_id": 115,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        17768,
+        58937,
+        32625,
+        16512
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 124,
+        "decisions": 71,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 115 step 55 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 115,
+        "observations": 144,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 71,
+        "errors": [],
+        "id": 115,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0115-instruct-last-protection-battle-30",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3061611179,
+        "original_id": 29,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        13195,
+        33485,
+        54149,
+        555
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 82,
+        "decisions": 47,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 30 step 31 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 30,
+        "observations": 96,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 47,
+        "errors": [],
+        "id": 30,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0116-faint-pending-protection-battle-59",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3062611182,
+        "original_id": 58,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        43552,
+        57716,
+        43728,
+        14105
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 122,
+        "decisions": 66,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 59 step 16 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 59,
+        "observations": 134,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 66,
+        "errors": [],
+        "id": 59,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0124-instruct-quick-claw-battle-54",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3070611206,
+        "original_id": 55,
+        "options": [
+          "--species",
+          "oranguru",
+          "--moves",
+          "instruct,rockslide,earthquake,drainingkiss,protect",
+          "--moves-per",
+          "3",
+          "--items",
+          "quickclaw,leftovers",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        3539,
+        42301,
+        7980,
+        20663
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 42,
+        "decisions": 23,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 54 step 8 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 54,
+        "observations": 48,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 23,
+        "errors": [],
+        "id": 54,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0126-confusion-endure-instruct-battle-96",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3072611212,
+        "original_id": 96,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        32816,
+        12937,
+        26322,
+        23002
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 110,
+        "decisions": 68,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 96 step 10 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 96,
+        "observations": 138,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 68,
+        "errors": [],
+        "id": 96,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0135-instruct-last-protection-battle-187",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3081611239,
+        "original_id": 187,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        62192,
+        224,
+        27622,
+        6048
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 134,
+        "decisions": 71,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 187 step 45 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 187,
+        "observations": 144,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 71,
+        "errors": [],
+        "id": 187,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0154-encore-same-choice-battle-229",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3100611296,
+        "original_id": 228,
+        "options": [
+          "--moves",
+          "encore,instruct,protect,endure,round,psychup",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        23866,
+        65254,
+        53905,
+        16796
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 66,
+        "decisions": 35,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 229 step 18 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 229,
+        "observations": 72,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 35,
+        "errors": [],
+        "id": 229,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0155-instruct-last-protection-battle-214",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3101611299,
+        "original_id": 213,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        52333,
+        62279,
+        48,
+        5528
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 73,
+        "decisions": 41,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 214 step 14 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 214,
+        "observations": 84,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 41,
+        "errors": [],
+        "id": 214,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0155-instruct-last-protection-battle-92",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3101611299,
+        "original_id": 91,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        33280,
+        11936,
+        27518,
+        14303
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 31,
+        "decisions": 21,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 92 step 20 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 92,
+        "observations": 40,
+        "passed_over": 4,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 92,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0156-faint-pending-protection-battle-167",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3102611302,
+        "original_id": 166,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        31541,
+        12997,
+        44962,
+        59785
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 49,
+        "decisions": 27,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 167 step 10 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 167,
+        "observations": 56,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 27,
+        "errors": [],
+        "id": 167,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0156-faint-pending-protection-battle-6",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3102611302,
+        "original_id": 5,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        6363,
+        16935,
+        56920,
+        6273
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 40,
+        "decisions": 22,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 6 step 12 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 6,
+        "observations": 46,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 22,
+        "errors": [],
+        "id": 6,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0175-instruct-last-protection-battle-40",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3121611359,
+        "original_id": 39,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        33215,
+        51953,
+        53726,
+        24191
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 48,
+        "decisions": 26,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 40 step 16 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 40,
+        "observations": 54,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 26,
+        "errors": [],
+        "id": 40,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0176-faint-pending-protection-battle-185",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3122611362,
+        "original_id": 185,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        21638,
+        21852,
+        31397,
+        32815
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 47,
+        "decisions": 26,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 185 step 13 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 185,
+        "observations": 54,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 26,
+        "errors": [],
+        "id": 185,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0186-confusion-endure-instruct-battle-103",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3132611392,
+        "original_id": 102,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        51855,
+        65082,
+        27317,
+        39577
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 84,
+        "decisions": 43,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 103 step 27 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 103,
+        "observations": 88,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 43,
+        "errors": [],
+        "id": 103,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0186-confusion-endure-instruct-battle-153",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3132611392,
+        "original_id": 152,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        16562,
+        16376,
+        6466,
+        57405
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 82,
+        "decisions": 43,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 153 step 28 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 153,
+        "observations": 88,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 43,
+        "errors": [],
+        "id": 153,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0186-confusion-endure-instruct-battle-246",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3132611392,
+        "original_id": 245,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        44216,
+        23768,
+        28654,
+        42963
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 56,
+        "decisions": 31,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 246 step 13 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 246,
+        "observations": 64,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 31,
+        "errors": [],
+        "id": 246,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0186-confusion-endure-instruct-battle-71",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3132611392,
+        "original_id": 70,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        3635,
+        48333,
+        19548,
+        64109
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 60,
+        "decisions": 31,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 71 step 17 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 71,
+        "observations": 64,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 31,
+        "errors": [],
+        "id": 71,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0195-instruct-last-protection-battle-2",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3141611419,
+        "original_id": 1,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        34773,
+        25381,
+        50253,
+        57460
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 38,
+        "decisions": 21,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 2 step 6 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 2,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 2,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0195-instruct-last-protection-battle-234",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3141611419,
+        "original_id": 233,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        61109,
+        28297,
+        43639,
+        54539
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 57,
+        "decisions": 32,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 234 step 13 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 234,
+        "observations": 66,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 32,
+        "errors": [],
+        "id": 234,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0196-faint-pending-protection-battle-152",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3142611422,
+        "original_id": 151,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        24434,
+        58307,
+        22526,
+        31770
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 36,
+        "decisions": 20,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 152 step 16 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 152,
+        "observations": 42,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 20,
+        "errors": [],
+        "id": 152,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0196-faint-pending-protection-battle-183",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3142611422,
+        "original_id": 182,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        62697,
+        50561,
+        27993,
+        58054
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 34,
+        "decisions": 19,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 183 step 7 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 183,
+        "observations": 40,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 19,
+        "errors": [],
+        "id": 183,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0201-encore-quick-claw-battle-86",
+      "group": "failure_context",
+      "generation": {
+        "seed": 3147611437,
+        "original_id": 86,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        63569,
+        46279,
+        50705,
+        27101
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 52,
+        "decisions": 28,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 86 step 22 side 0: their position: vol twoturnmove: the game has 1 (at 1154), the follower 0"
+        ],
+        "id": 86,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 86,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0208-reflected-heal-encore-battle-182",
+      "group": "speed_inference",
+      "generation": {
+        "seed": 3154611458,
+        "original_id": 182,
+        "options": [
+          "--moves",
+          "healpulse,psychicnoise,encore,copycat,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "magicbounce,pressure,innerfocus",
+          "--items",
+          "mentalherb,choicescarf,leftovers",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        21871,
+        9451,
+        51700,
+        54054
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 36,
+        "decisions": 19,
+        "differences": 3,
+        "errors": [],
+        "first_differences": [
+          "battle 182 step 16 side 1: their mon: speed high: the game has 0.475 (at 423), the follower 0.555"
+        ],
+        "id": 182,
+        "observations": 40,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 19,
+        "errors": [],
+        "id": 182,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0215-instruct-last-protection-battle-57",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3161611479,
+        "original_id": 56,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        62273,
+        60131,
+        43922,
+        34187
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 49,
+        "decisions": 26,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 57 step 11 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 57,
+        "observations": 54,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 26,
+        "errors": [],
+        "id": 57,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0229-called-speed-priority-battle-19",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3175611521,
+        "original_id": 18,
+        "options": [
+          "--moves",
+          "speedswap,instruct,copycat,afteryou,quash,round",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "prankster,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        57184,
+        3018,
+        7264,
+        49422
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 36,
+        "decisions": 20,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 19 step 9 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 19,
+        "observations": 42,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 20,
+        "errors": [],
+        "id": 19,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0235-instruct-last-protection-battle-12",
+      "group": "target_identity_pp",
+      "generation": {
+        "seed": 3181611539,
+        "original_id": 11,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        1268,
+        23643,
+        8435,
+        48596
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 51,
+        "decisions": 28,
+        "differences": 1,
+        "errors": [],
+        "first_differences": [
+          "battle 12 step 19 side 1: own mon: pp: the game has 0.625 (at 317), the follower 0.6875"
+        ],
+        "id": 12,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 12,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0235-instruct-last-protection-battle-126",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3181611539,
+        "original_id": 125,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        23799,
+        1041,
+        46717,
+        38004
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 63,
+        "decisions": 37,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 126 step 15 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 126,
+        "observations": 76,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 37,
+        "errors": [],
+        "id": 126,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0235-instruct-last-protection-battle-231",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3181611539,
+        "original_id": 230,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        47207,
+        41555,
+        2646,
+        3679
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 71,
+        "decisions": 40,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 231 step 33 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 231,
+        "observations": 82,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 40,
+        "errors": [],
+        "id": 231,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0235-instruct-last-protection-battle-93",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3181611539,
+        "original_id": 92,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        18012,
+        63724,
+        41728,
+        38636
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 66,
+        "decisions": 53,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 93 step 7 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 93,
+        "observations": 108,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 53,
+        "errors": [],
+        "id": 93,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0254-encore-same-choice-battle-45",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3200611596,
+        "original_id": 44,
+        "options": [
+          "--moves",
+          "encore,instruct,protect,endure,round,psychup",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        28987,
+        52882,
+        58679,
+        59634
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 75,
+        "decisions": 39,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 45 step 28 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 45,
+        "observations": 80,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 39,
+        "errors": [],
+        "id": 45,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0266-confusion-endure-instruct-battle-49",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3212611632,
+        "original_id": 48,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        47749,
+        3699,
+        43049,
+        56074
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 102,
+        "decisions": 56,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 49 step 32 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 49,
+        "observations": 114,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 56,
+        "errors": [],
+        "id": 49,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0276-faint-pending-protection-battle-94",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3222611662,
+        "original_id": 93,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        2654,
+        56758,
+        23335,
+        53569
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 44,
+        "decisions": 23,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 94 step 14 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 94,
+        "observations": 48,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 23,
+        "errors": [],
+        "id": 94,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0285-residual-weather-battle-73",
+      "group": "residual_phase",
+      "generation": {
+        "seed": 3231611689,
+        "original_id": 72,
+        "options": [
+          "--species",
+          "politoed,pelipper,passimian",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--moves",
+          "toxic,willowisp,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        18492,
+        37961,
+        64942,
+        7963
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 11,
+        "actionable_observations": 40,
+        "decisions": 22,
+        "differences": 14,
+        "errors": [],
+        "first_differences": [
+          "battle 73 step 12 side 0: field: weather timer: the game has 0 (at 10), the follower 0.125"
+        ],
+        "id": 73,
+        "observations": 46,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 22,
+        "errors": [],
+        "id": 73,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0286-confusion-endure-instruct-battle-189",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3232611692,
+        "original_id": 189,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        4289,
+        8457,
+        44664,
+        58265
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 79,
+        "decisions": 40,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 189 step 11 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 189,
+        "observations": 82,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 40,
+        "errors": [],
+        "id": 189,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0295-instruct-last-protection-battle-132",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3241611719,
+        "original_id": 132,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        35626,
+        63695,
+        62001,
+        37786
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 38,
+        "decisions": 30,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 132 step 29 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 132,
+        "observations": 62,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 30,
+        "errors": [],
+        "id": 132,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0296-faint-pending-protection-battle-203",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3242611722,
+        "original_id": 203,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        53575,
+        53272,
+        52753,
+        25270
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 6,
+        "actionable_observations": 66,
+        "decisions": 35,
+        "differences": 8,
+        "errors": [],
+        "first_differences": [
+          "battle 203 step 11 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 203,
+        "observations": 72,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 35,
+        "errors": [],
+        "id": 203,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0306-confusion-endure-instruct-battle-199",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3252611752,
+        "original_id": 198,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        23122,
+        26995,
+        50463,
+        42690
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 64,
+        "decisions": 33,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 199 step 4 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 199,
+        "observations": 68,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 33,
+        "errors": [],
+        "id": 199,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0316-faint-pending-protection-battle-90",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3262611782,
+        "original_id": 89,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        32530,
+        59166,
+        50222,
+        61180
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 82,
+        "decisions": 42,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 90 step 11 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 90,
+        "observations": 86,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 42,
+        "errors": [],
+        "id": 90,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0335-instruct-last-protection-battle-118",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3281611839,
+        "original_id": 118,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        51546,
+        5174,
+        49273,
+        34300
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 82,
+        "decisions": 47,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 118 step 21 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 118,
+        "observations": 96,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 47,
+        "errors": [],
+        "id": 118,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0335-instruct-last-protection-battle-89",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3281611839,
+        "original_id": 89,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        39279,
+        4020,
+        44176,
+        38085
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 124,
+        "decisions": 66,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 89 step 25 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 89,
+        "observations": 134,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 66,
+        "errors": [],
+        "id": 89,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0375-instruct-last-protection-battle-149",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3321611959,
+        "original_id": 149,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        61049,
+        19655,
+        61116,
+        27431
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 33,
+        "decisions": 19,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 149 step 12 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 149,
+        "observations": 40,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 19,
+        "errors": [],
+        "id": 149,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0375-instruct-last-protection-battle-162",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3321611959,
+        "original_id": 162,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        45430,
+        24028,
+        40452,
+        12305
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 47,
+        "decisions": 27,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 162 step 12 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 162,
+        "observations": 56,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 27,
+        "errors": [],
+        "id": 162,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0375-instruct-last-protection-battle-184",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3321611959,
+        "original_id": 184,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        12873,
+        45377,
+        56077,
+        30848
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 45,
+        "decisions": 26,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 184 step 12 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 184,
+        "observations": 54,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 26,
+        "errors": [],
+        "id": 184,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0376-faint-pending-protection-battle-250",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3322611962,
+        "original_id": 250,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        35699,
+        27679,
+        54847,
+        9478
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 54,
+        "decisions": 28,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 250 step 19 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 250,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 250,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0376-faint-pending-protection-battle-26",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3322611962,
+        "original_id": 25,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        54938,
+        62775,
+        53622,
+        38648
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 56,
+        "decisions": 30,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 26 step 12 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 26,
+        "observations": 62,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 30,
+        "errors": [],
+        "id": 26,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0386-confusion-endure-instruct-battle-20",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3332611992,
+        "original_id": 19,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        41843,
+        46916,
+        6746,
+        8689
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 46,
+        "decisions": 26,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 20 step 16 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 20,
+        "observations": 54,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 26,
+        "errors": [],
+        "id": 20,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0386-confusion-endure-instruct-battle-29",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3332611992,
+        "original_id": 28,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        26593,
+        37133,
+        40214,
+        61653
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 77,
+        "decisions": 44,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 29 step 5 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 29,
+        "observations": 90,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 44,
+        "errors": [],
+        "id": 29,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0395-instruct-last-protection-battle-224",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3341612019,
+        "original_id": 223,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        59382,
+        61640,
+        17325,
+        15191
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 116,
+        "decisions": 63,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 224 step 36 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 224,
+        "observations": 128,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 63,
+        "errors": [],
+        "id": 224,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0395-instruct-last-protection-battle-75",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3341612019,
+        "original_id": 74,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        5850,
+        26753,
+        59102,
+        61068
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 68,
+        "decisions": 46,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 75 step 18 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 75,
+        "observations": 94,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 46,
+        "errors": [],
+        "id": 75,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0395-instruct-last-protection-battle-81",
+      "group": "protection_counter",
+      "generation": {
+        "seed": 3341612019,
+        "original_id": 80,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        45734,
+        60107,
+        19857,
+        19543
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 54,
+        "decisions": 31,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 81 step 10 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 81,
+        "observations": 64,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 31,
+        "errors": [],
+        "id": 81,
+        "status": "matched"
+      }
+    }
+  ],
+  "representative_sequences": [
+    {
+      "key": "0066-confusion-endure-instruct-battle-245",
+      "recording_sha256": "d781a1429c7f136f1bf1b489d56bfaf5b0d9da4747428550b30e39728a2a0c73",
+      "step": 2,
+      "choices": [
+        "move 1 -2, move 4 1",
+        "move 1, move 3 -1"
+      ],
+      "log": [
+        "|",
+        "|t:|1791821948",
+        "|move|p2a: Simisage5|Endure|p2a: Simisage5",
+        "|-singleturn|p2a: Simisage5|move: Endure",
+        "|move|p1a: Tauros3|Lash Out|p1b: Vivillon5",
+        "|split|p1",
+        "|-damage|p1b: Vivillon5|0 fnt",
+        "|-damage|p1b: Vivillon5|0 fnt",
+        "|faint|p1b: Vivillon5",
+        "|move|p2b: Oranguru2|Instruct|p2a: Simisage5",
+        "|-singleturn|p2a: Simisage5|move: Instruct|[of] p2b: Oranguru2",
+        "|move|p2a: Simisage5|Endure||[still]",
+        "|-fail|p2a: Simisage5",
+        "|",
+        "|split|p2",
+        "|-heal|p2b: Oranguru2|66/172|[from] item: Leftovers",
+        "|-heal|p2b: Oranguru2|38/100|[from] item: Leftovers",
+        "|upkeep"
+      ]
+    },
+    {
+      "key": "0201-encore-quick-claw-battle-86",
+      "recording_sha256": "2e6d28b78c09488eeed46498e8a2d3fcad4c4c0644bbef85122d62b27dca9972",
+      "step": 22,
+      "choices": [
+        "pass, switch 3",
+        "pass, pass"
+      ],
+      "log": [
+        "|",
+        "|t:|1791822487",
+        "|split|p1",
+        "|switch|p1b: Scrafty2|Scrafty-Mega, L50, F|94/140",
+        "|switch|p1b: Scrafty2|Scrafty-Mega, L50, F|67/100",
+        "|-ability|p1b: Scrafty2|Intimidate|boost",
+        "|-unboost|p2a: Toucannon3|atk|1",
+        "|-fail|p2b: Stunfisk4|unboost|atk|[from] ability: Inner Focus|[of] p2b: Stunfisk4",
+        "|turn|20"
+      ]
+    },
+    {
+      "key": "0235-instruct-last-protection-battle-12",
+      "recording_sha256": "5b79f6ee676ee8de4c23e98895875dc74bc5887f4eb942656fedb62b18b87203",
+      "step": 19,
+      "choices": [
+        "move 4 1, move 1",
+        "move 4 1, move 1"
+      ],
+      "log": [
+        "|",
+        "|t:|1791822619",
+        "|move|p2b: Swalot5|Protect|p2b: Swalot5",
+        "|-singleturn|p2b: Swalot5|Protect",
+        "|move|p1b: Musharna4|Ally Switch|p1b: Musharna4",
+        "|swap|p1b: Musharna4|0|[from] move: Ally Switch",
+        "|move|p2a: Skarmory4|Fly||[still]",
+        "|-prepare|p2a: Skarmory4|Fly",
+        "|move|p1b: Appletun1|Energy Ball|p2a: Skarmory4|[miss]",
+        "|-miss|p1b: Appletun1|p2a: Skarmory4",
+        "|",
+        "|upkeep",
+        "|turn|15"
+      ]
+    },
+    {
+      "key": "0285-residual-weather-battle-73",
+      "recording_sha256": "e8274370c1de78a316e25bbfce1e94a280965ee8ea7f1d3846e5aa306183eff9",
+      "step": 12,
+      "choices": [
+        "move 4 2, switch 3",
+        "move 3 -2, pass"
+      ],
+      "log": [
+        "|",
+        "|t:|1791822831",
+        "|split|p1",
+        "|switch|p1b: Politoed4|Politoed, L50, F|181/181",
+        "|switch|p1b: Politoed4|Politoed, L50, F|100/100",
+        "|move|p2a: Politoed0|Body Slam|p2: Politoed3|[notarget]",
+        "|-fail|p2a: Politoed0",
+        "|move|p1a: Garbodor2|Rock Blast|p2a: Politoed0|[miss]",
+        "|-miss|p1a: Garbodor2|p2a: Politoed0",
+        "|",
+        "|-start|p1a: Garbodor2|perish0",
+        "|faint|p1a: Garbodor2",
+        "|-ability|p1b: Politoed4|Drought|Receiver|[from] ability: Receiver|[of] p1a: Garbodor2",
+        "|-weather|SunnyDay|[from] ability: Drought|[of] p1b: Politoed4",
+        "|upkeep"
+      ]
+    },
+    {
+      "key": "0208-reflected-heal-encore-battle-182",
+      "recording_sha256": "b53073645f4d2effc980bade6d5fdfd5051a5bbff04fdf56a5ac5f65ca6ceb7f",
+      "step": 16,
+      "choices": [
+        "move 2 2, move 2 -1 mega",
+        "move 2 2, move 2 2"
+      ],
+      "log": [
+        "|",
+        "|t:|1791822516",
+        "|detailschange|p1b: Scovillain0|Scovillain-Mega, L50, M",
+        "|-mega|p1b: Scovillain0|Scovillain|Scovillainite",
+        "|move|p1a: Lopunny1|Encore|p2b: Scovillain0",
+        "|-start|p2b: Scovillain0|Encore",
+        "|move|p2a: Delphox2|Psychic Noise|p1b: Scovillain0",
+        "|split|p1",
+        "|-damage|p1b: Scovillain0|54/145",
+        "|-damage|p1b: Scovillain0|37/100",
+        "|-start|p1b: Scovillain0|move: Heal Block",
+        "|move|p2b: Scovillain0|Giga Drain|p1b: Scovillain0",
+        "|-resisted|p1b: Scovillain0|2",
+        "|split|p1",
+        "|-damage|p1b: Scovillain0|40/145",
+        "|-damage|p1b: Scovillain0|27/100",
+        "|split|p2",
+        "|-heal|p2b: Scovillain0|131/145|[from] drain|[of] p1b: Scovillain0",
+        "|-heal|p2b: Scovillain0|90/100|[from] drain|[of] p1b: Scovillain0",
+        "|cant|p1b: Scovillain0|move: Heal Block|Giga Drain",
+        "|",
+        "|upkeep",
+        "|turn|14"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "src/follow.rs": "1c18e5fd06fd977826aa38cead9a9bb68e1f64b33285950c8bb883cfb4060a73",
+    "src/battle.rs": "98b4c40b8a14e2e1c62ee0f301f2630980bfe60cd8fa29407243bb6034f01cae",
+    "src/speed.rs": "cda8480f4ad45c41407b9caca03eab0e9f3c470b66d581a661a577e98bd63b42",
+    "src/conditions.rs": "4d8e8fe76518d9299393f230a12b2714d0f5af551730f01fa274b16f70d9a40e",
+    "src/replay.rs": "5763964f00aa3333abf5f93ef66042e45810e3dcdb4356ef48fcc12e84888781",
+    "oracle/gen_cases.js": "b290695409d2057ada41cb21fc657071a340b31635bec97bdd4e61d0aa695da4"
+  }
+}

@@ -1,0 +1,1242 @@
+[
+  {
+    "name": "perish-receiver-drought-slot-0-item-none",
+    "seed": [
+      123,
+      456,
+      789,
+      1
+    ],
+    "rosters": [
+      [
+        {
+          "species": "politoed",
+          "ability": "drought",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "raindance",
+            "protect"
+          ]
+        },
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, switch 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drought-slot-1-item-none",
+    "seed": [
+      123,
+      456,
+      789,
+      2
+    ],
+    "rosters": [
+      [
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "politoed",
+          "ability": "drought",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "raindance",
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "switch 3, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drought-slot-0-item-heatrock",
+    "seed": [
+      123,
+      456,
+      789,
+      3
+    ],
+    "rosters": [
+      [
+        {
+          "species": "politoed",
+          "ability": "drought",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "raindance",
+            "protect"
+          ]
+        },
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "heatrock",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, switch 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drought-slot-1-item-heatrock",
+    "seed": [
+      123,
+      456,
+      789,
+      4
+    ],
+    "rosters": [
+      [
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "politoed",
+          "ability": "drought",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "raindance",
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "heatrock",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "switch 3, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drizzle-slot-0-item-none",
+    "seed": [
+      123,
+      456,
+      789,
+      5
+    ],
+    "rosters": [
+      [
+        {
+          "species": "politoed",
+          "ability": "drizzle",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "sunnyday",
+            "protect"
+          ]
+        },
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, switch 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drizzle-slot-1-item-none",
+    "seed": [
+      123,
+      456,
+      789,
+      6
+    ],
+    "rosters": [
+      [
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "politoed",
+          "ability": "drizzle",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "sunnyday",
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "switch 3, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drizzle-slot-0-item-damprock",
+    "seed": [
+      123,
+      456,
+      789,
+      7
+    ],
+    "rosters": [
+      [
+        {
+          "species": "politoed",
+          "ability": "drizzle",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "sunnyday",
+            "protect"
+          ]
+        },
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "damprock",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, switch 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 3, move 1",
+        "move 1, move 1"
+      ]
+    ]
+  },
+  {
+    "name": "perish-receiver-drizzle-slot-1-item-damprock",
+    "seed": [
+      123,
+      456,
+      789,
+      8
+    ],
+    "rosters": [
+      [
+        {
+          "species": "oranguru",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "politoed",
+          "ability": "drizzle",
+          "item": "",
+          "moves": [
+            "perishsong",
+            "sunnyday",
+            "protect"
+          ]
+        },
+        {
+          "species": "passimian",
+          "ability": "receiver",
+          "item": "damprock",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ],
+      [
+        {
+          "species": "umbreon",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "arcanine",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "snorlax",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "scrafty",
+          "ability": "innerfocus",
+          "moves": [
+            "protect"
+          ]
+        },
+        {
+          "species": "charizard",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        },
+        {
+          "species": "blastoise",
+          "moves": [
+            "protect"
+          ],
+          "ability": "innerfocus"
+        }
+      ]
+    ],
+    "picks": [
+      [
+        0,
+        1,
+        2,
+        3
+      ],
+      [
+        0,
+        1,
+        2,
+        3
+      ]
+    ],
+    "choices": [
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 1",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "switch 3, move 3",
+        "move 1, move 1"
+      ],
+      [
+        "move 1, move 3",
+        "move 1, move 1"
+      ]
+    ]
+  }
+]

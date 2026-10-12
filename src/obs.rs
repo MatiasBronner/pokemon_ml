@@ -44,6 +44,14 @@
 //! move's hidden random target leaves its Pressure cost uncertain. An exact
 //! move request restores the count; wait and switch requests do not.
 //!
+//! # Protection knowledge
+//!
+//! The Stall volatile flag and protection-failure probability use -1 when
+//! a failed repeat cannot distinguish an odds failure from an empty queue:
+//! a fainted actor's queued action may have been silently skipped. Public
+//! action history, not hidden queue contents, settles this for both training
+//! and live play. The array dimensions are unchanged.
+//!
 //! # Timers
 //!
 //! How long a weather, a terrain or a screen has left is not public: an item
@@ -816,10 +824,18 @@ pub fn observe_battle(
             // Suppression's silent removal by a hidden ability is not public.
             w.buf[w.at + VolKind::Gastroacid as usize] = 1.0;
         }
+        let uncertain_protection = speeds.protection_uncertain(r);
+        if uncertain_protection {
+            w.buf[w.at + VolKind::Stall as usize] = -1.0;
+        }
         w.skip(N_VOLATILES);
         w.put(vols.get(VolKind::Perishsong).map_or(0.0, |v| v.duration as f32 / 3.0));
         // How unlikely another Protect is to work: 0 after none, 2/3 after one, 8/9 after two.
-        w.put(vols.get(VolKind::Stall).map_or(0.0, |v| 1.0 - 1.0 / v.data.max(1) as f32));
+        w.put(if uncertain_protection {
+            -1.0
+        } else {
+            vols.get(VolKind::Stall).map_or(0.0, |v| 1.0 - 1.0 / v.data.max(1) as f32)
+        });
         for kind in SlotCond::ALL {
             w.flag(b.sides[side].slot_conds[pos].has(kind));
         }

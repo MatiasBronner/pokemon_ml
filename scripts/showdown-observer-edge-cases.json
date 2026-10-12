@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "description": "Observer lifecycle edge cases, including public uncertainty, failure ownership, target identity and residual phases.",
+  "themes": [
+    {
+      "name": "encore-quick-claw",
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained encore-quick-claw regression family."
+    },
+    {
+      "name": "future-sight-recoil",
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained future-sight-recoil regression family."
+    },
+    {
+      "name": "court-change",
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained court-change regression family."
+    },
+    {
+      "name": "instruct-quick-claw",
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers"
+      ],
+      "purpose": "Fresh randomized coverage of the retained instruct-quick-claw regression family."
+    },
+    {
+      "name": "residual-weather",
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3"
+      ],
+      "purpose": "Fresh randomized coverage of the retained residual-weather regression family."
+    },
+    {
+      "name": "confusion-endure-instruct",
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro"
+      ],
+      "purpose": "Confusion self-hits during Endure, including instructed actions and Encore."
+    },
+    {
+      "name": "solar-suppression",
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers"
+      ],
+      "purpose": "Solar animation targets after suppression, ability exchange or Encore."
+    },
+    {
+      "name": "reflected-heal-encore",
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers"
+      ],
+      "purpose": "Move ownership and PP when reflected or called healing is blocked."
+    },
+    {
+      "name": "called-speed-priority",
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Successful versus failed called swaps and promoted action order."
+    },
+    {
+      "name": "herb-instruct-disable",
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Herb consumption, item locking, rerolled actions and allied swaps."
+    },
+    {
+      "name": "sleep-confusion-priority",
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Wake and confusion boundaries during called or replaced actions."
+    },
+    {
+      "name": "future-weather-guard",
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian"
+      ],
+      "purpose": "Delayed hits and guard knowledge across weather, recoil and replacement."
+    },
+    {
+      "name": "encore-claw-reroll",
+      "options": [
+        "--moves",
+        "encore,protect,endure,confuseray,round,spite",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers"
+      ],
+      "purpose": "Distinguish original Quick Claw from a new activation after Encore replacement."
+    },
+    {
+      "name": "encore-same-choice",
+      "options": [
+        "--moves",
+        "encore,instruct,protect,endure,round,psychup",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Preserve original priority when the privately chosen move already matches Encore."
+    },
+    {
+      "name": "instruct-last-protection",
+      "options": [
+        "--moves",
+        "instruct,protect,endure,uturn,flipturn,batonpass",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "A failed instruction must count its target's still-pending natural action."
+    },
+    {
+      "name": "faint-pending-protection",
+      "options": [
+        "--moves",
+        "instruct,protect,endure,swagger,earthquake,selfdestruct",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,lifeorb,leftovers",
+        "--species",
+        "oranguru"
+      ],
+      "purpose": "Protection odds while an already fainted participant still has a queued action."
+    },
+    {
+      "name": "guards-court-pivot",
+      "options": [
+        "--moves",
+        "courtchange,quickguard,wideguard,uturn,voltswitch,reflect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "lightclay,leftovers"
+      ],
+      "purpose": "Court Change leaves one-turn guards on their original side, including mid-turn pivot observations."
+    },
+    {
+      "name": "receiver-residual-weather",
+      "options": [
+        "--moves",
+        "leechseed,infestation,whirlpool,toxic,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "damprock,heatrock,leftovers"
+      ],
+      "purpose": "Weather inherited after late residual faints must not age at the same upkeep."
+    },
+    {
+      "name": "called-charge-choice",
+      "options": [
+        "--moves",
+        "copycat,solarbeam,solarblade,fly,dig,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,magicbounce,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers"
+      ],
+      "purpose": "Failed second turns of called charges, including refusal by a Choice lock."
+    },
+    {
+      "name": "terminal-delayed-recoil",
+      "options": [
+        "--moves",
+        "futuresight,psychicnoise,protect,uturn,feint",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking"
+      ],
+      "purpose": "Final positions with a queued recoil faint after a delayed hit has already ended the battle."
+    },
+    {
+      "name": "tracking-ally-switch-pp",
+      "options": [
+        "--moves",
+        "fly,dig,solarbeam,allyswitch,protect,skillswap",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "stalwart,pressure,innerfocus",
+        "--items",
+        "leftovers,choicescarf"
+      ],
+      "purpose": "original target identity across Ally Switch with tracking abilities"
+    },
+    {
+      "name": "charge-ability-failures",
+      "options": [
+        "--moves",
+        "dig,fly,bounce,protect,skillswap,uturn",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "intimidate,innerfocus,clearbody,pressure",
+        "--items",
+        "ejectbutton,redcard,leftovers"
+      ],
+      "purpose": "stat failure ownership at replacement boundaries while charging"
+    },
+    {
+      "name": "perish-receiver-phase",
+      "options": [
+        "--moves",
+        "perishsong,protect,endure,uturn,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drought,drizzle,innerfocus",
+        "--items",
+        "leftovers,damprock,heatrock"
+      ],
+      "purpose": "new weather after Perish Song versus normal actions"
+    },
+    {
+      "name": "heal-block-action-order",
+      "options": [
+        "--moves",
+        "gigadrain,drainingkiss,healpulse,psychicnoise,encore,copycat",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,innerfocus,pressure",
+        "--items",
+        "choicescarf,mentalherb,leftovers"
+      ],
+      "purpose": "real healing actions versus reflected failures and Speed evidence"
+    }
+  ],
+  "mega_rates": [
+    0.0,
+    1.0
+  ]
+}

@@ -665,3 +665,72 @@ fn targeted_pattern_regressions_have_matching_public_observations() {
     }
     assert_eq!(tally.wrong, 0, "{:?}", tally.by_feature);
 }
+
+#[test]
+fn observer_lifecycle_regressions_match_public_knowledge() {
+    let mut tally = FollowTally::default();
+    for line in include_str!("fixtures/observer_lifecycle_regressions.jsonl").lines() {
+        let case: FollowCase = serde_json::from_str(line).unwrap();
+        assert!(matches!(check_follow(&case, &mut tally), Outcome::Pass(_)), "case {}", case.id);
+    }
+    assert_eq!(tally.wrong, 0, "{:?}", tally.by_feature);
+}
+
+#[test]
+fn observer_lifecycle_preserves_unknown_protection_and_unrelated_charge_failures() {
+    let cases: Vec<FollowCase> = include_str!("fixtures/observer_lifecycle_regressions.jsonl")
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (id, steps, feature, expected) in [(245, 2, 977, -1.0), (86, 22, 1154, 1.0), (846, 17, 904, 1.0)] {
+        let case = cases.iter().find(|c| c.id == id).unwrap();
+        let mut me = follower_for(case, 0);
+        me.lines(&Follower::own_lines(0, &case.initial.log)).unwrap();
+        me.request(&case.initial.requests[0].to_string()).unwrap();
+        for step in &case.steps[..steps] {
+            me.lines(&Follower::own_lines(0, &step.after.log)).unwrap();
+            me.request(&step.after.requests[0].to_string()).unwrap();
+        }
+        let (mut f, mut i, mut mask) = (vec![0.0; OBS_F], vec![0; OBS_I], vec![0; OBS_M]);
+        me.observe(&mut f, &mut i, &mut mask).unwrap();
+        assert_eq!(f[feature], expected, "case {id}");
+        if id == 245 {
+            let base =
+                vgc_engine::obs::FIELD_F + vgc_engine::obs::MONS * vgc_engine::obs::MON_F + 2 * vgc_engine::obs::ACT_F;
+            assert_eq!(f[base + vgc_engine::obs::ACT_VOLATILES + vgc_engine::data::N_VOLATILES + 1], -1.0);
+        }
+    }
+}
+
+#[test]
+fn scripted_public_knowledge_cases_match_and_hidden_queue_choices_are_indistinguishable() {
+    let text = include_str!("fixtures/observer_scripted_public_knowledge.jsonl");
+    let json: Vec<serde_json::Value> = text.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    let cases: Vec<FollowCase> = text.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    assert_eq!(cases.len(), 18);
+    let mut tally = FollowTally::default();
+    for case in &cases {
+        assert!(matches!(check_follow(case, &mut tally), Outcome::Pass(_)), "case {}", case.id);
+    }
+    assert_eq!(tally.wrong, 0, "{:?}", tally.by_feature);
+    let (a, b) = (&cases[16], &cases[17]);
+    let public = |logs: &[String]| {
+        Follower::own_lines(0, logs)
+            .into_iter()
+            .filter(|l| !l.starts_with("|t:|"))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(public(&a.initial.log), public(&b.initial.log));
+    assert_eq!(a.initial.requests[0], b.initial.requests[0]);
+    assert_eq!(a.steps.len(), b.steps.len());
+    for (x, y) in a.steps.iter().zip(&b.steps) {
+        assert_eq!(public(&x.after.log), public(&y.after.log));
+        assert_eq!(x.after.requests[0], y.after.requests[0]);
+    }
+    // The reference's hidden physical counter differs despite identical inputs to player 0.
+    let last_vol = |value: &serde_json::Value| {
+        value["steps"].as_array().unwrap().last().unwrap()["after"]["sides"][1]["mons"][0]["vol"].clone()
+    };
+    assert_ne!(last_vol(&json[16]), last_vol(&json[17]));
+}

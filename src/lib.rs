@@ -19,6 +19,7 @@ mod moves;
 pub mod obs;
 pub mod observer;
 pub mod position;
+mod public_actions;
 #[cfg(feature = "python")]
 mod python;
 pub mod replay;

@@ -176,6 +176,7 @@ impl Battle {
 
             // The consecutive-Protect counter.
             (VolKind::Stall, Ev::Start) => {
+                self.note_public(crate::public_actions::PublicEvent::Success(holder));
                 if let Some(v) = self.vol_mut(holder, VolKind::Stall) {
                     v.data = 3;
                 }
@@ -190,6 +191,7 @@ impl Battle {
                 Res::Bool(success)
             }
             (VolKind::Stall, Ev::Restart) => {
+                self.note_public(crate::public_actions::PublicEvent::Success(holder));
                 if let Some(v) = self.vol_mut(holder, VolKind::Stall) {
                     if v.data < 729 {
                         v.data *= 3;

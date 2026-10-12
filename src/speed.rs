@@ -308,6 +308,7 @@ pub(crate) struct Queued {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Event {
+    Public(crate::public_actions::PublicEvent),
     /// A queued move has reached the head of the queue and starts.
     Start {
         me: Queued,
@@ -405,6 +406,17 @@ fn queued(a: &Action) -> Queued {
 }
 
 impl Battle {
+    pub(crate) fn note_public(&self, event: crate::public_actions::PublicEvent) {
+        if on() {
+            LOG.with(|log| log.borrow_mut().push(Event::Public(event)));
+        }
+    }
+    pub(crate) fn public_visible(&self) -> [Option<MonRef>; 4] {
+        std::array::from_fn(|k| {
+            let r = self.active(k / 2, k % 2);
+            (self.mon(r).is_active && !self.mon(r).fainted).then_some(r)
+        })
+    }
     pub(crate) fn note_speed_switch(&self, r: MonRef) {
         if on() {
             LOG.with(|log| log.borrow_mut().push(Event::Switch { r }));
@@ -698,6 +710,7 @@ fn bracket(s: &Seen, known: &Know, field: &FieldSeen, move_id: u16) -> Option<i3
 /// decision. Part of a game's state, next to its [`Battle`].
 #[derive(Clone, Copy, Debug)]
 pub struct Speeds {
+    public_actions: crate::public_actions::PublicActions,
     /// By side and registered Pokémon: what that side's opponent knows of it.
     belief: [[Belief; MAX_ROSTER]; 2],
     /// By side and team index: on the field since a Speed Swap was used, so its Speed may not be its own.
@@ -753,6 +766,7 @@ impl Speeds {
         };
         let clause = Format::current().team.item_clause == 1;
         Speeds {
+            public_actions: Default::default(),
             belief,
             clause: [clause && once(rosters[0]), clause && once(rosters[1])],
             handed: [[false; MAX_ROSTER]; 2],
@@ -783,6 +797,7 @@ impl Speeds {
     pub(crate) fn renumber(&mut self, side: usize, moved: &[(usize, usize, bool)]) {
         // (All at once: two that stand side by side can trade numbers. A number given up
         // and not taken by the other is nobody's until someone comes in under it.)
+        self.public_actions.renumber(side, moved);
         let (began, encored) = (self.began[side], self.encored[side]);
         for &(from, _, _) in moved {
             (self.began[side][from], self.swapped[side][from], self.encored[side][from]) =
@@ -807,6 +822,10 @@ impl Speeds {
     /// The Speed the queue would sort `side`'s Pokémon at `pos` by, as things stand.
     pub fn own(&self, side: usize, pos: usize) -> i32 {
         self.own[side][pos]
+    }
+
+    pub(crate) fn protection_uncertain(&self, r: MonRef) -> bool {
+        self.public_actions.uncertain(r)
     }
 
     /// Takes in what the engine noted since the last decision, and the battle as it now stands.
@@ -865,7 +884,11 @@ impl Speeds {
                         }
                     }
                 }
-                Event::Start { .. } => {
+                Event::Public(event) => {
+                    self.public_actions.event(event);
+                }
+                Event::Start { me, .. } => {
+                    self.public_actions.start(me.r, me.order == 200);
                     // This one moved after each of those that started before it.
                     for i in 0..j {
                         self.compare(events, i, j, &swapped_at[i], b);

@@ -78,6 +78,7 @@
 //! the types as its side has been told them, the simulator keeps both
 //! sides' (`Battle::seen_types`), and the two go by the same rules.
 
+use crate::public_actions::PublicEvent;
 use serde_json::Value;
 
 use crate::battle::{PokemonSet, calc_stats, types_copied};
@@ -479,6 +480,7 @@ pub struct Follower {
     animation_pp: Option<(usize, bool, u16, u8, bool)>,
     /// The moves chosen with the last reply, by team index, and where each was aimed.
     chosen: Vec<(usize, u16, i8)>,
+    chosen_targets: Vec<(usize, u32)>,
     /// The Pokémon of its own that the last reply sent in, by position: one that comes in
     /// under another's name (Illusion) is known by this until the next request says so.
     sent: [Option<usize>; ACTIVE],
@@ -687,6 +689,7 @@ impl Follower {
             refusable: None,
             animation_pp: None,
             chosen: Vec::new(),
+            chosen_targets: Vec::new(),
             sent: [None; ACTIVE],
             megaed: [false; 2],
             ending: false,
@@ -1014,6 +1017,9 @@ impl Follower {
         };
         // Status, Leech Seed and trapping damage follow weather's residual event. A weather ability
         // inherited on the ensuing faint starts too late to age at this upkeep.
+        if kind == "-start" && effect_id(arg(3)) == "perish0" {
+            self.ending = true;
+        }
         if kind == "-damage"
             && (matches!(from, "brn" | "psn" | "tox") || from == "Leech Seed" || parts.contains(&"[partiallytrapped]"))
         {
@@ -1061,6 +1067,7 @@ impl Follower {
             for (_, event) in &mut self.items {
                 match event {
                     Event::Switch { r } => renumber(r),
+                    Event::Public(event) => event.renumber(&renumber),
                     Event::Swap { first, second } => {
                         renumber(first);
                         renumber(second);
@@ -1348,6 +1355,7 @@ impl Follower {
             }
         }
         self.items.push((self.begun.len(), Event::Switch { r: self.mon_ref(side, pos) }));
+        self.items.push((self.begun.len(), Event::Public(PublicEvent::Switch { r: self.mon_ref(side, pos), pos })));
     }
 
     /// Where the Pokémon a line names stands: its side and position.
@@ -1426,11 +1434,14 @@ impl Follower {
                 for slots in self.field.sides.iter_mut().flat_map(|s| s.slots.iter_mut()) {
                     slots.retain(|c| c.0 != SlotCond::Revivalblessing);
                 }
+                let visible = std::array::from_fn(|k| self.present(k / 2, k % 2).then(|| self.mon_ref(k / 2, k % 2)));
+                self.items.push((self.begun.len(), Event::Public(PublicEvent::Turn(visible))));
                 self.rounds.clear();
                 self.mover = None;
                 return Ok(());
             }
             "upkeep" => {
+                self.items.push((self.begun.len(), Event::Public(PublicEvent::Upkeep)));
                 self.upkeep();
                 return Ok(());
             }
@@ -1551,6 +1562,8 @@ impl Follower {
                     && to != pos
                 {
                     // (What is set on a position, a Wish on its way, stays where it was set.)
+                    self.items
+                        .push((self.begun.len(), Event::Public(PublicEvent::Swap { side, first: pos, second: to })));
                     self.spots[side].swap(pos, to);
                     if side == self.side {
                         self.own_at.swap(pos, to);
@@ -1691,6 +1704,19 @@ impl Follower {
                         }
                     } else if queued
                         && !replaced
+                        && side == self.side
+                        && (data.tracks_target
+                            || self.own_now(pos).is_some_and(|n| {
+                                n.agreed(|a| Some(matches!(a, ab::STALWART | ab::PROPELLERTAIL))) == Some(true)
+                            }))
+                        && let Some((_, stay)) = self.chosen_targets.iter().find(|t| t.0 == self.own_at[pos])
+                        && let Some(aim) = (0..2)
+                            .flat_map(|s| (0..ACTIVE).map(move |p| (s, p)))
+                            .find(|&(s, p)| self.present(s, p) && self.spots[s][p].stay == *stay)
+                    {
+                        aimed.push(aim);
+                    } else if queued
+                        && !replaced
                         && matches!(target, Target::Normal | Target::Any | Target::AdjacentFoe)
                         && let Some(loc) = chosen_loc
                         && loc != 0
@@ -1814,6 +1840,13 @@ impl Follower {
                     _ => {}
                 }
                 let stalling = MOVES[used as usize].stalling_move;
+                if stalling {
+                    self.items.push((self.begun.len(), Event::Public(PublicEvent::Attempt(self.mon_ref(side, pos)))));
+                    if matches!(undo, Some(Undo::Stall(_))) {
+                        self.items
+                            .push((self.begun.len(), Event::Public(PublicEvent::Success(self.mon_ref(side, pos)))));
+                    }
+                }
                 let shield = MOVES[used as usize].volatile.filter(|_| stalling);
                 let cancel_charge =
                     MOVES[used as usize].flags & F_CHARGE != 0 && parts.contains(&"[still]") && from != "lockedmove";
@@ -1853,6 +1886,10 @@ impl Follower {
                 }
             }
             "-fail" => {
+                // Stat/ability failures do not belong to the preceding move.
+                if !arg(3).is_empty() || from.starts_with("ability:") {
+                    return Ok(());
+                }
                 if self.mover.as_ref().is_some_and(|m| (m.side, m.pos) == (side, pos) && m.cancel_charge) {
                     let spot = self.spot(side, pos);
                     spot.remove(VolKind::Twoturnmove);
@@ -1868,6 +1905,16 @@ impl Follower {
                         && self.spots[s][p].begun == 0
                 });
                 let refused = refusable.filter(|r| (r.side, r.pos) == (side, pos));
+                if refused.is_none()
+                    && self.mover.as_ref().is_some_and(|m| m.stalling && (m.side, m.pos) == (side, pos))
+                {
+                    let visible =
+                        std::array::from_fn(|k| self.present(k / 2, k % 2).then(|| self.mon_ref(k / 2, k % 2)));
+                    self.items.push((
+                        self.begun.len(),
+                        Event::Public(PublicEvent::Failure { r: self.mon_ref(side, pos), visible }),
+                    ));
+                }
                 if let Some(mover) = &mut self.mover
                     && (mover.side, mover.pos) == (side, pos)
                 {
@@ -2057,6 +2104,7 @@ impl Follower {
                 let stalling = move_id(&effect).is_some_and(|m| MOVES[m as usize].stalling_move)
                     || matches!(effect.as_str(), "wideguard" | "quickguard");
                 if stalling {
+                    self.items.push((self.begun.len(), Event::Public(PublicEvent::Success(self.mon_ref(side, pos)))));
                     self.spot(side, pos).stalled();
                 }
             }
@@ -2129,6 +2177,7 @@ impl Follower {
                         (spot.pressing, spot.lost_item) = (false, false);
                     }
                 } else if name == "feint" || parts.contains(&"[broken]") {
+                    self.items.push((self.begun.len(), Event::Public(PublicEvent::Reset(self.mon_ref(side, pos)))));
                     // Its protection is broken, and with it the run of protecting moves.
                     self.field.sides[side].conds.retain(|c| !matches!(c.0, SideCond::Quickguard | SideCond::Wideguard));
                     self.spot(side, pos).vols.retain(|v| {
@@ -2997,6 +3046,7 @@ impl Follower {
         }
         if b.request == Request::Move {
             self.chosen.clear();
+            self.chosen_targets.clear();
         }
         self.timers = self.count_timers();
     }
@@ -3040,6 +3090,7 @@ impl Follower {
         // that turn as they were: some have yet to be used.)
         if !self.req.as_ref().is_some_and(|r| matches!(r.asked, Asked::Switch | Asked::Wait)) {
             self.chosen.clear();
+            self.chosen_targets.clear();
         }
         self.sent = [None; ACTIVE];
         let Some(b) = &self.battle else {
@@ -3064,6 +3115,13 @@ impl Follower {
                     m.moves[slot as usize].id
                 };
                 self.chosen.push((r.idx as usize, id, target));
+                if target != 0 {
+                    let side = if target > 0 { 1 - self.side } else { self.side };
+                    let pos = target.unsigned_abs() as usize - 1;
+                    if pos < ACTIVE {
+                        self.chosen_targets.push((r.idx as usize, self.spots[side][pos].stay));
+                    }
+                }
             }
             if let Choice::Switch { to } = choice {
                 self.sent[pos] = Some(b.sides[self.side].order[to as usize] as usize);

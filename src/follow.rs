@@ -132,6 +132,8 @@ struct Spot {
     /// What its types were taken to be before the first of those.
     before: [Type; 2],
     active_turns: u16,
+    /// Had an ordinary action queued at this turn's start, even if it later fainted.
+    queued_this_turn: bool,
     last_move: u16,
     last_move_loc: Option<i8>,
     last_attempted_move: Option<u16>,
@@ -149,6 +151,8 @@ struct Spot {
     overridden: Option<usize>,
     /// Its move went ahead of its bracket, and said so (Quick Claw, Quick Draw, Custap Berry).
     quick: bool,
+    /// An activation announced after Encore resolved a replacement action.
+    quick_rerolled: bool,
     /// It has been seen to lose an item since it came in (Unburden asks).
     lost_item: bool,
     /// Something has been said of its ability since the last request.
@@ -192,6 +196,7 @@ impl Spot {
             told: false,
             before: [Type::None; 2],
             active_turns: 0,
+            queued_this_turn: false,
             last_move: NO_MOVE,
             last_move_loc: None,
             last_attempted_move: None,
@@ -203,6 +208,7 @@ impl Spot {
             genuine_form: false,
             overridden: None,
             quick: false,
+            quick_rerolled: false,
             lost_item: false,
             ability_touched: false,
             own_abilities: None,
@@ -407,6 +413,8 @@ struct Begun {
     /// Encore is still active as this move begins; replacement can outlive it.
     encored: bool,
     quick: bool,
+    /// An activation announced after Encore resolved a replacement action.
+    quick_rerolled: bool,
     seen: [Seen; 4],
     field: FieldSeen,
     /// The follower's own two at that moment: which stay, and what it knew of each.
@@ -432,6 +440,7 @@ struct Mover {
     undo: Option<Undo>,
     /// Its move is one that protects, which works less often in a row.
     stalling: bool,
+    cancel_charge: bool,
     /// The protection that move puts up: the log calls every kind "Protect".
     shield: Option<VolKind>,
 }
@@ -1003,9 +1012,11 @@ impl Follower {
         } else {
             None
         };
-        // Poison and burn tick after weather's residual event. A weather ability
+        // Status, Leech Seed and trapping damage follow weather's residual event. A weather ability
         // inherited on the ensuing faint starts too late to age at this upkeep.
-        if kind == "-damage" && matches!(from, "brn" | "psn" | "tox") {
+        if kind == "-damage"
+            && (matches!(from, "brn" | "psn" | "tox") || from == "Leech Seed" || parts.contains(&"[partiallytrapped]"))
+        {
             self.ending = true;
         }
         let before = held(self);
@@ -1239,6 +1250,7 @@ impl Follower {
             overridden: spot.overridden,
             encored: spot.has(VolKind::Encore),
             quick: spot.quick,
+            quick_rerolled: spot.quick_rerolled,
             seen,
             field,
             own,
@@ -1384,10 +1396,12 @@ impl Follower {
                     for pos in 0..ACTIVE {
                         let present = self.present(side, pos);
                         let spot = &mut self.spots[side][pos];
+                        spot.queued_this_turn = present;
                         if present {
                             spot.active_turns += 1;
                         }
-                        (spot.begun, spot.reordered, spot.overridden, spot.quick) = (0, None, None, false);
+                        (spot.begun, spot.reordered, spot.overridden, spot.quick, spot.quick_rerolled) =
+                            (0, None, None, false, false);
                         // Showdown says at the end of a turn what a Pokémon's types have
                         // become, if they have changed: one of the follower's own that took
                         // a foe's types and has heard nothing has the ones it had.
@@ -1491,7 +1505,14 @@ impl Follower {
             }
             "-swapsideconditions" => {
                 let [a, b] = &mut self.field.sides;
+                let stays = |c: &(SideCond, u8, u16)| matches!(c.0, SideCond::Wideguard | SideCond::Quickguard);
+                let a_stay: Vec<_> = a.conds.iter().copied().filter(stays).collect();
+                let b_stay: Vec<_> = b.conds.iter().copied().filter(stays).collect();
+                a.conds.retain(|c| !stays(c));
+                b.conds.retain(|c| !stays(c));
                 std::mem::swap(&mut a.conds, &mut b.conds);
+                a.conds.extend(a_stay);
+                b.conds.extend(b_stay);
                 return Ok(());
             }
             "-clearallboost" => {
@@ -1794,7 +1815,9 @@ impl Follower {
                 }
                 let stalling = MOVES[used as usize].stalling_move;
                 let shield = MOVES[used as usize].volatile.filter(|_| stalling);
-                self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling, shield });
+                let cancel_charge =
+                    MOVES[used as usize].flags & F_CHARGE != 0 && parts.contains(&"[still]") && from != "lockedmove";
+                self.mover = Some(Mover { side, pos, stay, target: fourth, undo, stalling, shield, cancel_charge });
             }
             "cant" => {
                 if arg(3) == "move: Imprison"
@@ -1830,13 +1853,19 @@ impl Follower {
                 }
             }
             "-fail" => {
+                if self.mover.as_ref().is_some_and(|m| (m.side, m.pos) == (side, pos) && m.cancel_charge) {
+                    let spot = self.spot(side, pos);
+                    spot.remove(VolKind::Twoturnmove);
+                    for kind in CHARGING {
+                        spot.remove(kind);
+                    }
+                }
                 // Whether anybody else has yet to move this turn: not one that has moved, or
                 // that came in during it.
                 let to_act = (0..2).flat_map(|s| (0..ACTIVE).map(move |p| (s, p))).any(|(s, p)| {
-                    (s, p) != (side, pos)
-                        && self.present(s, p)
+                    ((s, p) != (side, pos) || self.begun.last().is_some_and(|b| b.instructed))
+                        && self.spots[s][p].queued_this_turn
                         && self.spots[s][p].begun == 0
-                        && self.spots[s][p].active_turns > 0
                 });
                 let refused = refusable.filter(|r| (r.side, r.pos) == (side, pos));
                 if let Some(mover) = &mut self.mover
@@ -2016,7 +2045,13 @@ impl Follower {
                     let vol = if vol == VolKind::Protect { own.unwrap_or(vol) } else { vol };
                     self.spot(side, pos).add(vol, ends);
                 } else if effect == "instruct" {
-                    self.spot(side, pos).instructed = true;
+                    let spot = self.spot(side, pos);
+                    // Instruct inserts only the first resolved action. Counter and
+                    // Mirror Coat insert their setup callback, not a repeated move.
+                    spot.instructed = spot.last_move == NO_MOVE
+                        || MOVES[spot.last_move as usize].events
+                            & (Ev::BeforeTurnCallback.bit() | Ev::PriorityChargeCallback.bit())
+                            == 0;
                 }
                 // A move that protects makes the next one less likely to work.
                 let stalling = move_id(&effect).is_some_and(|m| MOVES[m as usize].stalling_move)
@@ -2066,7 +2101,12 @@ impl Follower {
                     // Instruct resolves a fresh move and can roll its item again;
                     // that roll did not promote the original queued action.
                     if !self.spots[side][pos].instructed {
-                        self.spot(side, pos).quick = true;
+                        let spot = self.spot(side, pos);
+                        if spot.overridden.is_some() {
+                            spot.quick_rerolled = true;
+                        } else {
+                            spot.quick = true;
+                        }
                     }
                 } else if name == "symbiosis" {
                     // This transfer is announced only by -activate, not -item.
@@ -2129,7 +2169,12 @@ impl Follower {
                     return Ok(());
                 }
                 if effect_id(arg(3)) == "custapberry" {
-                    self.spot(side, pos).quick = true;
+                    let spot = self.spot(side, pos);
+                    if spot.overridden.is_some() {
+                        spot.quick_rerolled = true;
+                    } else {
+                        spot.quick = true;
+                    }
                 }
                 let spot = self.spot(side, pos);
                 (spot.choice, spot.item_since) = (None, Some(it::NONE));
@@ -2841,7 +2886,9 @@ impl Follower {
         }
         let a = b.resolve_move(begun.r, chosen, 0);
         // A Quick Claw is rolled for, and says so when it works; what always holds a move back does not.
-        Some(if begun.quick && begun.overridden.is_none_or(|t| t > at) { 1 } else { a.frac.min(0) })
+        let original = self.chosen.iter().find(|c| c.0 == begun.r.idx as usize).map(|c| c.1);
+        let replaced = original != Some(begun.named) && begun.overridden.is_some_and(|t| t <= at);
+        Some(if if replaced { begun.quick_rerolled } else { begun.quick } { 1 } else { a.frac.min(0) })
     }
 
     /// A move as it stood in the queue when the `at`th of this stretch began.
@@ -2851,7 +2898,7 @@ impl Follower {
             r: s.r,
             order: 200,
             priority: 0,
-            frac: (s.quick && s.overridden.is_none_or(|t| t > at)) as i8,
+            frac: (if s.overridden.is_some_and(|t| t <= at) { s.quick_rerolled } else { s.quick }) as i8,
             speed: 0,
             move_id: if s.named == NO_MOVE { 0 } else { s.named },
             encored: s.encored,

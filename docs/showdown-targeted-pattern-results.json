@@ -1,0 +1,5325 @@
+{
+  "uploaded_summary": {
+    "completed_batches": 400,
+    "compared_battles": 100000,
+    "failing_battles": 56,
+    "elapsed_seconds": 1609,
+    "observations_actionable_differences": 719,
+    "observations_decisions": 3016455,
+    "observations_differences": 804,
+    "observations_failed": 0,
+    "observations_followed": 100000,
+    "observations_observations": 6199022,
+    "observations_passed_over": 33888,
+    "observations_unsupported": 0,
+    "mechanics_decisions": 3016110,
+    "mechanics_diverged": 13,
+    "mechanics_matched": 99987,
+    "mechanics_unsupported": 0
+  },
+  "uploaded_provenance": {
+    "schema_version": 1,
+    "started_utc": "2026-10-12T15:11:19Z",
+    "engine_commit": "16d6ed6f95a5f6bb978872623159b203d55a91c3",
+    "working_tree": "?? .DS_Store\n?? oracle/.DS_Store\n?? python/.DS_Store\n?? teams/",
+    "showdown_commit": "ad7ca5d51c03865e6829dbec3a7875df71480fb8",
+    "showdown_working_tree": "",
+    "node_version": "v24.8.0",
+    "generator_hashes": {
+      "oracle/gen_cases.js": "b290695409d2057ada41cb21fc657071a340b31635bec97bdd4e61d0aa695da4",
+      "oracle/lib.js": "8ffe4fd4b3d21c73cabfa6b25ae68186567bed60acd4e1be1a59bbc26ac61acd",
+      "oracle/pool.json": "0e26bee959fabdfb4c645469120c12167c0287f919d0d30a311e8d7650f5f784"
+    },
+    "binaries": {
+      "followcheck": "6427335e3b0374dd1351d1ba294e897cae52389d3ac86812dfe1b8f8d556185b",
+      "difftest": "5916fbfc6005b49bb0b7a766cdbbbfa489b96bfc41b3b32a49091c7b1266c700"
+    },
+    "build_requested": true,
+    "command": [
+      "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/compare-showdown.py",
+      "--battles",
+      "100000",
+      "--batch-size",
+      "250",
+      "--profile",
+      "regressions",
+      "--themes-file",
+      "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/showdown-observation-stress.json",
+      "--seed",
+      "1379264805",
+      "--workers",
+      "4",
+      "--out",
+      "/Users/matiasbronner/showdown-runs/observation-stress-1379264805"
+    ],
+    "scope": "complete stress battles; single initially brought Illusion per side; closed sheets exclude rosters with non-native Illusion",
+    "stress_suite": {
+      "path": "/Users/matiasbronner/Desktop/pokemon_ml_git/scripts/showdown-observation-stress.json",
+      "sha256": "c2021409ec61fc7d5473891e4abf3784398be42a5255ecb75dabc90f0e72de15"
+    },
+    "completed_utc": "2026-10-12T15:38:09Z",
+    "generator_unchanged": true,
+    "stress_suite_unchanged": true
+  },
+  "uploaded_failures": [
+    {
+      "key": "0009-encore-quick-claw-battle-127",
+      "generation": {
+        "seed": 1387264829,
+        "original_id": 127,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        12510,
+        40371,
+        63966,
+        51694
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 6,
+        "actionable_observations": 103,
+        "decisions": 62,
+        "differences": 9,
+        "errors": [],
+        "first_differences": [
+          "battle 127 step 13 side 1: their mon: speed high: the game has 0.57 (at 475), the follower 0.56"
+        ],
+        "id": 127,
+        "observations": 126,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 62,
+        "errors": [],
+        "id": 127,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0009-encore-quick-claw-battle-67",
+      "generation": {
+        "seed": 1387264829,
+        "original_id": 66,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        42063,
+        38527,
+        2015,
+        11289
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 16,
+        "actionable_observations": 55,
+        "decisions": 28,
+        "differences": 16,
+        "errors": [],
+        "first_differences": [
+          "battle 67 step 12 side 0: their mon: speed high: the game has 1.095 (at 579), the follower 0.585"
+        ],
+        "id": 67,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 67,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0014-court-change-battle-126",
+      "generation": {
+        "seed": 1392264844,
+        "original_id": 127,
+        "options": [
+          "--species",
+          "cinderace",
+          "--moves",
+          "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+          "--moves-per",
+          "3",
+          "--items",
+          "lightclay,leftovers",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        58088,
+        11126,
+        19060,
+        60447
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 150,
+        "decisions": 88,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 126 step 51 side 0: side: quickguard: the game has 0 (at 37), the follower 1"
+        ],
+        "id": 126,
+        "observations": 178,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 88,
+        "errors": [],
+        "id": 126,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0016-instruct-quick-claw-battle-91",
+      "generation": {
+        "seed": 1394264850,
+        "original_id": 94,
+        "options": [
+          "--species",
+          "oranguru",
+          "--moves",
+          "instruct,rockslide,earthquake,drainingkiss,protect",
+          "--moves-per",
+          "3",
+          "--items",
+          "quickclaw,leftovers",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        34658,
+        14726,
+        4331,
+        22068
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 17,
+        "actionable_observations": 58,
+        "decisions": 31,
+        "differences": 18,
+        "errors": [],
+        "first_differences": [
+          "battle 91 step 13 side 0: their mon: speed high: the game has 0.51 (at 527), the follower 0.41"
+        ],
+        "id": 91,
+        "observations": 64,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 31,
+        "errors": [],
+        "id": 91,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0028-confusion-endure-instruct-battle-116",
+      "generation": {
+        "seed": 1406264886,
+        "original_id": 116,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        15230,
+        26249,
+        9709,
+        5471
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 38,
+        "actionable_observations": 92,
+        "decisions": 47,
+        "differences": 40,
+        "errors": [],
+        "first_differences": [
+          "battle 116 step 7 side 1: their mon: speed high: the game has 0.875 (at 527), the follower 0.225"
+        ],
+        "id": 116,
+        "observations": 96,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 47,
+        "errors": [],
+        "id": 116,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0028-confusion-endure-instruct-battle-135",
+      "generation": {
+        "seed": 1406264886,
+        "original_id": 135,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        57104,
+        37688,
+        22148,
+        63282
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 15,
+        "actionable_observations": 80,
+        "decisions": 42,
+        "differences": 15,
+        "errors": [],
+        "first_differences": [
+          "battle 135 step 27 side 0: their mon: speed high: the game has 0.545 (at 527), the follower 0.48"
+        ],
+        "id": 135,
+        "observations": 86,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 42,
+        "errors": [],
+        "id": 135,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0038-sleep-confusion-priority-battle-137",
+      "generation": {
+        "seed": 1416264916,
+        "original_id": 137,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        53692,
+        19971,
+        4756,
+        65493
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 62,
+        "decisions": 32,
+        "differences": 1,
+        "errors": [],
+        "first_differences": [
+          "battle 137 step 12 side 0: their mon: speed high: the game has 0.605 (at 527), the follower 0.44"
+        ],
+        "id": 137,
+        "observations": 66,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 32,
+        "errors": [],
+        "id": 137,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0038-sleep-confusion-priority-battle-244",
+      "generation": {
+        "seed": 1416264916,
+        "original_id": 244,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        24501,
+        12015,
+        14238,
+        9070
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 73,
+        "actionable_observations": 148,
+        "decisions": 84,
+        "differences": 75,
+        "errors": [],
+        "first_differences": [
+          "battle 244 step 9 side 1: their mon: speed high: the game has 1.205 (at 631), the follower 0.56"
+        ],
+        "id": 244,
+        "observations": 170,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 84,
+        "errors": [],
+        "id": 244,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0040-future-weather-guard-battle-147",
+      "generation": {
+        "seed": 1418264922,
+        "original_id": 147,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        1212,
+        12390,
+        62161,
+        30164
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 27,
+        "decisions": 15,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 147,
+        "observations": 32,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 147,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0040-future-weather-guard-battle-207",
+      "generation": {
+        "seed": 1418264922,
+        "original_id": 207,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        32837,
+        1965,
+        37518,
+        43703
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 64,
+        "decisions": 41,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 207,
+        "observations": 84,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 207,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0068-confusion-endure-instruct-battle-209",
+      "generation": {
+        "seed": 1446265006,
+        "original_id": 208,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        13228,
+        25844,
+        43224,
+        46642
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 65,
+        "decisions": 33,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 209 step 23 side 0: own position: vol stall: the game has 0 (at 852), the follower 1"
+        ],
+        "id": 209,
+        "observations": 68,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 33,
+        "errors": [],
+        "id": 209,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0068-confusion-endure-instruct-battle-78",
+      "generation": {
+        "seed": 1446265006,
+        "original_id": 77,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        24795,
+        32085,
+        10514,
+        26211
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 100,
+        "decisions": 57,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 78 step 28 side 0: their position: vol stall: the game has 0 (at 977), the follower 1"
+        ],
+        "id": 78,
+        "observations": 116,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 57,
+        "errors": [],
+        "id": 78,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0078-sleep-confusion-priority-battle-205",
+      "generation": {
+        "seed": 1456265036,
+        "original_id": 204,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        4255,
+        4626,
+        25569,
+        14541
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 83,
+        "actionable_observations": 223,
+        "decisions": 122,
+        "differences": 97,
+        "errors": [],
+        "first_differences": [
+          "battle 205 step 25 side 1: their mon: speed high: the game has 0.56 (at 423), the follower 0.455"
+        ],
+        "id": 205,
+        "observations": 246,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 122,
+        "errors": [],
+        "id": 205,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0089-encore-quick-claw-battle-105",
+      "generation": {
+        "seed": 1467265069,
+        "original_id": 105,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        26733,
+        17676,
+        12564,
+        37355
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 7,
+        "actionable_observations": 46,
+        "decisions": 25,
+        "differences": 8,
+        "errors": [],
+        "first_differences": [
+          "battle 105 step 8 side 1: their mon: speed low: the game has 0.11 (at 630), the follower 0.66"
+        ],
+        "id": 105,
+        "observations": 52,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 25,
+        "errors": [],
+        "id": 105,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0089-encore-quick-claw-battle-108",
+      "generation": {
+        "seed": 1467265069,
+        "original_id": 108,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        46671,
+        446,
+        64598,
+        37947
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 10,
+        "actionable_observations": 38,
+        "decisions": 20,
+        "differences": 12,
+        "errors": [],
+        "first_differences": [
+          "battle 108 step 8 side 1: their mon: speed high: the game has 0.83 (at 683), the follower 0.53"
+        ],
+        "id": 108,
+        "observations": 42,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 20,
+        "errors": [],
+        "id": 108,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0108-confusion-endure-instruct-battle-26",
+      "generation": {
+        "seed": 1486265126,
+        "original_id": 25,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        39948,
+        16663,
+        56525,
+        14306
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 38,
+        "decisions": 21,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 26 step 2 side 0: their position: vol stall: the game has 0 (at 1102), the follower 1"
+        ],
+        "id": 26,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 26,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0110-solar-suppression-battle-156",
+      "generation": {
+        "seed": 1488265132,
+        "original_id": 156,
+        "options": [
+          "--moves",
+          "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        25001,
+        45571,
+        64220,
+        62087
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 10,
+        "actionable_observations": 38,
+        "decisions": 21,
+        "differences": 12,
+        "errors": [],
+        "first_differences": [
+          "battle 156 step 9 side 1: their mon: speed low: the game has 0.27 (at 422), the follower 0.425"
+        ],
+        "id": 156,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 156,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0160-future-weather-guard-battle-99",
+      "generation": {
+        "seed": 1538265282,
+        "original_id": 98,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        807,
+        52045,
+        1796,
+        36752
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 42,
+        "decisions": 23,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 99,
+        "observations": 48,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 99,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0169-encore-quick-claw-battle-224",
+      "generation": {
+        "seed": 1547265309,
+        "original_id": 224,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        43064,
+        31921,
+        21959,
+        40168
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 15,
+        "actionable_observations": 43,
+        "decisions": 23,
+        "differences": 17,
+        "errors": [],
+        "first_differences": [
+          "battle 224 step 6 side 0: their mon: speed high: the game has 0.685 (at 475), the follower 0.33"
+        ],
+        "id": 224,
+        "observations": 48,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 23,
+        "errors": [],
+        "id": 224,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0188-confusion-endure-instruct-battle-141",
+      "generation": {
+        "seed": 1566265366,
+        "original_id": 141,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        50028,
+        22916,
+        43266,
+        17334
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 153,
+        "decisions": 77,
+        "differences": 1,
+        "errors": [],
+        "first_differences": [
+          "battle 141 step 4 side 0: their mon: speed high: the game has 0.615 (at 631), the follower 0.575"
+        ],
+        "id": 141,
+        "observations": 156,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 77,
+        "errors": [],
+        "id": 141,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0188-confusion-endure-instruct-battle-28",
+      "generation": {
+        "seed": 1566265366,
+        "original_id": 27,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        18235,
+        55462,
+        54713,
+        8670
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 31,
+        "actionable_observations": 71,
+        "decisions": 38,
+        "differences": 33,
+        "errors": [],
+        "first_differences": [
+          "battle 28 step 5 side 0: their mon: speed high: the game has 0.915 (at 683), the follower 0.685"
+        ],
+        "id": 28,
+        "observations": 78,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 38,
+        "errors": [],
+        "id": 28,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0190-solar-suppression-battle-233",
+      "generation": {
+        "seed": 1568265372,
+        "original_id": 233,
+        "options": [
+          "--moves",
+          "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        54919,
+        32571,
+        32336,
+        14159
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 12,
+        "actionable_observations": 56,
+        "decisions": 29,
+        "differences": 13,
+        "errors": [],
+        "first_differences": [
+          "battle 233 step 16 side 0: their mon: speed high: the game has 0.845 (at 579), the follower 0.68"
+        ],
+        "id": 233,
+        "observations": 60,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 29,
+        "errors": [],
+        "id": 233,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0196-herb-instruct-disable-battle-144",
+      "generation": {
+        "seed": 1574265390,
+        "original_id": 144,
+        "options": [
+          "--moves",
+          "encore,disable,taunt,instruct,skillswap,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "klutz,pressure,innerfocus",
+          "--items",
+          "mentalherb,choicescarf,leppaberry",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        27490,
+        46846,
+        44077,
+        19435
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 19,
+        "actionable_observations": 49,
+        "decisions": 28,
+        "differences": 22,
+        "errors": [],
+        "first_differences": [
+          "battle 144 step 6 side 0: their mon: speed high: the game has 0.695 (at 527), the follower 0.34"
+        ],
+        "id": 144,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 144,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0198-sleep-confusion-priority-battle-182",
+      "generation": {
+        "seed": 1576265396,
+        "original_id": 182,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        53266,
+        9613,
+        8240,
+        55523
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 44,
+        "actionable_observations": 98,
+        "decisions": 51,
+        "differences": 47,
+        "errors": [],
+        "first_differences": [
+          "battle 182 step 4 side 1: their mon: speed high: the game has 0.44 (at 527), the follower 0.23"
+        ],
+        "id": 182,
+        "observations": 104,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 51,
+        "errors": [],
+        "id": 182,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0198-sleep-confusion-priority-battle-220",
+      "generation": {
+        "seed": 1576265396,
+        "original_id": 220,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        24045,
+        51635,
+        58141,
+        39132
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 63,
+        "actionable_observations": 136,
+        "decisions": 69,
+        "differences": 65,
+        "errors": [],
+        "first_differences": [
+          "battle 220 step 4 side 0: their mon: speed high: the game has 1.5 (at 475), the follower 0.41"
+        ],
+        "id": 220,
+        "observations": 140,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 69,
+        "errors": [],
+        "id": 220,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0200-future-weather-guard-battle-178",
+      "generation": {
+        "seed": 1578265402,
+        "original_id": 178,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        15617,
+        31905,
+        7739,
+        3075
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 43,
+        "decisions": 24,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 178,
+        "observations": 50,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 178,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0200-future-weather-guard-battle-205",
+      "generation": {
+        "seed": 1578265402,
+        "original_id": 205,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        50767,
+        5321,
+        33352,
+        32804
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 62,
+        "decisions": 33,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 205,
+        "observations": 68,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 205,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0200-future-weather-guard-battle-41",
+      "generation": {
+        "seed": 1578265402,
+        "original_id": 40,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        18776,
+        62172,
+        63277,
+        63234
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 47,
+        "decisions": 25,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 41,
+        "observations": 52,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 41,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0200-future-weather-guard-battle-51",
+      "generation": {
+        "seed": 1578265402,
+        "original_id": 50,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        19854,
+        17603,
+        44940,
+        16151
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 51,
+        "decisions": 27,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 51,
+        "observations": 56,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 51,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0228-confusion-endure-instruct-battle-145",
+      "generation": {
+        "seed": 1606265486,
+        "original_id": 144,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        13135,
+        33042,
+        1736,
+        36631
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 25,
+        "decisions": 15,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 145 step 10 side 0: their position: vol stall: the game has 0 (at 1102), the follower 1"
+        ],
+        "id": 145,
+        "observations": 32,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 15,
+        "errors": [],
+        "id": 145,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0238-sleep-confusion-priority-battle-99",
+      "generation": {
+        "seed": 1616265516,
+        "original_id": 98,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        27591,
+        34182,
+        1993,
+        15798
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 132,
+        "decisions": 70,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 99 step 2 side 1: their mon: speed high: the game has 0.685 (at 631), the follower 0.66"
+        ],
+        "id": 99,
+        "observations": 142,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 70,
+        "errors": [],
+        "id": 99,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0240-future-weather-guard-battle-238",
+      "generation": {
+        "seed": 1618265522,
+        "original_id": 237,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        50558,
+        48103,
+        56824,
+        64279
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 178,
+        "decisions": 95,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 238 step 26 side 0: field: weather timer: the game has 0 (at 10), the follower 0.125"
+        ],
+        "id": 238,
+        "observations": 192,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 95,
+        "errors": [],
+        "id": 238,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0240-future-weather-guard-battle-249",
+      "generation": {
+        "seed": 1618265522,
+        "original_id": 248,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        27676,
+        51965,
+        21433,
+        8723
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 59,
+        "decisions": 32,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 249,
+        "observations": 65,
+        "passed_over": 1,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 249,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0247-called-speed-swap-battle-209",
+      "generation": {
+        "seed": 1625265543,
+        "original_id": 212,
+        "options": [
+          "--species",
+          "oranguru",
+          "--moves",
+          "speedswap,copycat,instruct,encore,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        47232,
+        55278,
+        61395,
+        38461
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 66,
+        "decisions": 36,
+        "differences": 3,
+        "errors": [],
+        "first_differences": [
+          "battle 209 step 3 side 1: their mon: speed high: the game has 1.085 (at 683), the follower 0.6"
+        ],
+        "id": 209,
+        "observations": 74,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 36,
+        "errors": [],
+        "id": 209,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0249-encore-quick-claw-battle-28",
+      "generation": {
+        "seed": 1627265549,
+        "original_id": 27,
+        "options": [
+          "--abilities",
+          "prankster,pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--moves",
+          "encore,confuseray,spite,dig,protect",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        50475,
+        55591,
+        8208,
+        56296
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 13,
+        "actionable_observations": 65,
+        "decisions": 36,
+        "differences": 14,
+        "errors": [],
+        "first_differences": [
+          "battle 28 step 22 side 0: their mon: speed high: the game has 1.125 (at 579), the follower 0.69"
+        ],
+        "id": 28,
+        "observations": 74,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 36,
+        "errors": [],
+        "id": 28,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0268-confusion-endure-instruct-battle-177",
+      "generation": {
+        "seed": 1646265606,
+        "original_id": 177,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        45499,
+        42854,
+        15249,
+        38175
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 51,
+        "decisions": 34,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 177 step 18 side 0: own position: vol stall: the game has 0 (at 727), the follower 1"
+        ],
+        "id": 177,
+        "observations": 57,
+        "passed_over": 13,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 34,
+        "errors": [],
+        "id": 177,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0268-confusion-endure-instruct-battle-2",
+      "generation": {
+        "seed": 1646265606,
+        "original_id": 1,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        31206,
+        63634,
+        16142,
+        57536
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 43,
+        "actionable_observations": 132,
+        "decisions": 69,
+        "differences": 46,
+        "errors": [],
+        "first_differences": [
+          "battle 2 step 23 side 1: their mon: speed high: the game has 0.59 (at 475), the follower 0.36"
+        ],
+        "id": 2,
+        "observations": 140,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 69,
+        "errors": [],
+        "id": 2,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0268-confusion-endure-instruct-battle-5",
+      "generation": {
+        "seed": 1646265606,
+        "original_id": 4,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        31086,
+        12158,
+        33305,
+        25875
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 5,
+        "actionable_observations": 56,
+        "decisions": 30,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 5 step 22 side 0: their position: vol stall: the game has 0 (at 977), the follower 1"
+        ],
+        "id": 5,
+        "observations": 62,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 30,
+        "errors": [],
+        "id": 5,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0270-solar-suppression-battle-30",
+      "generation": {
+        "seed": 1648265612,
+        "original_id": 29,
+        "options": [
+          "--moves",
+          "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        41174,
+        32280,
+        31686,
+        64005
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 12,
+        "actionable_observations": 41,
+        "decisions": 22,
+        "differences": 13,
+        "errors": [],
+        "first_differences": [
+          "battle 30 step 9 side 0: their mon: speed high: the game has 0.485 (at 683), the follower 0.24"
+        ],
+        "id": 30,
+        "observations": 46,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 22,
+        "errors": [],
+        "id": 30,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0270-solar-suppression-battle-64",
+      "generation": {
+        "seed": 1648265612,
+        "original_id": 63,
+        "options": [
+          "--moves",
+          "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        56519,
+        47528,
+        22870,
+        54353
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 9,
+        "actionable_observations": 40,
+        "decisions": 22,
+        "differences": 11,
+        "errors": [],
+        "first_differences": [
+          "battle 64 step 11 side 0: their mon: speed low: the game has 0.525 (at 474), the follower 0.245"
+        ],
+        "id": 64,
+        "observations": 46,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 22,
+        "errors": [],
+        "id": 64,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0278-sleep-confusion-priority-battle-239",
+      "generation": {
+        "seed": 1656265636,
+        "original_id": 239,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        5728,
+        50969,
+        52687,
+        37393
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 32,
+        "actionable_observations": 79,
+        "decisions": 41,
+        "differences": 34,
+        "errors": [],
+        "first_differences": [
+          "battle 239 step 7 side 1: their mon: speed high: the game has 0.7 (at 475), the follower 0.49"
+        ],
+        "id": 239,
+        "observations": 84,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 41,
+        "errors": [],
+        "id": 239,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0280-future-weather-guard-battle-207",
+      "generation": {
+        "seed": 1658265642,
+        "original_id": 207,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        46879,
+        58611,
+        17494,
+        35060
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 44,
+        "decisions": 24,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 207,
+        "observations": 50,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 207,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0308-confusion-endure-instruct-battle-38",
+      "generation": {
+        "seed": 1686265726,
+        "original_id": 37,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        11018,
+        48867,
+        42315,
+        63740
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 43,
+        "decisions": 25,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 38 step 8 side 0: their position: vol stall: the game has 0 (at 977), the follower 1"
+        ],
+        "id": 38,
+        "observations": 52,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 25,
+        "errors": [],
+        "id": 38,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0348-confusion-endure-instruct-battle-56",
+      "generation": {
+        "seed": 1726265846,
+        "original_id": 55,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        31530,
+        42778,
+        8623,
+        29474
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 8,
+        "actionable_observations": 40,
+        "decisions": 21,
+        "differences": 9,
+        "errors": [],
+        "first_differences": [
+          "battle 56 step 12 side 0: their mon: speed high: the game has 0.67 (at 631), the follower 0.585"
+        ],
+        "id": 56,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 56,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0353-reflected-heal-encore-battle-107",
+      "generation": {
+        "seed": 1731265861,
+        "original_id": 107,
+        "options": [
+          "--moves",
+          "healpulse,psychicnoise,encore,copycat,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "magicbounce,pressure,innerfocus",
+          "--items",
+          "mentalherb,choicescarf,leftovers",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        18575,
+        52519,
+        56448,
+        45316
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 77,
+        "decisions": 55,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 107 step 16 side 0: their position: vol twoturnmove: the game has 0 (at 1154), the follower 1"
+        ],
+        "id": 107,
+        "observations": 112,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 55,
+        "errors": [],
+        "id": 107,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0354-called-speed-priority-battle-42",
+      "generation": {
+        "seed": 1732265864,
+        "original_id": 41,
+        "options": [
+          "--moves",
+          "speedswap,instruct,copycat,afteryou,quash,round",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "prankster,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        42615,
+        57157,
+        55211,
+        9860
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 76,
+        "decisions": 41,
+        "differences": 1,
+        "errors": [],
+        "first_differences": [
+          "battle 42 step 17 side 1: their mon: speed high: the game has 0.565 (at 579), the follower 0.605"
+        ],
+        "id": 42,
+        "observations": 84,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 41,
+        "errors": [],
+        "id": 42,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0358-sleep-confusion-priority-battle-107",
+      "generation": {
+        "seed": 1736265876,
+        "original_id": 107,
+        "options": [
+          "--moves",
+          "rest,sleeptalk,snore,confuseray,instruct,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "quickfeet,prankster,innerfocus",
+          "--items",
+          "quickclaw,mentalherb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        21763,
+        17728,
+        65277,
+        31361
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 71,
+        "actionable_observations": 172,
+        "decisions": 92,
+        "differences": 83,
+        "errors": [],
+        "first_differences": [
+          "battle 107 step 9 side 0: their mon: speed high: the game has 0.55 (at 631), the follower 0.305"
+        ],
+        "id": 107,
+        "observations": 186,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 92,
+        "errors": [],
+        "id": 107,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0360-future-weather-guard-battle-114",
+      "generation": {
+        "seed": 1738265882,
+        "original_id": 114,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        16181,
+        30970,
+        49295,
+        60000
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 38,
+        "decisions": 21,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 114,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 114,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0360-future-weather-guard-battle-153",
+      "generation": {
+        "seed": 1738265882,
+        "original_id": 153,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        9680,
+        51949,
+        14109,
+        15010
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 72,
+        "decisions": 38,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 153,
+        "observations": 78,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 153,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0360-future-weather-guard-battle-189",
+      "generation": {
+        "seed": 1738265882,
+        "original_id": 189,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        47926,
+        42313,
+        14485,
+        13617
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 41,
+        "decisions": 23,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 189,
+        "observations": 48,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 189,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0370-future-sight-recoil-battle-248",
+      "generation": {
+        "seed": 1748265912,
+        "original_id": 247,
+        "options": [
+          "--species",
+          "slowking,slowbro",
+          "--moves",
+          "futuresight,protect,trick,uturn,psychicnoise",
+          "--moves-per",
+          "3",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        12387,
+        46380,
+        1829,
+        37463
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 0,
+        "actionable_observations": 35,
+        "decisions": 19,
+        "differences": 0,
+        "errors": [],
+        "first_differences": [],
+        "id": 248,
+        "observations": 40,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 0,
+        "errors": [
+          "rebuilding the final position failed",
+          "a battle rebuilt from the exported position differs:",
+          "Battle { > sides: [ > Side { > team: [ > Pokemon {\n  here:  fainted: false,\n  there: fainted: true,"
+        ],
+        "id": 248,
+        "status": "diverged"
+      }
+    },
+    {
+      "key": "0380-residual-weather-battle-234",
+      "generation": {
+        "seed": 1758265942,
+        "original_id": 233,
+        "options": [
+          "--species",
+          "politoed,pelipper,passimian",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--moves",
+          "toxic,willowisp,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        63963,
+        18623,
+        14448,
+        22867
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 11,
+        "actionable_observations": 196,
+        "decisions": 105,
+        "differences": 12,
+        "errors": [],
+        "first_differences": [
+          "battle 234 step 54 side 0: field: weather timer: the game has 0 (at 10), the follower 0.125"
+        ],
+        "id": 234,
+        "observations": 212,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 105,
+        "errors": [],
+        "id": 234,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0388-confusion-endure-instruct-battle-192",
+      "generation": {
+        "seed": 1766265966,
+        "original_id": 191,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        15217,
+        64742,
+        50062,
+        42400
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 92,
+        "decisions": 49,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 192 step 22 side 0: own position: vol stall: the game has 0 (at 852), the follower 1"
+        ],
+        "id": 192,
+        "observations": 100,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 49,
+        "errors": [],
+        "id": 192,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0388-confusion-endure-instruct-battle-53",
+      "generation": {
+        "seed": 1766265966,
+        "original_id": 52,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        21839,
+        14660,
+        42187,
+        13589
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 11,
+        "actionable_observations": 37,
+        "decisions": 21,
+        "differences": 16,
+        "errors": [],
+        "first_differences": [
+          "battle 53 step 5 side 1: their mon: speed high: the game has 0.56 (at 527), the follower 0.54"
+        ],
+        "id": 53,
+        "observations": 44,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 21,
+        "errors": [],
+        "id": 53,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0390-solar-suppression-battle-220",
+      "generation": {
+        "seed": 1768265972,
+        "original_id": 219,
+        "options": [
+          "--moves",
+          "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,choicescarf,leftovers",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        62164,
+        22085,
+        27494,
+        33831
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 5,
+        "actionable_observations": 42,
+        "decisions": 25,
+        "differences": 7,
+        "errors": [],
+        "first_differences": [
+          "battle 220 step 18 side 0: their mon: speed high: the game has 0.61 (at 527), the follower 0.605"
+        ],
+        "id": 220,
+        "observations": 52,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 25,
+        "errors": [],
+        "id": 220,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0400-future-weather-guard-battle-65",
+      "generation": {
+        "seed": 1778266002,
+        "original_id": 64,
+        "options": [
+          "--moves",
+          "futuresight,feint,wideguard,protect,raindance,sunnyday",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "receiver,drizzle,drought,innerfocus",
+          "--items",
+          "lifeorb,redcard,ejectbutton,leftovers",
+          "--species",
+          "slowbro,slowking,passimian",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        45918,
+        5210,
+        28901,
+        1069
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 12,
+        "actionable_observations": 66,
+        "decisions": 34,
+        "differences": 14,
+        "errors": [],
+        "first_differences": [
+          "battle 65 step 6 side 0: field: weather timer: the game has 0 (at 10), the follower 0.125"
+        ],
+        "id": 65,
+        "observations": 70,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 34,
+        "errors": [],
+        "id": 65,
+        "status": "matched"
+      }
+    }
+  ],
+  "uploaded_final_observations": {
+    "actionable_differences": 0,
+    "decisions": 2311,
+    "differences": 0,
+    "failed": 0,
+    "followed": 56,
+    "observations": 4720,
+    "passed_over": 14,
+    "unsupported": 0
+  },
+  "uploaded_final_mechanics": {
+    "decisions": 2311,
+    "diverged": 0,
+    "matched": 56,
+    "unsupported": 0
+  },
+  "uploaded_final_continuous_mechanics": {
+    "decisions": 2311,
+    "diverged": 0,
+    "matched": 56,
+    "unsupported": 0
+  },
+  "targeted_seed": 1830574926,
+  "targeted_manifest": [
+    {
+      "label": "0001-encore-quick-claw",
+      "seed": 1830574926,
+      "n": 25,
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0002-future-sight-recoil",
+      "seed": 1831574929,
+      "n": 25,
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0003-court-change",
+      "seed": 1832574932,
+      "n": 25,
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0004-instruct-quick-claw",
+      "seed": 1833574935,
+      "n": 25,
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0005-residual-weather",
+      "seed": 1834574938,
+      "n": 25,
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0006-confusion-endure-instruct",
+      "seed": 1835574941,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0007-solar-suppression",
+      "seed": 1836574944,
+      "n": 25,
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0008-reflected-heal-encore",
+      "seed": 1837574947,
+      "n": 25,
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0009-called-speed-priority",
+      "seed": 1838574950,
+      "n": 25,
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0010-herb-instruct-disable",
+      "seed": 1839574953,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0011-sleep-confusion-priority",
+      "seed": 1840574956,
+      "n": 25,
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0012-future-weather-guard",
+      "seed": 1841574959,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0013-encore-claw-reroll",
+      "seed": 1842574962,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,protect,endure,confuseray,round,spite",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0014-encore-same-choice",
+      "seed": 1843574965,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,instruct,protect,endure,round,psychup",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0015-instruct-last-protection",
+      "seed": 1844574968,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,uturn,flipturn,batonpass",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0016-faint-pending-protection",
+      "seed": 1845574971,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,swagger,earthquake,selfdestruct",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,lifeorb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0017-guards-court-pivot",
+      "seed": 1846574974,
+      "n": 25,
+      "options": [
+        "--moves",
+        "courtchange,quickguard,wideguard,uturn,voltswitch,reflect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0018-receiver-residual-weather",
+      "seed": 1847574977,
+      "n": 25,
+      "options": [
+        "--moves",
+        "leechseed,infestation,whirlpool,toxic,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "damprock,heatrock,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0019-called-charge-choice",
+      "seed": 1848574980,
+      "n": 25,
+      "options": [
+        "--moves",
+        "copycat,solarbeam,solarblade,fly,dig,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,magicbounce,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0020-terminal-delayed-recoil",
+      "seed": 1849574983,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,psychicnoise,protect,uturn,feint",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking",
+        "--mega-rate",
+        "0.0"
+      ]
+    },
+    {
+      "label": "0021-encore-quick-claw",
+      "seed": 1850574986,
+      "n": 25,
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0022-future-sight-recoil",
+      "seed": 1851574989,
+      "n": 25,
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0023-court-change",
+      "seed": 1852574992,
+      "n": 25,
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0024-instruct-quick-claw",
+      "seed": 1853574995,
+      "n": 25,
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0025-residual-weather",
+      "seed": 1854574998,
+      "n": 25,
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0026-confusion-endure-instruct",
+      "seed": 1855575001,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0027-solar-suppression",
+      "seed": 1856575004,
+      "n": 25,
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0028-reflected-heal-encore",
+      "seed": 1857575007,
+      "n": 25,
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0029-called-speed-priority",
+      "seed": 1858575010,
+      "n": 25,
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0030-herb-instruct-disable",
+      "seed": 1859575013,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0031-sleep-confusion-priority",
+      "seed": 1860575016,
+      "n": 25,
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0032-future-weather-guard",
+      "seed": 1861575019,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0033-encore-claw-reroll",
+      "seed": 1862575022,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,protect,endure,confuseray,round,spite",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0034-encore-same-choice",
+      "seed": 1863575025,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,instruct,protect,endure,round,psychup",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0035-instruct-last-protection",
+      "seed": 1864575028,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,uturn,flipturn,batonpass",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0036-faint-pending-protection",
+      "seed": 1865575031,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,swagger,earthquake,selfdestruct",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,lifeorb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0037-guards-court-pivot",
+      "seed": 1866575034,
+      "n": 25,
+      "options": [
+        "--moves",
+        "courtchange,quickguard,wideguard,uturn,voltswitch,reflect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0038-receiver-residual-weather",
+      "seed": 1867575037,
+      "n": 25,
+      "options": [
+        "--moves",
+        "leechseed,infestation,whirlpool,toxic,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "damprock,heatrock,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0039-called-charge-choice",
+      "seed": 1868575040,
+      "n": 25,
+      "options": [
+        "--moves",
+        "copycat,solarbeam,solarblade,fly,dig,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,magicbounce,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0040-terminal-delayed-recoil",
+      "seed": 1869575043,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,psychicnoise,protect,uturn,feint",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking",
+        "--mega-rate",
+        "0.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0041-encore-quick-claw",
+      "seed": 1870575046,
+      "n": 25,
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0042-future-sight-recoil",
+      "seed": 1871575049,
+      "n": 25,
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0043-court-change",
+      "seed": 1872575052,
+      "n": 25,
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0044-instruct-quick-claw",
+      "seed": 1873575055,
+      "n": 25,
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0045-residual-weather",
+      "seed": 1874575058,
+      "n": 25,
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0046-confusion-endure-instruct",
+      "seed": 1875575061,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0047-solar-suppression",
+      "seed": 1876575064,
+      "n": 25,
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0048-reflected-heal-encore",
+      "seed": 1877575067,
+      "n": 25,
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0049-called-speed-priority",
+      "seed": 1878575070,
+      "n": 25,
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0050-herb-instruct-disable",
+      "seed": 1879575073,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0051-sleep-confusion-priority",
+      "seed": 1880575076,
+      "n": 25,
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0052-future-weather-guard",
+      "seed": 1881575079,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0053-encore-claw-reroll",
+      "seed": 1882575082,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,protect,endure,confuseray,round,spite",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0054-encore-same-choice",
+      "seed": 1883575085,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,instruct,protect,endure,round,psychup",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0055-instruct-last-protection",
+      "seed": 1884575088,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,uturn,flipturn,batonpass",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0056-faint-pending-protection",
+      "seed": 1885575091,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,swagger,earthquake,selfdestruct",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,lifeorb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0057-guards-court-pivot",
+      "seed": 1886575094,
+      "n": 25,
+      "options": [
+        "--moves",
+        "courtchange,quickguard,wideguard,uturn,voltswitch,reflect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0058-receiver-residual-weather",
+      "seed": 1887575097,
+      "n": 25,
+      "options": [
+        "--moves",
+        "leechseed,infestation,whirlpool,toxic,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "damprock,heatrock,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0059-called-charge-choice",
+      "seed": 1888575100,
+      "n": 25,
+      "options": [
+        "--moves",
+        "copycat,solarbeam,solarblade,fly,dig,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,magicbounce,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0060-terminal-delayed-recoil",
+      "seed": 1889575103,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,psychicnoise,protect,uturn,feint",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking",
+        "--mega-rate",
+        "1.0"
+      ]
+    },
+    {
+      "label": "0061-encore-quick-claw",
+      "seed": 1890575106,
+      "n": 25,
+      "options": [
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--moves",
+        "encore,confuseray,spite,dig,protect",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0062-future-sight-recoil",
+      "seed": 1891575109,
+      "n": 25,
+      "options": [
+        "--species",
+        "slowking,slowbro",
+        "--moves",
+        "futuresight,protect,trick,uturn,psychicnoise",
+        "--moves-per",
+        "3",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0063-court-change",
+      "seed": 1892575112,
+      "n": 25,
+      "options": [
+        "--species",
+        "cinderace",
+        "--moves",
+        "courtchange,reflect,lightscreen,auroraveil,tailwind,quickguard,wideguard",
+        "--moves-per",
+        "3",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0064-instruct-quick-claw",
+      "seed": 1893575115,
+      "n": 25,
+      "options": [
+        "--species",
+        "oranguru",
+        "--moves",
+        "instruct,rockslide,earthquake,drainingkiss,protect",
+        "--moves-per",
+        "3",
+        "--items",
+        "quickclaw,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0065-residual-weather",
+      "seed": 1894575118,
+      "n": 25,
+      "options": [
+        "--species",
+        "politoed,pelipper,passimian",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--moves",
+        "toxic,willowisp,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0066-confusion-endure-instruct",
+      "seed": 1895575121,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,confuseray,swagger,endure,encore,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru,slowbro",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0067-solar-suppression",
+      "seed": 1896575124,
+      "n": 25,
+      "options": [
+        "--moves",
+        "solarbeam,solarblade,sunnyday,gastroacid,skillswap,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0068-reflected-heal-encore",
+      "seed": 1897575127,
+      "n": 25,
+      "options": [
+        "--moves",
+        "healpulse,psychicnoise,encore,copycat,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "magicbounce,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0069-called-speed-priority",
+      "seed": 1898575130,
+      "n": 25,
+      "options": [
+        "--moves",
+        "speedswap,instruct,copycat,afteryou,quash,round",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0070-herb-instruct-disable",
+      "seed": 1899575133,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,disable,taunt,instruct,skillswap,protect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "klutz,pressure,innerfocus",
+        "--items",
+        "mentalherb,choicescarf,leppaberry",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0071-sleep-confusion-priority",
+      "seed": 1900575136,
+      "n": 25,
+      "options": [
+        "--moves",
+        "rest,sleeptalk,snore,confuseray,instruct,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "quickfeet,prankster,innerfocus",
+        "--items",
+        "quickclaw,mentalherb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0072-future-weather-guard",
+      "seed": 1901575139,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,feint,wideguard,protect,raindance,sunnyday",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking,passimian",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0073-encore-claw-reroll",
+      "seed": 1902575142,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,protect,endure,confuseray,round,spite",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "prankster,pressure,innerfocus",
+        "--items",
+        "quickclaw,choicescarf,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0074-encore-same-choice",
+      "seed": 1903575145,
+      "n": 25,
+      "options": [
+        "--moves",
+        "encore,instruct,protect,endure,round,psychup",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0075-instruct-last-protection",
+      "seed": 1904575148,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,uturn,flipturn,batonpass",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,innerfocus",
+        "--items",
+        "quickclaw,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0076-faint-pending-protection",
+      "seed": 1905575151,
+      "n": 25,
+      "options": [
+        "--moves",
+        "instruct,protect,endure,swagger,earthquake,selfdestruct",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "quickclaw,lifeorb,leftovers",
+        "--species",
+        "oranguru",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0077-guards-court-pivot",
+      "seed": 1906575154,
+      "n": 25,
+      "options": [
+        "--moves",
+        "courtchange,quickguard,wideguard,uturn,voltswitch,reflect",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "innerfocus,pressure",
+        "--items",
+        "lightclay,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0078-receiver-residual-weather",
+      "seed": 1907575157,
+      "n": 25,
+      "options": [
+        "--moves",
+        "leechseed,infestation,whirlpool,toxic,sunnyday,raindance",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "receiver,drizzle,drought,innerfocus",
+        "--items",
+        "damprock,heatrock,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0079-called-charge-choice",
+      "seed": 1908575160,
+      "n": 25,
+      "options": [
+        "--moves",
+        "copycat,solarbeam,solarblade,fly,dig,encore",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "pressure,magicbounce,innerfocus",
+        "--items",
+        "choicescarf,mentalherb,leftovers",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    },
+    {
+      "label": "0080-terminal-delayed-recoil",
+      "seed": 1909575163,
+      "n": 25,
+      "options": [
+        "--moves",
+        "futuresight,psychicnoise,protect,uturn,feint",
+        "--moves-per",
+        "3",
+        "--abilities",
+        "drizzle,drought,innerfocus",
+        "--items",
+        "lifeorb,redcard,ejectbutton,leftovers",
+        "--species",
+        "slowbro,slowking",
+        "--mega-rate",
+        "1.0",
+        "--open-sheets"
+      ]
+    }
+  ],
+  "targeted_candidate_summary": {
+    "completed_batches": 80,
+    "compared_battles": 2000,
+    "failing_battles": 21,
+    "elapsed_seconds": 309,
+    "observations_actionable_differences": 60,
+    "observations_decisions": 63690,
+    "observations_differences": 66,
+    "observations_failed": 0,
+    "observations_followed": 2000,
+    "observations_observations": 131048,
+    "observations_passed_over": 332,
+    "observations_unsupported": 0,
+    "mechanics_decisions": 63690,
+    "mechanics_diverged": 0,
+    "mechanics_matched": 2000,
+    "mechanics_unsupported": 0
+  },
+  "targeted_candidate_findings": [
+    {
+      "key": "0006-confusion-endure-instruct-battle-11",
+      "generation": {
+        "seed": 1835574941,
+        "original_id": 10,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        63310,
+        47313,
+        25230,
+        18244
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 140,
+        "decisions": 75,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 11 step 68 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 11,
+        "observations": 152,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 75,
+        "errors": [],
+        "id": 11,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0006-confusion-endure-instruct-battle-15",
+      "generation": {
+        "seed": 1835574941,
+        "original_id": 14,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        28059,
+        20499,
+        15170,
+        27899
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 1,
+        "actionable_observations": 80,
+        "decisions": 47,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 15 step 33 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 15,
+        "observations": 96,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 47,
+        "errors": [],
+        "id": 15,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0015-instruct-last-protection-battle-14",
+      "generation": {
+        "seed": 1844574968,
+        "original_id": 13,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        31548,
+        19219,
+        6365,
+        24321
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 114,
+        "decisions": 63,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 14 step 38 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 14,
+        "observations": 128,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 63,
+        "errors": [],
+        "id": 14,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0015-instruct-last-protection-battle-21",
+      "generation": {
+        "seed": 1844574968,
+        "original_id": 20,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        49602,
+        54200,
+        42216,
+        63664
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 114,
+        "decisions": 62,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 21 step 26 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 21,
+        "observations": 126,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 62,
+        "errors": [],
+        "id": 21,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0015-instruct-last-protection-battle-6",
+      "generation": {
+        "seed": 1844574968,
+        "original_id": 5,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        47531,
+        35191,
+        4250,
+        57571
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 6,
+        "actionable_observations": 63,
+        "decisions": 33,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 6 step 16 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 6,
+        "observations": 68,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 33,
+        "errors": [],
+        "id": 6,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0015-instruct-last-protection-battle-9",
+      "generation": {
+        "seed": 1844574968,
+        "original_id": 8,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        17875,
+        53862,
+        30504,
+        33374
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 132,
+        "decisions": 82,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 9 step 51 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 9,
+        "observations": 166,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 82,
+        "errors": [],
+        "id": 9,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0016-faint-pending-protection-battle-19",
+      "generation": {
+        "seed": 1845574971,
+        "original_id": 18,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0"
+        ]
+      },
+      "battle_seed": [
+        48080,
+        64442,
+        61119,
+        49270
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 42,
+        "decisions": 24,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 19 step 21 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 19,
+        "observations": 50,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 24,
+        "errors": [],
+        "id": 19,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0024-instruct-quick-claw-battle-18",
+      "generation": {
+        "seed": 1853574995,
+        "original_id": 17,
+        "options": [
+          "--species",
+          "oranguru",
+          "--moves",
+          "instruct,rockslide,earthquake,drainingkiss,protect",
+          "--moves-per",
+          "3",
+          "--items",
+          "quickclaw,leftovers",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        3338,
+        22370,
+        29073,
+        51645
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 121,
+        "decisions": 67,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 18 step 39 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 18,
+        "observations": 136,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 67,
+        "errors": [],
+        "id": 18,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0026-confusion-endure-instruct-battle-22",
+      "generation": {
+        "seed": 1855575001,
+        "original_id": 21,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        28460,
+        5322,
+        31909,
+        61674
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 71,
+        "decisions": 39,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 22 step 37 side 0: their position: vol stall: the game has 1 (at 1102), the follower 0"
+        ],
+        "id": 22,
+        "observations": 80,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 39,
+        "errors": [],
+        "id": 22,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0035-instruct-last-protection-battle-19",
+      "generation": {
+        "seed": 1864575028,
+        "original_id": 18,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        54782,
+        14568,
+        28724,
+        44607
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 94,
+        "decisions": 53,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 19 step 44 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 19,
+        "observations": 108,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 53,
+        "errors": [],
+        "id": 19,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0035-instruct-last-protection-battle-24",
+      "generation": {
+        "seed": 1864575028,
+        "original_id": 23,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        19868,
+        36173,
+        23633,
+        57459
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 36,
+        "decisions": 20,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 24 step 17 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 24,
+        "observations": 42,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 20,
+        "errors": [],
+        "id": 24,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0035-instruct-last-protection-battle-3",
+      "generation": {
+        "seed": 1864575028,
+        "original_id": 2,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,uturn,flipturn,batonpass",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,innerfocus",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        49824,
+        60563,
+        24972,
+        59514
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 73,
+        "decisions": 44,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 3 step 22 side 0: own position: vol stall: the game has 1 (at 852), the follower 0"
+        ],
+        "id": 3,
+        "observations": 90,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 44,
+        "errors": [],
+        "id": 3,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0036-faint-pending-protection-battle-22",
+      "generation": {
+        "seed": 1865575031,
+        "original_id": 21,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        63635,
+        40852,
+        44042,
+        4533
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 79,
+        "decisions": 40,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 22 step 38 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 22,
+        "observations": 82,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 40,
+        "errors": [],
+        "id": 22,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0039-called-charge-choice-battle-20",
+      "generation": {
+        "seed": 1868575040,
+        "original_id": 19,
+        "options": [
+          "--moves",
+          "copycat,solarbeam,solarblade,fly,dig,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,magicbounce,innerfocus",
+          "--items",
+          "choicescarf,mentalherb,leftovers",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        58657,
+        35992,
+        38174,
+        55995
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 29,
+        "decisions": 17,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 20 step 13 side 0: own position: vol twoturnmove: the game has 1 (at 904), the follower 0"
+        ],
+        "id": 20,
+        "observations": 36,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 17,
+        "errors": [],
+        "id": 20,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0039-called-charge-choice-battle-25",
+      "generation": {
+        "seed": 1868575040,
+        "original_id": 24,
+        "options": [
+          "--moves",
+          "copycat,solarbeam,solarblade,fly,dig,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,magicbounce,innerfocus",
+          "--items",
+          "choicescarf,mentalherb,leftovers",
+          "--mega-rate",
+          "0.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        55447,
+        20625,
+        63185,
+        28450
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 32,
+        "decisions": 19,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 25 step 7 side 0: their position: vol twoturnmove: the game has 1 (at 1154), the follower 0"
+        ],
+        "id": 25,
+        "observations": 40,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 19,
+        "errors": [],
+        "id": 25,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0046-confusion-endure-instruct-battle-23",
+      "generation": {
+        "seed": 1875575061,
+        "original_id": 22,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        48404,
+        8943,
+        16373,
+        58549
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 44,
+        "decisions": 24,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 23 step 23 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 23,
+        "observations": 50,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 24,
+        "errors": [],
+        "id": 23,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0046-confusion-endure-instruct-battle-3",
+      "generation": {
+        "seed": 1875575061,
+        "original_id": 2,
+        "options": [
+          "--moves",
+          "instruct,confuseray,swagger,endure,encore,protect",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru,slowbro",
+          "--mega-rate",
+          "1.0"
+        ]
+      },
+      "battle_seed": [
+        37604,
+        18357,
+        33120,
+        28005
+      ],
+      "open_sheets": false,
+      "observations": {
+        "actionable_differences": 3,
+        "actionable_observations": 101,
+        "decisions": 55,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 3 step 49 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 3,
+        "observations": 112,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 55,
+        "errors": [],
+        "id": 3,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0074-encore-same-choice-battle-19",
+      "generation": {
+        "seed": 1903575145,
+        "original_id": 18,
+        "options": [
+          "--moves",
+          "encore,instruct,protect,endure,round,psychup",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        9829,
+        27761,
+        19124,
+        37475
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 63,
+        "decisions": 35,
+        "differences": 6,
+        "errors": [],
+        "first_differences": [
+          "battle 19 step 29 side 0: own position: vol stall: the game has 1 (at 727), the follower 0"
+        ],
+        "id": 19,
+        "observations": 72,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 35,
+        "errors": [],
+        "id": 19,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0074-encore-same-choice-battle-4",
+      "generation": {
+        "seed": 1903575145,
+        "original_id": 3,
+        "options": [
+          "--moves",
+          "encore,instruct,protect,endure,round,psychup",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        43111,
+        60429,
+        3746,
+        60643
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 64,
+        "decisions": 39,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 4 step 30 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 4,
+        "observations": 70,
+        "passed_over": 10,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 39,
+        "errors": [],
+        "id": 4,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0076-faint-pending-protection-battle-21",
+      "generation": {
+        "seed": 1905575151,
+        "original_id": 20,
+        "options": [
+          "--moves",
+          "instruct,protect,endure,swagger,earthquake,selfdestruct",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "innerfocus,pressure",
+          "--items",
+          "quickclaw,lifeorb,leftovers",
+          "--species",
+          "oranguru",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        52206,
+        43067,
+        29525,
+        41291
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 2,
+        "actionable_observations": 52,
+        "decisions": 28,
+        "differences": 2,
+        "errors": [],
+        "first_differences": [
+          "battle 21 step 21 side 0: their position: vol stall: the game has 1 (at 977), the follower 0"
+        ],
+        "id": 21,
+        "observations": 58,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 28,
+        "errors": [],
+        "id": 21,
+        "status": "matched"
+      }
+    },
+    {
+      "key": "0079-called-charge-choice-battle-18",
+      "generation": {
+        "seed": 1908575160,
+        "original_id": 17,
+        "options": [
+          "--moves",
+          "copycat,solarbeam,solarblade,fly,dig,encore",
+          "--moves-per",
+          "3",
+          "--abilities",
+          "pressure,magicbounce,innerfocus",
+          "--items",
+          "choicescarf,mentalherb,leftovers",
+          "--mega-rate",
+          "1.0",
+          "--open-sheets"
+        ]
+      },
+      "battle_seed": [
+        32821,
+        44771,
+        8680,
+        45132
+      ],
+      "open_sheets": true,
+      "observations": {
+        "actionable_differences": 4,
+        "actionable_observations": 75,
+        "decisions": 41,
+        "differences": 4,
+        "errors": [],
+        "first_differences": [
+          "battle 18 step 12 side 0: own position: vol twoturnmove: the game has 1 (at 779), the follower 0"
+        ],
+        "id": 18,
+        "observations": 84,
+        "passed_over": 0,
+        "status": "followed"
+      },
+      "mechanics": {
+        "decisions": 41,
+        "errors": [],
+        "id": 18,
+        "status": "matched"
+      }
+    }
+  ],
+  "targeted_final_observations": {
+    "actionable_differences": 0,
+    "decisions": 63690,
+    "differences": 0,
+    "failed": 0,
+    "followed": 2000,
+    "observations": 131048,
+    "passed_over": 332,
+    "unsupported": 0
+  },
+  "targeted_final_mechanics": {
+    "decisions": 63690,
+    "diverged": 0,
+    "matched": 2000,
+    "unsupported": 0
+  },
+  "targeted_final_continuous_mechanics": {
+    "decisions": 63690,
+    "diverged": 0,
+    "matched": 2000,
+    "unsupported": 0
+  },
+  "integration_tests": 61,
+  "next_local_seed": 2947610837,
+  "next_local_battles": 100000,
+  "next_local_suite": "scripts/showdown-pattern-stress.json",
+  "next_local_run_executed": false,
+  "source_sha256": {
+    "src/follow.rs": "1c18e5fd06fd977826aa38cead9a9bb68e1f64b33285950c8bb883cfb4060a73",
+    "src/position.rs": "f92307139a8c9d337852e35c5b551aa85aa3b54f30fa4c355df04b6d28d526d6",
+    "scripts/run-showdown-targeted-100000.py": "f8b8969291c47067e99c4b0bca203727e07af80cd1a15ec7d90f507e7bc7faf5",
+    "scripts/showdown-pattern-stress.json": "adab239c4de34af6092d09bedc8cab0ae8a3ed182833c954d5cf5f31586b0f11"
+  },
+  "binary_sha256": {
+    "target/release/followcheck": "eec844a90ecea979b430c122b65caa3977cae2a304798d5c24aad9ba4e629850",
+    "target/release/difftest": "c6136c41f2ee67df2706934d4df3433e085ec9b60bb3c111c6675accd7016c5a"
+  }
+}

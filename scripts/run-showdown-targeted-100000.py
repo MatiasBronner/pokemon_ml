@@ -14,6 +14,7 @@ SUITE = Path(__file__).with_name('showdown-observation-stress.json')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--suite', type=Path, default=SUITE, help='validated JSON theme file')
     parser.add_argument('--seed', type=int, help='base seed; omitted selects and prints a random one')
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--out', type=Path, help='new results directory; defaults to ~/showdown-runs/observation-stress-SEED')
@@ -23,7 +24,7 @@ def main():
     if not 0 < seed < 2**32 or args.workers < 1:
         parser.error('seed must be 1..4294967295 and workers must be positive')
     try:
-        themes, rates = load_suite(SUITE, REPO / 'oracle/pool.json')
+        themes, rates = load_suite(args.suite, REPO / 'oracle/pool.json')
     except (OSError, ValueError) as error:
         parser.error(str(error))
     out = args.out or Path.home() / 'showdown-runs' / f'observation-stress-{seed}'
@@ -36,7 +37,7 @@ def main():
     return subprocess.call([
         sys.executable, str(Path(__file__).with_name('compare-showdown.py')),
         '--battles', '100000', '--batch-size', '250', '--profile', 'regressions',
-        '--themes-file', str(SUITE), '--seed', str(seed), '--workers', str(args.workers), '--out', str(out),
+        '--themes-file', str(args.suite.resolve()), '--seed', str(seed), '--workers', str(args.workers), '--out', str(out),
     ])
 
 

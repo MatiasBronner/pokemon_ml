@@ -188,3 +188,35 @@ python3 scripts/run-showdown-targeted-100000.py --plan-only
 
 This suite was prepared with configuration and syntax checks only; its battles
 were not run in the cloud.
+
+## Focused follow-up to the 56-failure stress run
+
+After merging the shared-pattern fixes:
+
+```bash
+git fetch origin &&
+git switch main &&
+git pull --ff-only origin main &&
+python3 scripts/run-showdown-targeted-100000.py \
+  --suite scripts/showdown-pattern-stress.json --seed 2947610837
+```
+
+This generates 100,000 new random stress battles with **20 themes**, all focused
+on the latest failing families. Twelve themes retain relevant earlier coverage;
+eight add focused variants: Encore/Quick Claw rerolls and unchanged choices,
+Instruct/protection with a pending natural action, protection with a queued faint,
+Court Change/guards/pivots, Receiver after Leech Seed or trapping damage,
+called charges with Choice items, and terminal delayed-hit/recoil positions.
+It checks both observations and mechanics, including position reconstruction.
+
+Each theme receives 5,000 battles, equally split between closed and open sheets.
+The 400 batches of 250 cover equal numbers with Mega probability 0 and 1.
+Species and move sampling plus random choices provide fresh scenarios; not every
+battle is guaranteed to execute its targeted interaction. Existing single-Illusion
+restrictions are unchanged. These are stress teams, not a competitive training pool.
+
+Results go to `~/showdown-runs/observation-stress-2947610837`. Every difference is
+retained with its seeds and reproduction command in `differences.tar.gz`. To
+select another random base seed on a subsequent run, omit `--seed`; a random seed
+reduces overlap but does not guarantee globally unique individual battles.
+`--plan-only` validates this suite without building or generating games.

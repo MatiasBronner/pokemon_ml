@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "e292402",
+  "device": "cpu",
+  "python": "3.12.14",
+  "torch": "2.14.1+cpu",
+  "contract": {
+    "version": 1,
+    "sha256": "654068c2834757b51ea44e0bfdb73324e646907bdd1bb1ae0d2d4f65b764e622"
+  },
+  "python_suite": {
+    "passed": 28,
+    "skipped": 1,
+    "skip": "live Showdown test requires SHOWDOWN_SERVER"
+  },
+  "focused_rust_environment": {
+    "passed": 10,
+    "filtered": 1,
+    "filtered_test": "each_scripted_player_beats_the_one_below_it",
+    "reason": "unrelated debug-mode lookahead tournament; initial full invocation was stopped after the other tests passed"
+  },
+  "experiment_regressions": {
+    "passed": 18
+  },
+  "smoke_training": {
+    "updates": [
+      1,
+      2,
+      3
+    ],
+    "configuration": "width32/layer1; all experiments; default league; disjoint synthetic pools",
+    "resume_from_update": 2,
+    "latest_metrics": [
+      "clipped",
+      "decisions",
+      "entropy",
+      "entropy_phase_0",
+      "entropy_phase_1",
+      "entropy_phase_2",
+      "evaluation_seconds",
+      "explained",
+      "games",
+      "grad_norm",
+      "hidden_ability_accuracy",
+      "hidden_item_accuracy",
+      "hidden_loss",
+      "hours",
+      "inference_seconds",
+      "kl",
+      "league_assignments",
+      "learner_decisions_per_second",
+      "normalized_entropy_phase_0",
+      "normalized_entropy_phase_1",
+      "normalized_entropy_phase_2",
+      "opponent_accuracy",
+      "opponent_loss",
+      "per_second",
+      "playing",
+      "policy_loss",
+      "rating",
+      "scripted_opponent_seconds",
+      "simulation_seconds",
+      "ties",
+      "timeouts",
+      "transfer_seconds",
+      "turns",
+      "update",
+      "update_seconds",
+      "value_brier",
+      "value_ece",
+      "value_loss",
+      "vs_greedy",
+      "vs_lookahead",
+      "vs_random",
+      "wall_hours"
+    ]
+  },
+  "standalone_evaluation": {
+    "games": 8,
+    "calibration_samples": 123,
+    "retained_traces": 1,
+    "pool_archetype_labels": [
+      "synthetic-validation"
+    ],
+    "schedule": "first episode per slot; batch seed increments by one"
+  },
+  "benchmark_cli": {
+    "models": [
+      "small"
+    ],
+    "elapsed_times_positive": true,
+    "purpose": "functional CPU smoke, not a performance claim"
+  },
+  "experiment_runner": {
+    "dry_run_commands": 12
+  },
+  "checks": [
+    "release Python extension rebuilt",
+    "ruff F checks and formatting",
+    "cargo fmt --check",
+    "git diff --check",
+    "bash -n Slurm template"
+  ],
+  "unverified": [
+    "Oscar submission and GPU throughput/memory/utilization",
+    "live Showdown games",
+    "long-run competitive strength"
+  ],
+  "model_presets_parameters": {
+    "small": 922759,
+    "medium": 3716103,
+    "large": 10350343
+  },
+  "additional_final_checks": [
+    "league/snapshot integration rerun passed after optional lookahead toggle",
+    "default 922759-parameter small-model CLI trained and saved with lookahead evaluation omitted",
+    "all-experiment CLI resumed update 2 to 3"
+  ]
+}

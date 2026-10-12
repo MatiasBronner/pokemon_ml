@@ -12,6 +12,7 @@ offset and a shape) and `TABLES` holds static data for the model: a row of
 features for every species, move and item id. The Rust side documents what
 every number means (`src/obs.rs`, `src/env.rs`).
 """
+
 import numpy as np
 
 from . import _engine
@@ -31,16 +32,45 @@ def part(array, kind, name):
     """A named part of a batch of observations, shaped [batch, *shape]. Works on NumPy arrays and tensors."""
     at, shape = LAYOUT[kind][name]
     size = int(np.prod(shape))
-    return array[..., at:at + size].reshape(*array.shape[:-1], *shape)
+    return array[..., at : at + size].reshape(*array.shape[:-1], *shape)
 
 
 class Env:
     """`envs` games at once between teams of a pool (the JSON `teampool` writes)."""
 
-    def __init__(self, pool, envs=256, seed=1, open_sheets=0.5, vary=True, max_turns=100, threads=0):
+    def __init__(
+        self,
+        pool,
+        envs=256,
+        seed=1,
+        open_sheets=0.5,
+        vary=True,
+        max_turns=100,
+        threads=0,
+    ):
+        self._settings = (pool, envs, seed, open_sheets, vary, max_turns, threads)
         with open(pool, encoding="utf-8") as file:
-            self.raw = _engine.VecEnv(file.read(), envs, seed, open_sheets, vary, max_turns, threads)
+            text = file.read()
+            self.raw = _engine.VecEnv(
+                text, envs, seed, open_sheets, vary, max_turns, threads
+            )
+        # Optional tournament/archetype labels are metadata, never policy inputs.
+        import json
+
+        canonical = lambda s: "".join(c for c in s.lower() if c.isalnum())
+        species = {canonical(name): k for k, name in enumerate(NAMES["species"])}
+        self.archetypes = {}
+        for team in json.loads(text)["teams"]:
+            if "archetype" in team:
+                key = "-".join(
+                    map(
+                        str,
+                        sorted(species[canonical(p["species"])] for p in team["team"]),
+                    )
+                )
+                self.archetypes[key] = team["archetype"]
         self.envs = envs
+        self.seed, self.max_turns, self.open_sheets = seed, max_turns, open_sheets
         self.f = np.zeros((2 * envs, OBS_F), np.float32)
         self.i = np.zeros((2 * envs, OBS_I), np.int16)
         self.mask = np.zeros((2 * envs, OBS_M), np.uint8)
@@ -61,6 +91,13 @@ class Env:
         out = np.zeros((self.envs, 4), np.int32)
         self.raw.baseline(kind, out)
         return out.reshape(2 * self.envs, 2)
+
+    def restart(self, seed):
+        pool, envs, _, sheets, vary, cap, threads = self._settings
+        return Env(pool, envs, seed, sheets, vary, cap, threads)
+
+    def episode_info(self):
+        return np.asarray(self.raw.episode_info(), dtype=np.int64)
 
     def stats(self):
         return self.raw.stats()

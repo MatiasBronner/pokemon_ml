@@ -22,6 +22,7 @@ The network is the one a run has saved (`--run`, with `--snapshot` for an
 older version of it). Without `--run` the bot picks legal actions at random,
 which is good for trying a connection out and for nothing else.
 """
+
 import argparse
 import asyncio
 import json
@@ -67,18 +68,49 @@ class ModelPolicy:
         from . import model as model_lib
 
         saved = torch.load(path, map_location="cpu", weights_only=False)
+        from .checkpoint import verify_contract
+
+        verify_contract(saved)
         self.torch, self.device, self.greedy = torch, torch.device(device), greedy
-        self.net = model_lib.Model(model_lib.Config(**saved["model_config"])).to(self.device).eval()
+        self.net = (
+            model_lib.Model(model_lib.Config(**saved["model_config"]))
+            .to(self.device)
+            .eval()
+        )
         try:
             self.net.load_state_dict(saved["model"])
         except RuntimeError as error:
             raise SystemExit(
                 f"{path} was trained on an earlier layout of the observation and cannot play on this "
-                f"version of the code; train again, or check out the version it was trained with.\n({error})")
+                f"version of the code; train again, or check out the version it was trained with.\n({error})"
+            )
+
+    def fork(self):
+        # A shared network, but separate histories for concurrent battle rooms.
+        from .features import History
+
+        policy = object.__new__(ModelPolicy)
+        policy.__dict__ = self.__dict__.copy()
+        policy.history = History(1, self.net.config.history, self.device)
+        return policy
 
     def act(self, f, i, mask, preview):
+        if not hasattr(self, "history"):
+            from .features import History
+
+            self.history = History(1, self.net.config.history, self.device)
         t = lambda a: self.torch.from_numpy(a).unsqueeze(0).to(self.device)
-        actions = self.net.act(t(f), t(i), t(mask), greedy=self.greedy)[0]
+        tf, ti = t(f), t(i)
+        result = self.net.act(
+            tf,
+            ti,
+            t(mask),
+            greedy=self.greedy,
+            history=self.history.tensors() if self.net.config.history else None,
+        )
+        actions = result[0]
+        self.last_value = float(result[2][0])
+        self.history.append(tf, ti)
         return int(actions[0, 0]), int(actions[0, 1])
 
 
@@ -92,8 +124,11 @@ def saved_network(run, snapshot=None):
 class Battle:
     """One battle room: the follower of the bot's side of it, and what to send back."""
 
-    def __init__(self, room, team, policy, open_sheets=True, sheets_wait=2.0, record=None):
-        self.room, self.team, self.policy = room, team, policy
+    def __init__(
+        self, room, team, policy, open_sheets=True, sheets_wait=2.0, record=None
+    ):
+        self.room, self.team = room, team
+        self.policy = policy.fork() if hasattr(policy, "fork") else policy
         self.open_sheets, self.sheets_wait = open_sheets, sheets_wait
         self.follower = None
         self.held = []  # lines that came before the bot knew which side it is
@@ -106,6 +141,7 @@ class Battle:
         self.opponent = ""
         self.names = {}
         self.decisions = 0
+        self.values = []
         self.refused = 0
         self.f = np.zeros(OBS_F, np.float32)
         self.i = np.zeros(OBS_I, np.int16)
@@ -127,14 +163,16 @@ class Battle:
             parts = line.split("|")
             kind = parts[1] if len(parts) > 1 else ""
             if kind == "request":
-                text = line[len("|request|"):]
+                text = line[len("|request|") :]
                 if not text or text == "null":
                     continue
                 self._follow(log)
                 log = []
                 parsed = json.loads(text)
                 if self.follower is None:
-                    self.follower = _engine.Follower(0 if parsed["side"]["id"] == "p1" else 1, json.dumps(self.team))
+                    self.follower = _engine.Follower(
+                        0 if parsed["side"]["id"] == "p1" else 1, json.dumps(self.team)
+                    )
                     self._follow(self.held)
                     self.held = []
                 self.pending = (text, parsed)
@@ -151,9 +189,18 @@ class Battle:
                     self.names[parts[2]] = parts[3]
                     if userid(parts[3]) != userid(me):
                         self.opponent = parts[3]
-                if kind == "uhtml" and "otsrequest" in line and "acceptopenteamsheets" in line and not self.asked_sheets:
+                if (
+                    kind == "uhtml"
+                    and "otsrequest" in line
+                    and "acceptopenteamsheets" in line
+                    and not self.asked_sheets
+                ):
                     self.asked_sheets = True
-                    out.append("/acceptopenteamsheets" if self.open_sheets else "/rejectopenteamsheets")
+                    out.append(
+                        "/acceptopenteamsheets"
+                        if self.open_sheets
+                        else "/rejectopenteamsheets"
+                    )
                 if kind == "showteam":
                     self.sheets_shown = True
                 if kind in ("win", "tie"):
@@ -168,7 +215,12 @@ class Battle:
         if self.pending is None or self.over or self.follower is None:
             return []
         text, parsed = self.pending
-        if parsed.get("teamPreview") and self.open_sheets and self.asked_sheets and not self.sheets_shown:
+        if (
+            parsed.get("teamPreview")
+            and self.open_sheets
+            and self.asked_sheets
+            and not self.sheets_shown
+        ):
             # With team sheets asked for, the other side's answer may be a moment coming: the
             # sheets, if they come, are worth having before the four are picked.
             if self.due is None:
@@ -184,10 +236,16 @@ class Battle:
         if legal > 1 or preview:
             first, second = self.policy.act(self.f, self.i, self.mask, preview)
             self.decisions += 1
+            if hasattr(self.policy, "last_value"):
+                self.values.append(self.policy.last_value)
         else:
             # One thing to do, and Showdown still wants to be told.
             first = int(np.flatnonzero(self.mask[:N_ACTIONS])[0])
-            second = int(np.flatnonzero(self.mask[N_ACTIONS * (1 + first):N_ACTIONS * (2 + first)])[0])
+            second = int(
+                np.flatnonzero(
+                    self.mask[N_ACTIONS * (1 + first) : N_ACTIONS * (2 + first)]
+                )[0]
+            )
         reply = self.follower.choice(first, second)
         rqid = parsed.get("rqid")
         return [f"/choose {reply}" + (f"|{rqid}" if rqid is not None else "")]
@@ -200,10 +258,27 @@ class Battle:
 class Client:
     """A connection to a Showdown server, logged in under a name, playing battles."""
 
-    def __init__(self, server, name, password=None, policy=None, teams=None, secure=None, open_sheets=True,
-                 records=None, quiet=False, seed=None):
-        if userid(name).startswith("guest") or not 0 < len(userid(name)) <= 18 or len(name) > 18:
-            raise SystemExit(f"Showdown will not give the name {name!r}: a name is 1 to 18 characters and cannot begin with Guest")
+    def __init__(
+        self,
+        server,
+        name,
+        password=None,
+        policy=None,
+        teams=None,
+        secure=None,
+        open_sheets=True,
+        records=None,
+        quiet=False,
+        seed=None,
+    ):
+        if (
+            userid(name).startswith("guest")
+            or not 0 < len(userid(name)) <= 18
+            or len(name) > 18
+        ):
+            raise SystemExit(
+                f"Showdown will not give the name {name!r}: a name is 1 to 18 characters and cannot begin with Guest"
+            )
         local = server.split(":")[0] in ("localhost", "127.0.0.1")
         self.secure = (not local) if secure is None else secure
         self.uri = f"{'wss' if self.secure else 'ws'}://{server}/showdown/websocket"
@@ -238,14 +313,22 @@ class Client:
     def _assertion(self, challstr):
         """Showdown's login server vouches for a name: with the account's password, or without one for a name nobody has registered."""
         if self.password:
-            data = urllib.parse.urlencode({"name": self.name, "pass": self.password, "challstr": challstr}).encode()
+            data = urllib.parse.urlencode(
+                {"name": self.name, "pass": self.password, "challstr": challstr}
+            ).encode()
             with urllib.request.urlopen(LOGIN + "login", data, timeout=30) as reply:
                 answer = json.loads(reply.read().decode()[1:])
             if not answer.get("actionsuccess"):
-                raise SystemExit(f"Showdown did not accept the password for {self.name}")
+                raise SystemExit(
+                    f"Showdown did not accept the password for {self.name}"
+                )
             return answer["assertion"]
-        query = urllib.parse.urlencode({"userid": userid(self.name), "challstr": challstr})
-        with urllib.request.urlopen(LOGIN + "getassertion?" + query, timeout=30) as reply:
+        query = urllib.parse.urlencode(
+            {"userid": userid(self.name), "challstr": challstr}
+        )
+        with urllib.request.urlopen(
+            LOGIN + "getassertion?" + query, timeout=30
+        ) as reply:
             answer = reply.read().decode()
         if answer.startswith(";"):
             raise SystemExit(f"the name {self.name} is registered: give its --password")
@@ -253,7 +336,11 @@ class Client:
 
     async def _login(self, challstr):
         # A server run with --no-security takes any name on its word.
-        assertion = "" if not self.secure else await asyncio.to_thread(self._assertion, challstr)
+        assertion = (
+            ""
+            if not self.secure
+            else await asyncio.to_thread(self._assertion, challstr)
+        )
         await self.send("", f"/trn {self.name},0,{assertion}")
 
     def _team(self):
@@ -282,10 +369,14 @@ class Client:
             started = 0
             while len(self.results) < games:
                 if timeout and time.monotonic() - began > timeout:
-                    self.say(f"{self.name}: stopping after {timeout:.0f} seconds with {len(self.results)} battles played")
+                    self.say(
+                        f"{self.name}: stopping after {timeout:.0f} seconds with {len(self.results)} battles played"
+                    )
                     break
                 if not self.logged_in and time.monotonic() - began > 30:
-                    raise SystemExit(f"{self.name}: {self.uri} has not let it log in after 30 seconds")
+                    raise SystemExit(
+                        f"{self.name}: {self.uri} has not let it log in after 30 seconds"
+                    )
                 try:
                     message = await asyncio.wait_for(ws.recv(), 0.25)
                 except asyncio.TimeoutError:
@@ -301,30 +392,55 @@ class Client:
                 if room.startswith("battle-"):
                     battle = self.battles.get(room)
                     if battle is None:
-                        if room in self.left or not any(line.startswith("|init|battle") for line in lines):
+                        if room in self.left or not any(
+                            line.startswith("|init|battle") for line in lines
+                        ):
                             continue
                         if not self.expecting:
                             # A battle left over from an earlier session under this name: it cannot
                             # be picked up half-way (which team was it, and what has been seen?).
-                            self.say(f"{self.name}: forfeiting {room}, which this session did not start")
+                            self.say(
+                                f"{self.name}: forfeiting {room}, which this session did not start"
+                            )
                             self.left.add(room)
                             await self.send(room, "/forfeit")
                             await self.send(room, "/leave")
                             continue
                         self.expecting = False
-                        record = os.path.join(self.records, room + ".log") if self.records else None
-                        battle = Battle(room, self.next_team, self.policy, self.open_sheets, record=record)
+                        record = (
+                            os.path.join(self.records, room + ".log")
+                            if self.records
+                            else None
+                        )
+                        battle = Battle(
+                            room,
+                            self.next_team,
+                            self.policy,
+                            self.open_sheets,
+                            record=record,
+                        )
                         self.battles[room] = battle
                         started += 1
                     for reply in battle.receive(lines, self.name):
                         await self.send(room, reply)
                     if battle.over:
-                        self.results.append({"room": room, "opponent": battle.opponent, "won": battle.won,
-                                             "turns": battle.follower.turn if battle.follower else 0,
-                                             "decisions": battle.decisions, "refused": battle.refused})
+                        self.results.append(
+                            {
+                                "room": room,
+                                "opponent": battle.opponent,
+                                "won": battle.won,
+                                "turns": battle.follower.turn if battle.follower else 0,
+                                "decisions": battle.decisions,
+                                "refused": battle.refused,
+                                "team": [p["species"] for p in battle.team],
+                                "values": battle.values,
+                            }
+                        )
                         outcome = {True: "won", False: "lost", None: "tied"}[battle.won]
-                        self.say(f"{self.name}: {outcome} against {battle.opponent} in {self.results[-1]['turns']} turns "
-                                 f"({len(self.results)} of {games})")
+                        self.say(
+                            f"{self.name}: {outcome} against {battle.opponent} in {self.results[-1]['turns']} turns "
+                            f"({len(self.results)} of {games})"
+                        )
                         battle.close()
                         del self.battles[room]
                         await self.send(room, "/leave")
@@ -337,28 +453,46 @@ class Client:
                     if kind == "challstr":
                         await self._login("|".join(parts[2:]))
                     elif kind == "updateuser" and len(parts) > 3:
-                        named = parts[3] == "1" and userid(parts[2]) == userid(self.name)
+                        named = parts[3] == "1" and userid(parts[2]) == userid(
+                            self.name
+                        )
                         if named and not self.logged_in:
                             self.logged_in = True
                             self.say(f"{self.name}: logged in to {self.uri}")
                             if mode == "accept":
                                 self.next_team = self._team()
-                                await self.send("", "/utm " + _engine.packed_team(json.dumps(self.next_team)))
+                                await self.send(
+                                    "",
+                                    "/utm "
+                                    + _engine.packed_team(json.dumps(self.next_team)),
+                                )
                             else:
                                 await self._offer(mode, opponent)
                     elif kind == "nametaken":
-                        raise SystemExit(f"Showdown would not give the name {self.name}: {parts[-1]}")
-                    elif kind == "pm" and len(parts) > 4 and parts[4].startswith("/challenge " + FORMAT):
+                        raise SystemExit(
+                            f"Showdown would not give the name {self.name}: {parts[-1]}"
+                        )
+                    elif (
+                        kind == "pm"
+                        and len(parts) > 4
+                        and parts[4].startswith("/challenge " + FORMAT)
+                    ):
                         sender = parts[2].strip()
                         mine = userid(parts[3]) == userid(self.name)
                         wanted = opponent is None or userid(sender) == userid(opponent)
                         if mode == "accept" and mine and wanted and started < games:
                             self.next_team = self._team()
                             self.expecting = True
-                            await self.send("", "/utm " + _engine.packed_team(json.dumps(self.next_team)))
+                            await self.send(
+                                "",
+                                "/utm "
+                                + _engine.packed_team(json.dumps(self.next_team)),
+                            )
                             await self.send("", f"/accept {sender}")
                     elif kind == "popup":
-                        self.say(f"{self.name}: Showdown says: {'|'.join(parts[2:])[:300]}")
+                        self.say(
+                            f"{self.name}: Showdown says: {'|'.join(parts[2:])[:300]}"
+                        )
         return self.results
 
     def _connect(self):
@@ -377,26 +511,71 @@ def summary(results):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--pool", required=True, help="the teams to play with (a pool, as `teampool` writes it)")
-    p.add_argument("--team", type=int, help="play this team of the pool every game (default: one at random each game)")
-    p.add_argument("--run", help="the training run whose network plays (default: random legal actions)")
-    p.add_argument("--snapshot", help="a snapshot of the run by name, e.g. 000300 (default: its latest checkpoint)")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--pool",
+        required=True,
+        help="the teams to play with (a pool, as `teampool` writes it)",
+    )
+    p.add_argument(
+        "--team",
+        type=int,
+        help="play this team of the pool every game (default: one at random each game)",
+    )
+    p.add_argument(
+        "--run",
+        help="the training run whose network plays (default: random legal actions)",
+    )
+    p.add_argument(
+        "--snapshot",
+        help="a snapshot of the run by name, e.g. 000300 (default: its latest checkpoint)",
+    )
     p.add_argument("--device", default="cpu")
-    p.add_argument("--greedy", action="store_true", help="always the likeliest action, in place of drawing one")
-    p.add_argument("--server", default="localhost:8000", help="host:port of the server (sim3.psim.us is the public one)")
+    p.add_argument(
+        "--greedy",
+        action="store_true",
+        help="always the likeliest action, in place of drawing one",
+    )
+    p.add_argument(
+        "--server",
+        default="localhost:8000",
+        help="host:port of the server (sim3.psim.us is the public one)",
+    )
     p.add_argument("--name", required=True, help="the account to play as")
-    p.add_argument("--password", default=os.environ.get("SHOWDOWN_PASSWORD"),
-                   help="its password, if it is registered (or set SHOWDOWN_PASSWORD)")
+    p.add_argument(
+        "--password",
+        default=os.environ.get("SHOWDOWN_PASSWORD"),
+        help="its password, if it is registered (or set SHOWDOWN_PASSWORD)",
+    )
     how = p.add_mutually_exclusive_group(required=True)
-    how.add_argument("--ladder", action="store_true", help="play whoever the ladder finds")
+    how.add_argument(
+        "--ladder", action="store_true", help="play whoever the ladder finds"
+    )
     how.add_argument("--challenge", metavar="USER", help="challenge this player")
-    how.add_argument("--accept", action="store_true", help="wait for challenges and accept them")
-    p.add_argument("--from", dest="only", metavar="USER", help="with --accept: only this player's challenges")
+    how.add_argument(
+        "--accept", action="store_true", help="wait for challenges and accept them"
+    )
+    p.add_argument(
+        "--from",
+        dest="only",
+        metavar="USER",
+        help="with --accept: only this player's challenges",
+    )
     p.add_argument("--games", type=int, default=1)
-    p.add_argument("--closed-sheets", action="store_true", help="turn down open team sheets when they are offered")
-    p.add_argument("--records", help="a directory to keep each battle's messages in, as they arrived")
-    p.add_argument("--results", help="a file to add the results to, one JSON line a battle")
+    p.add_argument(
+        "--closed-sheets",
+        action="store_true",
+        help="turn down open team sheets when they are offered",
+    )
+    p.add_argument(
+        "--records",
+        help="a directory to keep each battle's messages in, as they arrived",
+    )
+    p.add_argument(
+        "--results", help="a file to add the results to, one JSON line a battle"
+    )
     p.add_argument("--seed", type=int)
     args = p.parse_args(argv)
 
@@ -406,19 +585,65 @@ def main(argv=None):
         teams = [teams[args.team]]
     policy = None
     if args.run:
-        policy = ModelPolicy(saved_network(args.run, args.snapshot), args.device, args.greedy)
+        policy = ModelPolicy(
+            saved_network(args.run, args.snapshot), args.device, args.greedy
+        )
     if args.records:
         os.makedirs(args.records, exist_ok=True)
-    client = Client(args.server, args.name, args.password, policy, teams, open_sheets=not args.closed_sheets,
-                    records=args.records, seed=args.seed)
+    client = Client(
+        args.server,
+        args.name,
+        args.password,
+        policy,
+        teams,
+        open_sheets=not args.closed_sheets,
+        records=args.records,
+        seed=args.seed,
+    )
     mode = "ladder" if args.ladder else "challenge" if args.challenge else "accept"
     results = asyncio.run(client.play(mode, args.games, args.challenge or args.only))
     if args.results:
         with open(args.results, "a", encoding="utf-8") as file:
             for r in results:
-                file.write(json.dumps({"name": args.name, "run": args.run, "snapshot": args.snapshot, **r}) + "\n")
+                file.write(
+                    json.dumps(
+                        {
+                            "name": args.name,
+                            "run": args.run,
+                            "snapshot": args.snapshot,
+                            **r,
+                        }
+                    )
+                    + "\n"
+                )
+    if args.results:
+        from .evaluation import outcome_summary, calibration
+
+        labels = [
+            1 if r["won"] is True else -1 if r["won"] is False else 0 for r in results
+        ]
+        values = [v for r in results for v in r.get("values", [])]
+        outcomes = [y for r, y in zip(results, labels) for _ in r.get("values", [])]
+        report = dict(
+            outcome_summary(labels),
+            calibration=calibration(values, outcomes),
+            server=args.server,
+            run=args.run,
+            snapshot=args.snapshot,
+            seed=args.seed,
+        )
+        if args.run:
+            from .checkpoint import file_hash
+
+            report["checkpoint_sha256"] = file_hash(
+                saved_network(args.run, args.snapshot)
+            )
+        with open(args.results + ".summary.json", "w") as file:
+            json.dump(report, file, indent=2)
     won, lost, tied, share = summary(results)
-    print(f"{args.name}: {won} won, {lost} lost, {tied} tied: {100 * share:.1f}% of {len(results)} battles")
+    print(
+        f"{args.name}: {won} won, {lost} lost, {tied} tied: {100 * share:.1f}% of {len(results)} battles"
+    )
 
 
 if __name__ == "__main__":

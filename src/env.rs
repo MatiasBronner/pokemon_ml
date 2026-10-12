@@ -506,6 +506,8 @@ pub struct Stats {
     pub turns: u64,
     /// Games that ended in a tie or were stopped at the turn limit.
     pub ties: u64,
+    /// Games stopped by the turn cap before the battle ended.
+    pub timeouts: u64,
     /// Games the first side won.
     pub first_wins: u64,
 }
@@ -517,6 +519,7 @@ impl Stats {
             decisions: self.decisions + o.decisions,
             turns: self.turns + o.turns,
             ties: self.ties + o.ties,
+            timeouts: self.timeouts + o.timeouts,
             first_wins: self.first_wins + o.first_wins,
         }
     }
@@ -531,6 +534,7 @@ pub struct VecEnv {
     config: Config,
     workers: rayon::ThreadPool,
     stats: Stats,
+    last_episodes: Vec<[u64; 2]>,
 }
 
 fn fresh(sampler: &Sampler, config: &Config, rng: &mut Rng) -> Game {
@@ -569,7 +573,13 @@ impl VecEnv {
             .num_threads(config.threads)
             .build()
             .map_err(|e| Error::BadTeam(format!("cannot start worker threads: {e}")))?;
-        Ok(VecEnv { games, rngs, sampler, config, workers, stats: Stats::default() })
+        let last_episodes = vec![[0; 2]; config.envs];
+        Ok(VecEnv { games, rngs, sampler, config, workers, stats: Stats::default(), last_episodes })
+    }
+
+    /// Completed episode turns and timeout flag from the last step; zero if not done.
+    pub fn last_episodes(&self) -> &[[u64; 2]] {
+        &self.last_episodes
     }
 
     pub fn len(&self) -> usize {
@@ -645,21 +655,25 @@ impl VecEnv {
                 mask.par_chunks_mut(2 * OBS_M),
                 reward.par_chunks_mut(2),
                 done.par_iter_mut(),
+                self.last_episodes.par_iter_mut(),
             )
                 .into_par_iter()
                 .with_min_len(8)
-                .map(|(game, rng, a, f, i, mask, reward, done)| -> Result<Stats, Error> {
+                .map(|(game, rng, a, f, i, mask, reward, done, episode)| -> Result<Stats, Error> {
                     let number = |x: i32| usize::try_from(x).unwrap_or(usize::MAX);
                     let seed = seed_of(rng);
                     game.act([[number(a[0]), number(a[1])], [number(a[2]), number(a[3])]], seed)?;
                     let mut stats = Stats { decisions: 1, ..Stats::default() };
                     reward.fill(0.0);
                     *done = 0;
+                    *episode = [0; 2];
                     let b = game.battle.as_ref().expect("a game that has been acted on has a battle");
                     if b.ended || b.turn > config.max_turns {
                         *done = 1;
                         stats.games = 1;
+                        stats.timeouts = (!b.ended) as u64;
                         stats.turns = b.turn as u64;
+                        *episode = [stats.turns, stats.timeouts];
                         match b.winner.filter(|_| b.ended) {
                             Some(w) => {
                                 reward[w as usize] = 1.0;

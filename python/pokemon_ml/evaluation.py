@@ -226,8 +226,11 @@ def main(argv=None):
     p.add_argument("--device", default="auto")
     p.add_argument("--open-sheets", type=float, default=0.5)
     p.add_argument("--trace-games", type=int, default=2)
+    p.add_argument("--max-turns", type=int, default=100)
     p.add_argument("--archetypes", help="JSON mapping composition keys to labels")
     a = p.parse_args(argv)
+    if a.max_turns < 1:
+        p.error("--max-turns must be positive")
     from .train import pick_device
     from .checkpoint import file_hash
 
@@ -238,7 +241,15 @@ def main(argv=None):
         if a.opponent in ("random", "greedy", "lookahead")
         else load(a.opponent, device)
     )
-    env = Env(a.pool, a.envs, a.seed, a.open_sheets, False, threads=a.threads)
+    env = Env(
+        a.pool,
+        a.envs,
+        a.seed,
+        a.open_sheets,
+        False,
+        max_turns=a.max_turns,
+        threads=a.threads,
+    )
     report = play(
         env,
         first,

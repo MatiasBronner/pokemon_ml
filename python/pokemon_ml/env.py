@@ -13,6 +13,7 @@ features for every species, move and item id. The Rust side documents what
 every number means (`src/obs.rs`, `src/env.rs`).
 """
 
+from math import prod
 import numpy as np
 
 from . import _engine
@@ -31,7 +32,7 @@ PREVIEW, MOVE, SWITCH = 0, 1, 2
 def part(array, kind, name):
     """A named part of a batch of observations, shaped [batch, *shape]. Works on NumPy arrays and tensors."""
     at, shape = LAYOUT[kind][name]
-    size = int(np.prod(shape))
+    size = prod(shape)
     return array[..., at : at + size].reshape(*array.shape[:-1], *shape)
 
 

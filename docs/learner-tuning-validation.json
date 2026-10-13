@@ -1,0 +1,39 @@
+{
+  "baseline_commit": "1061305",
+  "device": "cpu",
+  "targeted_tests_passed": 27,
+  "deselected_test": "short reinforcement-learning improvement run; no learning-objective change",
+  "checks": [
+    "runtime leaves checkpoint keys unchanged",
+    "deferred metrics preserve identical parameter updates",
+    "unsupported precision rejected",
+    "source checkpoint remains unchanged by tuning worker",
+    "CPU parent runner/profile/report/recommendation passed",
+    "checkpoint-copy parent runner passed",
+    "train/snapshot/resume integration tests passed",
+    "fullgraph CPU encoder compile passed",
+    "ruff checks and formatting",
+    "bash syntax and git diff whitespace checks"
+  ],
+  "compiled_checks": [
+    {
+      "likelihood_error": 0.0,
+      "value_consistency_error": 0.0,
+      "fp32_log_probability_max_difference": 4.76837158203125e-07,
+      "log_probability_tolerance": 0.001
+    },
+    {
+      "likelihood_error": 0.0,
+      "value_consistency_error": 0.0,
+      "fp32_log_probability_max_difference": 4.76837158203125e-07,
+      "log_probability_tolerance": 0.001
+    }
+  ],
+  "cuda_unverified": [
+    "BF16",
+    "Flash attention",
+    "fused Adam",
+    "GPU compile and throughput"
+  ],
+  "performance_claim": "CPU smoke timings are not representative GPU performance estimates"
+}

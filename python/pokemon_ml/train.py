@@ -17,6 +17,7 @@ import torch
 from . import league, model as model_lib, ppo, checkpoint
 from .env import Env
 from .team_splits import assert_disjoint
+from .runtime import Runtime, configure
 
 
 def pick_device(name):
@@ -54,6 +55,17 @@ def parser():
     p.add_argument("--updates", type=int, default=1000)
     p.add_argument("--hours", type=float)
     p.add_argument("--device", default="auto")
+    p.add_argument("--precision", choices=["fp32", "bf16"], default=None)
+    p.add_argument(
+        "--attention", choices=["auto", "sdpa", "math", "flash"], default=None
+    )
+    p.add_argument(
+        "--compile-encoder", action=argparse.BooleanOptionalAction, default=None
+    )
+    p.add_argument(
+        "--deferred-metrics", action=argparse.BooleanOptionalAction, default=None
+    )
+    p.add_argument("--fused-adam", action=argparse.BooleanOptionalAction, default=None)
     p.add_argument("--threads", type=int, default=0)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--eval-seed", type=int, default=7000000)
@@ -149,7 +161,26 @@ def main(argv=None):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     model = model_lib.Model(net_config).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=ppo_config.lr, eps=1e-5)
+    runtime_values = saved.get("runtime", {}) if saved else {}
+    for key, attr in [
+        ("precision", "precision"),
+        ("attention", "attention"),
+        ("compile", "compile_encoder"),
+        ("deferred_metrics", "deferred_metrics"),
+        ("fused_adam", "fused_adam"),
+    ]:
+        if getattr(args, attr) is not None:
+            runtime_values[key] = getattr(args, attr)
+    execution = Runtime(**runtime_values)
+    configure(model, execution)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=ppo_config.lr,
+        eps=1e-5,
+        fused=execution.fused_adam if device.type == "cuda" else None,
+    )
+    if execution.fused_adam and device.type != "cuda":
+        p.error("fused Adam experiment requires CUDA")
     totals = dict(update=0, decisions=0, games=0, seconds=0.0, wall_seconds=0.0)
     provenance = dict(
         pool_sha256=checkpoint.file_hash(args.pool),
@@ -170,6 +201,8 @@ def main(argv=None):
         if saved.get("provenance", provenance) != provenance:
             p.error("pool or rollout settings differ from saved run; start a new --run")
         model.load_state_dict(saved["model"])
+        for group in saved["optimizer"]["param_groups"]:
+            group["fused"] = execution.fused_adam if device.type == "cuda" else None
         optimizer.load_state_dict(saved["optimizer"])
         totals = {k: saved.get(k, 0) for k in totals}
         for group in optimizer.param_groups:
@@ -208,6 +241,7 @@ def main(argv=None):
     )
     configuration = dict(
         model=asdict(net_config),
+        runtime=asdict(execution),
         ppo=asdict(ppo_config),
         provenance=provenance,
         args=vars(args),
@@ -223,6 +257,7 @@ def main(argv=None):
             model=model.state_dict(),
             optimizer=optimizer.state_dict(),
             model_config=asdict(net_config),
+            runtime=asdict(execution),
             ppo_config=asdict(ppo_config),
             contract=checkpoint.contract(),
             rng=checkpoint.rng_state(),

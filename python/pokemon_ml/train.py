@@ -90,6 +90,9 @@ def parser():
         default=25,
         help="checkpoint opponent cadence independent of evaluation",
     )
+    p.add_argument("--league-selection", choices=("legacy", "broad"), default=None)
+    p.add_argument("--league-pool-size", type=int, default=None)
+    p.add_argument("--league-cache-size", type=int, default=4)
     p.add_argument("--league-current", type=float, default=0.5)
     p.add_argument("--league-frozen", type=float, default=0.4)
     p.add_argument("--league-scripted", type=float, default=0.1)
@@ -246,6 +249,9 @@ def main(argv=None):
         args.seed,
         weights,
         state=saved.get("league") if saved else None,
+        selection=args.league_selection,
+        pool_size=args.league_pool_size,
+        cache_size=args.league_cache_size,
     )
     if saved and "rng" in saved:
         checkpoint.restore_rng(saved["rng"])
@@ -385,6 +391,8 @@ def main(argv=None):
                 ties=(stats["ties"] - before["ties"]) / max(games, 1),
                 timeouts=stats.get("timeouts", 0) - before.get("timeouts", 0),
                 league_assignments=training_league.counts.copy(),
+                league_results=training_league.drain_results(),
+                league_selection=training_league.selection,
             )
             if device.type == "cuda":
                 log["cuda_peak_allocated_bytes"] = torch.cuda.max_memory_allocated(

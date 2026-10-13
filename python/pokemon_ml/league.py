@@ -314,6 +314,8 @@ class TrainingLeague:
         weights=(0.5, 0.4, 0.1),
         cache_size=4,
         state=None,
+        selection=None,
+        pool_size=None,
     ):
         from collections import OrderedDict
 
@@ -321,6 +323,16 @@ class TrainingLeague:
             raise ValueError("league weights must be nonnegative and sum to one")
         if cache_size < 1:
             raise ValueError("league cache size must be positive")
+        self.selection = selection or (state or {}).get("selection", "legacy")
+        self.pool_size = (
+            pool_size if pool_size is not None else (state or {}).get("pool_size", 12)
+        )
+        if self.selection not in ("legacy", "broad") or self.pool_size < 4:
+            raise ValueError(
+                "league selection must be legacy/broad and pool size at least four"
+            )
+        self.results = {k: dict(v) for k, v in (state or {}).get("results", {}).items()}
+        self.update_results = {}
         self.run, self.device, self.weights = run, device, tuple(weights)
         self.cache_size, self.cache = cache_size, OrderedDict()
         self.rng = np.random.default_rng(seed)
@@ -352,12 +364,32 @@ class TrainingLeague:
                 names[-2:] + ([names[len(names) // 2], names[0]] if names else [])
             )
         )
+        probabilities = None
+        if self.selection == "broad" and names:
+            # Spread the historical budget across the full saved history; retain
+            # the two newest opponents. No outcome-based bias in this first experiment.
+            historical = names[:-2]
+            indices = np.linspace(
+                0, max(0, len(historical) - 1), self.pool_size - 2, dtype=int
+            )
+            candidates = list(
+                dict.fromkeys(
+                    names[-2:] + [historical[j] for j in indices]
+                    if historical
+                    else names
+                )
+            )
+            recent = min(2, len(names))
+            if len(candidates) > recent:
+                probabilities = [0.5 / recent] * recent + [
+                    0.5 / (len(candidates) - recent)
+                ] * (len(candidates) - recent)
         for game in np.flatnonzero(done):
             kind = int(self.rng.choice(3, p=self.weights))
             opponent = (
                 "current"
                 if kind == 0 or (kind == 1 and not candidates)
-                else "snapshot:" + str(self.rng.choice(candidates))
+                else "snapshot:" + str(self.rng.choice(candidates, p=probabilities))
                 if kind == 1
                 else str(self.rng.choice(("random", "greedy")))
             )
@@ -371,6 +403,22 @@ class TrainingLeague:
                 else "scripted"
             ] += 1
         self.initialized = True
+
+    def record_results(self, done, reward):
+        """Record terminal outcomes before finished slots receive new opponents."""
+        for game in np.flatnonzero(done):
+            name = self.assigned[game]
+            # Current self-play has two learner sides; use assigned side as the
+            # reporting perspective, rather than count both sides as separate games.
+            result = float(reward[game, self.side[game]])
+            for records in (self.results, self.update_results):
+                row = records.setdefault(name, dict(games=0, wins=0, losses=0, ties=0))
+                row["games"] += 1
+                row["wins" if result > 0 else "losses" if result < 0 else "ties"] += 1
+
+    def drain_results(self):
+        records, self.update_results = self.update_results, {}
+        return records
 
     def learner_rows(self):
         learn = np.ones(2 * len(self.assigned), dtype=bool)
@@ -420,6 +468,9 @@ class TrainingLeague:
     def state_dict(self):
         # Live episodes intentionally restart; RNG restored before new assignments.
         return {
+            "selection": self.selection,
+            "pool_size": self.pool_size,
+            "results": self.results,
             "rng": self.rng.bit_generator.state,
             "weights": self.weights,
             "snapshots": [

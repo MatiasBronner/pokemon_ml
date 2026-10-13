@@ -11,12 +11,20 @@ import sys
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment", required=True)
-    parser.add_argument("--arm", choices=["source", "legacy", "broad"], required=True)
+    parser.add_argument(
+        "--arm",
+        choices=["source", "legacy", "broad", "control", "low-lr"],
+        required=True,
+    )
     parser.add_argument("--games", type=int, default=1500)
+    parser.add_argument("--include-source", action="store_true")
     args = parser.parse_args()
     root = Path(args.experiment)
     manifest = json.loads((root / "experiment.json").read_text())
     config = manifest["source_args"]
+    arms = manifest.get("arms", ["legacy", "broad"])
+    if args.arm != "source" and args.arm not in arms:
+        parser.error("arm does not belong to this experiment")
     model_path = (
         root / "source-checkpoint.pt"
         if args.arm == "source"
@@ -25,12 +33,17 @@ def main():
     out = root / "evaluation" / args.arm
     out.mkdir(parents=True, exist_ok=True)
     # Use copied immutable snapshots, including for source evaluations.
-    for rival in manifest["panel"] + ["greedy"]:
+    rivals = manifest["panel"] + ["greedy"]
+    if args.include_source and args.arm != "source":
+        rivals.append("source")
+    for rival in rivals:
         opponent = (
             rival
             if rival == "greedy"
-            else str(root / "legacy" / "snapshots" / (rival + ".pt"))
+            else str(root / arms[0] / "snapshots" / (rival + ".pt"))
         )
+        if rival == "source":
+            opponent = str(root / "source-checkpoint.pt")
         print(f"Evaluating {args.arm} against {rival}", flush=True)
         subprocess.run(
             [

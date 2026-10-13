@@ -65,3 +65,29 @@ def test_experiment_driver_calls_real_evaluator_with_turn_limit(
         )
         assert report["games"] == 2
         assert report["max_turns"] == 3
+    # Exercise the added direct-source matchup through the real evaluator too.
+    torch.save(saved, tmp_path / "legacy" / "checkpoint.pt")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate-league-experiment.py",
+            "--experiment",
+            str(tmp_path),
+            "--arm",
+            "legacy",
+            "--games",
+            "2",
+            "--include-source",
+        ],
+    )
+    runpy.run_path(
+        str(root / "scripts/evaluate-league-experiment.py"), run_name="__main__"
+    )
+    direct = json.loads(
+        (tmp_path / "evaluation" / "legacy" / "source.json").read_text()
+    )
+    assert direct["games"] == 2
+    assert direct["opponent_sha256"] == checkpoint.file_hash(
+        tmp_path / "source-checkpoint.pt"
+    )

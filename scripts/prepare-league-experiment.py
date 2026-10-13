@@ -10,12 +10,21 @@ import shutil
 import torch
 
 
-def prepare(source, out, updates=1000):
+def prepare(source, out, updates=1000, experiment="league", expected_update=None):
     source, out = Path(source).resolve(), Path(out).resolve()
     if updates < 1:
         raise ValueError("additional updates must be positive")
     config = json.loads((source / "config.json").read_text())
     saved = torch.load(source / "checkpoint.pt", map_location="cpu", weights_only=False)
+    if expected_update is not None and saved["update"] != expected_update:
+        raise ValueError(
+            f"expected source update {expected_update}, found {saved['update']}"
+        )
+    if experiment not in ("league", "learning-rate"):
+        raise ValueError("unknown experiment")
+    arms = ("legacy", "broad") if experiment == "league" else ("control", "low-lr")
+    if experiment == "learning-rate" and saved["ppo_config"]["lr"] != 0.0003:
+        raise ValueError("this learning-rate experiment requires source lr 0.0003")
     if not (source / "snapshots").is_dir():
         raise ValueError("source snapshot history is required")
     if not saved.get("league"):
@@ -26,7 +35,7 @@ def prepare(source, out, updates=1000):
     if not names:
         raise ValueError("the source checkpoint must have historical opponents")
     out.mkdir(parents=True, exist_ok=False)
-    for arm in ("legacy", "broad"):
+    for arm in arms:
         target = out / arm
         target.mkdir()
         # Mutable files are copied, never linked. Snapshots are immutable, so
@@ -50,6 +59,11 @@ def prepare(source, out, updates=1000):
     )
     manifest = dict(
         source=str(source),
+        experiment=experiment,
+        arms=list(arms),
+        learning_rates={"control": 0.0003, "low-lr": 0.0001}
+        if experiment == "learning-rate"
+        else {},
         panel=panel,
         source_update=saved["update"],
         source_sha256=hashlib.sha256(
@@ -69,5 +83,9 @@ if __name__ == "__main__":
     parser.add_argument("--source", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--updates", type=int, default=1000)
+    parser.add_argument(
+        "--experiment", choices=("league", "learning-rate"), default="league"
+    )
+    parser.add_argument("--expected-update", type=int)
     args = parser.parse_args()
-    prepare(args.source, args.out, args.updates)
+    prepare(args.source, args.out, args.updates, args.experiment, args.expected_update)

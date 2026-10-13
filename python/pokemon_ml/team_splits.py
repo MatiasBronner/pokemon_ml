@@ -30,17 +30,27 @@ def assert_disjoint(train, evaluation):
         )
 
 
-def split(pool, fraction=0.2, seed=1):
+def split(pool, fraction=0.2, seed=1, seen_pools=()):
     if not 0 < fraction < 1:
         raise ValueError("evaluation fraction must lie in (0,1)")
     groups = sorted({key(t) for t in pool["teams"]})
     if len(groups) < 2:
         raise ValueError("at least two species compositions are needed")
-    random.Random(seed).shuffle(groups)
-    test = set(groups[: min(len(groups) - 1, max(1, round(len(groups) * fraction)))])
+    seen = {key(t) for old in seen_pools for t in old["teams"]}
+    eligible = [g for g in groups if g not in seen]
+    if not eligible:
+        raise ValueError("no unseen compositions remain for evaluation")
+    random.Random(seed).shuffle(eligible)
+    test = set(
+        eligible[: min(len(groups) - 1, max(1, round(len(eligible) * fraction)))]
+    )
     train, evaluation = copy.deepcopy(pool), copy.deepcopy(pool)
     train["teams"] = [t for t in train["teams"] if key(t) not in test]
     evaluation["teams"] = [t for t in evaluation["teams"] if key(t) in test]
+    excluded = sorted(seen)
+    if excluded:
+        for subset in (train, evaluation):
+            subset["evaluation_excluded_compositions"] = excluded
     reweight(train)
     reweight(evaluation)
     assert_disjoint(train, evaluation)
@@ -53,10 +63,17 @@ def main(argv=None):
     p.add_argument("--out", required=True)
     p.add_argument("--fraction", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument(
+        "--seen-pool",
+        action="append",
+        default=[],
+        help="exclude previously trained compositions from evaluation; repeatable",
+    )
     a = p.parse_args(argv)
     source = Path(a.pool)
     pool = json.loads(source.read_text())
-    train, evaluation = split(pool, a.fraction, a.seed)
+    seen = [json.loads(Path(path).read_text()) for path in a.seen_pool]
+    train, evaluation = split(pool, a.fraction, a.seed, seen)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     for name, data in [("train", train), ("eval", evaluation)]:
@@ -77,6 +94,10 @@ def main(argv=None):
         json.dumps(
             dict(
                 seed=a.seed,
+                seen_pool_sha256=[
+                    hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                    for path in a.seen_pool
+                ],
                 fraction=a.fraction,
                 source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                 grouping="identical species multiset; spread, move and item variants stay together",

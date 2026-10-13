@@ -64,9 +64,44 @@ benchmark and evaluate Worlds separately; `eval.json` measures the mixed populat
 Evaluation disables team mutations but honors the supplied pool's weights.
 
 Keep the running experiment's pool unchanged. A new dataset must use a new run:
-existing resume provenance checks deliberately reject changing pool hashes. These
-changes do not introduce a warm-start mechanism for switching a trained model to
-a new dataset; they prepare weighted pools for new training runs. Record the pool
+existing resume provenance checks deliberately reject changing pool hashes. Use the explicit warm-start mechanism below to transfer weights to a new dataset;
+ordinary resume continues to reject changed pool hashes. Record the pool
 and split files with checkpoints. On Oscar rebuild the Rust Python extension with
 `maturin develop --release --locked` before using weighted pools; the old extension
 would silently ignore the new JSON weight fields.
+
+## Warm-start a trained policy on this dataset
+
+`pokemon_ml.train --init-checkpoint PATH --run NEW_EMPTY_DIRECTORY` loads only
+model weights and the source model architecture. It checks the observation/dex
+contract and rejects conflicting architecture options or an existing nonempty
+run. Optimizer, PPO defaults (unless explicitly overridden), league, RNG and
+counters start fresh. Both policy and value heads are transferred. Source path,
+SHA256, source update/game counters and provenance are recorded in the new
+config and checkpoints. Subsequent launches omit `--init-checkpoint` and resume
+normally, retaining that initialization record. Runtime flags are chosen for the
+new run rather than inherited implicitly. Never copy the old checkpoint into the
+new directory: that invokes full resume instead of warm start.
+
+Before warm starting, regenerate the split with repeatable `--seen-pool` options:
+
+```bash
+python3 python/pokemon_ml/team_splits.py \
+  --pool teams/multi-tournament.json \
+  --seen-pool teams/louisville-split/train.json \
+  --out teams/multi-tournament-warmstart --seed 23
+```
+
+Previously trained species compositions stay in training, even if they appear
+under another tournament or with different moves/items/spreads. Evaluation is
+sampled only from the remaining unseen compositions, and mixture weights are
+recomputed after splitting. This protects composition-level holdout, not novel
+individual species or absence of related five-of-six lineups. If no unseen
+compositions remain, splitting fails rather than silently report a held-out
+benchmark. Primary evaluation should use the resulting `eval-current.json`.
+Supply all earlier training pools when a policy has trained on multiple datasets.
+The splitter records excluded compositions and input hashes for review.
+
+For an eight-hour Oscar allocation allow a saving margin, e.g. `POLICY_HOURS=7.75`,
+and forward `--init-checkpoint` only for the first launch into a new run. On later
+launches omit it. The standard script forwards additional trainer options.

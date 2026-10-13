@@ -46,6 +46,10 @@ def parser():
     )
     p.add_argument("--run", default="runs/first")
     p.add_argument(
+        "--init-checkpoint",
+        help="initialize weights in an empty run; reset optimizer, league, RNG and counters",
+    )
+    p.add_argument(
         "--model-size",
         choices=model_lib.PRESETS,
         default=None,
@@ -131,15 +135,24 @@ def main(argv=None):
         if path.exists()
         else None
     )
+    initial = None
+    if args.init_checkpoint:
+        if saved or any(Path(args.run).iterdir()):
+            p.error("--init-checkpoint requires an empty --run; omit it to resume")
+        initial = torch.load(
+            args.init_checkpoint, map_location="cpu", weights_only=False
+        )
+        checkpoint.verify_contract(initial)
+    architecture_source = saved or initial
     explicit = lambda config: {
         k: getattr(args, k) for k in asdict(config()) if getattr(args, k) is not None
     }
     overrides = explicit(model_lib.Config)
     if args.model_size:
         overrides = {**model_lib.PRESETS[args.model_size], **overrides}
-    if saved:
-        checkpoint.verify_contract(saved)
-        old = asdict(model_lib.Config(**saved["model_config"]))
+    if architecture_source:
+        checkpoint.verify_contract(architecture_source)
+        old = asdict(model_lib.Config(**architecture_source["model_config"]))
         if any(old[k] != v for k, v in overrides.items()):
             p.error(
                 "model/feature options differ from checkpoint; use a new --run for an ablation"
@@ -161,6 +174,8 @@ def main(argv=None):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     model = model_lib.Model(net_config).to(device)
+    if initial:
+        model.load_state_dict(initial["model"], strict=True)
     runtime_values = saved.get("runtime", {}) if saved else {}
     for key, attr in [
         ("precision", "precision"),
@@ -239,6 +254,20 @@ def main(argv=None):
         f"{args.envs} games; league weights={weights}; update={totals['update']}",
         flush=True,
     )
+    initialization = saved.get("initialization") if saved else None
+    if initial:
+        initialization = dict(
+            checkpoint=str(Path(args.init_checkpoint).resolve()),
+            sha256=checkpoint.file_hash(args.init_checkpoint),
+            source_update=initial.get("update"),
+            source_games=initial.get("games"),
+            source_provenance=initial.get("provenance"),
+            reset="optimizer, league, RNG and counters",
+        )
+        print(
+            f"Warm start from source update {initial.get('update')}; new run counters start at zero",
+            flush=True,
+        )
     configuration = dict(
         model=asdict(net_config),
         runtime=asdict(execution),
@@ -246,6 +275,7 @@ def main(argv=None):
         provenance=provenance,
         args=vars(args),
         contract=checkpoint.contract(),
+        initialization=initialization,
         resume="live episodes restart; optimizer, RNG, league and counters restored",
     )
     (Path(args.run) / "config.json").write_text(
@@ -263,6 +293,7 @@ def main(argv=None):
             rng=checkpoint.rng_state(),
             league=training_league.state_dict(),
             provenance=provenance,
+            initialization=initialization,
             **totals,
         )
         torch.save(state, str(path) + ".tmp")

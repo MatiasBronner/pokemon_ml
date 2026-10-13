@@ -134,6 +134,10 @@ fn main() {
             continue;
         }
         pool.teams.push(PoolTeam {
+            event: pool.event.clone(),
+            source: pool.source.clone(),
+            sampling_group: String::new(),
+            sampling_weight: None,
             player: team.player.clone(),
             placing: team.placing,
             record: team.record.clone(),

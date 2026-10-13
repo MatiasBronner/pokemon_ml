@@ -215,6 +215,29 @@ class Model(nn.Module):
     # ------------------------------------------------------------------ tokens
 
     def encode(self, f, i, history=None):
+        from .runtime import Runtime, context
+
+        runtime = getattr(self, "runtime", Runtime())
+        # Autocast heavy encoder kernels only. Policy/value heads and probabilities
+        # stay FP32, including the large negative illegal-action mask sentinel.
+        previous = torch.backends.mha.get_fastpath_enabled()
+        if runtime.attention != "auto" or runtime.precision != "fp32":
+            torch.backends.mha.set_fastpath_enabled(False)
+        try:
+            with (
+                context(self, f.device),
+                torch.autocast(
+                    f.device.type,
+                    dtype=torch.bfloat16,
+                    enabled=runtime.precision == "bf16",
+                ),
+            ):
+                encoded = getattr(self, "_runtime_encoder", self._encode)(f, i, history)
+            return tuple(x.float() for x in encoded)
+        finally:
+            torch.backends.mha.set_fastpath_enabled(previous)
+
+    def _encode(self, f, i, history=None):
         """Observations ([B, OBS_F] floats, [B, OBS_I] ids) to what the heads read: the field,
         the twelve Pokémon, the four positions and the eight moves, each [B, n, width]."""
         f = policy_features(f, self.config.use_speed)

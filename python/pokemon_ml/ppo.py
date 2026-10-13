@@ -234,6 +234,9 @@ def update(model, optimizer, roll, config):
         raise ValueError(
             "rollout requires at least two learner decisions; increase envs or steps"
         )
+    deferred = getattr(getattr(model, "runtime", None), "deferred_metrics", False)
+    # Accumulate detached scalar tensors on device and transfer once per update.
+    scalar = (lambda x: x.detach()) if deferred else (lambda x: float(x))
     batches = 0
     for _ in range(config.epochs):
         order = rows[torch.randperm(len(rows), device=rows.device)]
@@ -295,30 +298,36 @@ def update(model, optimizer, roll, config):
             )
             optimizer.step()
             with torch.no_grad():
-                log["policy_loss"] += policy_loss.item()
-                log["value_loss"] += value_loss.item()
-                log["entropy"] += entropy.mean().item()
-                log["kl"] += (ratio - 1 - (logp - old_logp[mb])).mean().item()
-                log["grad_norm"] += float(grad_norm)
+                log["policy_loss"] += scalar(policy_loss)
+                log["value_loss"] += scalar(value_loss)
+                log["entropy"] += scalar(entropy.mean())
+                log["kl"] += scalar(
+                    (ratio - 1 - (logp - old_logp[mb])).clamp_min(0).mean()
+                )
+                log["grad_norm"] += scalar(grad_norm)
                 for key, val in aux.items():
-                    log[key] += float(val.detach())
+                    log[key] += scalar(val)
                 for phase in range(3):
                     chosen = phases[mb] == phase
-                    phase_counts[phase] += int(chosen.sum())
-                    log[f"entropy_phase_{phase}"] += float(entropy[chosen].sum())
+                    phase_counts[phase] += scalar(chosen.sum())
+                    log[f"entropy_phase_{phase}"] += scalar(entropy[chosen].sum())
                     # Legal joint count is an upper bound on joint entropy.
                     normal = entropy / legal[mb].clamp(min=2).log()
-                    log[f"normalized_entropy_phase_{phase}"] += float(
+                    log[f"normalized_entropy_phase_{phase}"] += scalar(
                         normal[chosen].sum()
                     )
-                log["clipped"] += (
-                    ((ratio - 1).abs() > config.clip).float().mean().item()
+                log["clipped"] += scalar(
+                    ((ratio - 1).abs() > config.clip).float().mean()
                 )
             batches += 1
     log = {
         k: v
         / (
-            max(phase_counts[int(k[-1])], 1)
+            (
+                phase_counts[int(k[-1])].clamp_min(1)
+                if torch.is_tensor(phase_counts[int(k[-1])])
+                else max(phase_counts[int(k[-1])], 1)
+            )
             if "entropy_phase_" in k
             else max(batches, 1)
         )
@@ -334,6 +343,10 @@ def update(model, optimizer, roll, config):
     log["decisions"] = len(rows)
     log.update(roll.timings)
     log.update({k: v / auxiliary_counts[k] for k, v in auxiliary_metrics.items()})
+    tensors = {k: v for k, v in log.items() if torch.is_tensor(v)}
+    if tensors:
+        values = torch.stack([v.float() for v in tensors.values()]).cpu().tolist()
+        log.update(zip(tensors, values))
     return log
 
 

@@ -24,7 +24,7 @@ python -m pokemon_ml.train --pool "$POLICY_POOL" --eval-pool "$POLICY_EVAL_POOL"
   --run "$POLICY_RUN" --model-size "${POLICY_SIZE:-small}" --device cuda \
   --threads "${SLURM_CPUS_PER_TASK:-4}" --envs "${POLICY_ENVS:-512}" \
   --updates "${POLICY_UPDATES:-10000}" --hours "${POLICY_HOURS:-2.75}" \
-  --save-every 10 --no-lookahead-eval &
+  --save-every 10 --no-lookahead-eval "$@" &
 policy_pid=$!
 # wait can be interrupted by the signal trap; continue waiting for checkpoint completion.
 while true; do

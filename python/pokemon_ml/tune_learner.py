@@ -79,7 +79,7 @@ def record_profile(out, name, operation, device):
     ]
 
 
-def validation(model, env, reference):
+def validation(model, env, reference, strict=True):
     f, i, mask = ppo.to_device(env, next(model.parameters()).device)
     model.eval()
     reference.eval()
@@ -96,16 +96,25 @@ def validation(model, env, reference):
         raise ValueError("nonfinite policy/value output")
     err = float((lp - again).detach().abs().max())
     value_err = float((val - value).detach().abs().max())
-    if err > 1e-4 or value_err > 1e-4:
-        raise ValueError("collection/update likelihood mismatch")
+    consistency_passed = err <= 1e-4 and value_err <= 1e-4
+    if strict and not consistency_passed:
+        raise ValueError(
+            f"collection/update consistency mismatch: max_log_probability_error={err:.9g}, "
+            f"max_value_error={value_err:.9g}, threshold=0.0001, "
+            f"attention={getattr(model, 'runtime', Runtime()).attention}. "
+            "Run python -m pokemon_ml.diagnose_learner to inspect both paths."
+        )
     baseline_lp = reference.evaluate(f, i, m0, m1, actions)[0]
     delta = float((baseline_lp - lp).detach().abs().max())
     tolerance = (
         0.1 if getattr(model, "runtime", Runtime()).precision == "bf16" else 1e-3
     )
-    if delta > tolerance:
+    if strict and delta > tolerance:
         raise ValueError(f"FP32 reference log-probability drift {delta} > {tolerance}")
     return dict(
+        consistency_passed=consistency_passed,
+        reference_passed=delta <= tolerance,
+        max_ratio_deviation=float(((again - lp).detach().exp() - 1).abs().max()),
         likelihood_error=err,
         value_consistency_error=value_err,
         fp32_log_probability_max_difference=delta,

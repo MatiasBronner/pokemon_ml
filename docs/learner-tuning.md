@@ -77,3 +77,19 @@ Local validation is CPU-only. Oscar CUDA, BF16/Flash/fused-Adam kernels, driver 
 ## Validation
 
 [Recorded validation](learner-tuning-validation.json): 27 targeted tests passed; CPU parent runs produced profiles and recommendations; a fullgraph compiled CPU encoder passed likelihood/reference checks. GPU execution remains to be tested on Oscar.
+
+## Investigating a collection/update consistency failure
+
+This check runs before any optimizer update. `auto` can use PyTorch's inference-only MHA fastpath while gradient-enabled evaluation uses SDPA. A failure is not evidence that Adam, the observer, or training checkpoint is broken. Both log-probability error **and value error** are gated; the error now prints them separately. Gates are unchanged.
+
+After the tuner finishes, update the checkout and run this on an allocated GPU (not the login node):
+
+```bash
+python -m pokemon_ml.diagnose_learner \
+  --checkpoint runs/learner-tuning/job-7337666/source-checkpoint.pt \
+  --pool teams/louisville-split/train.json \
+  --envs 512 --threads 4 --device cuda \
+  --out runs/learner-tuning/job-7337666/diagnostics.json
+```
+
+The read-only diagnostic compares `auto`, `sdpa` and `math` on the same observations/seed, in preview and battle. It reports maximum log-probability error, value error and implied PPO-ratio deviation. No optimizer is created; no weights/checkpoints are written. The report may show failed numerical gates deliberately; it does not make those configurations eligible in the tuner. Use the measured differences to decide whether this is harmless floating-point drift or a material mismatch before modifying tolerances or production execution.

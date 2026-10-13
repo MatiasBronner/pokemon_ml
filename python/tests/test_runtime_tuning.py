@@ -99,3 +99,24 @@ def test_tuning_worker_does_not_change_source_checkpoint(pool, tmp_path):
     report = worker(args)
     assert checkpoint.file_hash(path) == before and report["status"] == "passed"
     assert report["median_decisions_per_second"] > 0
+
+
+def test_diagnostics_distinguish_value_drift_without_weakening_gate(pool, monkeypatch):
+    env = Env(pool, 2, threads=2)
+    model = Model(Config(width=32, layers=1, heads=2, ff=64)).eval()
+    reference = Model(model.config).eval()
+    reference.load_state_dict(model.state_dict())
+    original = model.evaluate
+
+    def shifted(*args, **kwargs):
+        lp, ent, spread, value = original(*args, **kwargs)
+        return lp, ent, spread, value + 0.01
+
+    monkeypatch.setattr(model, "evaluate", shifted)
+    with pytest.raises(ValueError, match="max_value_error="):
+        validation(model, env, reference)
+    result = validation(model, env, reference, strict=False)
+    assert not result["consistency_passed"]
+    assert (
+        result["value_consistency_error"] > 0.009 and result["likelihood_error"] < 1e-4
+    )

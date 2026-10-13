@@ -154,6 +154,7 @@ def collect(env, model, roll, league=None):
         roll.done[t] = over
         roll.history.reset(over)
         if league is not None:
+            league.record_results(env.done.astype(bool), env.reward)
             league.assign(env.done.astype(bool))
         timings["transfer_seconds"] += clock() - begin
     f, i, _ = to_device(env, roll.device)

@@ -284,3 +284,24 @@ fn a_pool_of_teams_can_be_saved_loaded_and_played() -> Result<(), Error> {
     assert_eq!(shown.roster[0].sheet.as_ref().unwrap().item, "garchompitez");
     Ok(())
 }
+
+#[test]
+fn weighted_sampling_controls_base_teams() {
+    let mut pool = pool_of(2);
+    pool.teams[0].sampling_weight = Some(0.9);
+    pool.teams[1].sampling_weight = Some(0.1);
+    let sampler = Sampler::new(&pool).unwrap();
+    let mut rng = Rng::from_words([3, 7, 11, 13]);
+    let count = (0..20_000).filter(|_| sampler.sample(&mut rng, &Variation::NONE).from == 1).count();
+    assert!((1800..2200).contains(&count), "{count}");
+    pool.teams[0].sampling_weight = Some(0.0);
+    let sampler = Sampler::new(&pool).unwrap();
+    assert!((0..100).all(|_| sampler.sample(&mut rng, &Variation::NONE).from == 1));
+    // A zero-mass tournament cannot leak through replacement donors either.
+    let vary = Variation { swap_one: 1.0, swap_two: 0.0, respread: 0.0, max_shift: 0 };
+    assert!((0..100).all(|_| sampler.sample(&mut rng, &vary).swapped == 0));
+    pool.teams[1].sampling_weight = Some(-1.0);
+    assert!(Sampler::new(&pool).is_err());
+    pool.teams[1].sampling_weight = Some(0.0);
+    assert!(Sampler::new(&pool).is_err());
+}

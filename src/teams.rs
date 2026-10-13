@@ -338,6 +338,11 @@ pub fn guess_spread(read: &mut Read, trick_room: bool) {
 #[serde(default)]
 pub struct PoolTeam {
     pub player: String,
+    /// Tournament provenance and optional relative sampling mass.
+    pub event: String,
+    pub source: String,
+    pub sampling_group: String,
+    pub sampling_weight: Option<f64>,
     /// Where it finished, if the source said.
     pub placing: Option<u32>,
     /// Wins and losses, as the source gave them ("11-2").
@@ -436,6 +441,7 @@ pub struct Sampled {
 #[derive(Clone, Debug)]
 pub struct Sampler {
     teams: Vec<Vec<PokemonSet>>,
+    cumulative_weights: Option<Vec<f64>>,
     format: &'static crate::format::Format,
 }
 
@@ -455,7 +461,25 @@ impl Sampler {
         if teams.is_empty() {
             return Err(Error::BadTeam("an empty pool".to_string()));
         }
-        Ok(Sampler { teams, format })
+        let cumulative_weights = if pool.teams.iter().any(|t| t.sampling_weight.is_some()) {
+            let mut total = 0.0;
+            let mut cumulative = Vec::with_capacity(teams.len());
+            for team in &pool.teams {
+                let weight = team.sampling_weight.unwrap_or(1.0);
+                if !weight.is_finite() || weight < 0.0 {
+                    return Err(Error::BadTeam("sampling weights must be finite and nonnegative".into()));
+                }
+                total += weight;
+                cumulative.push(total);
+            }
+            if !total.is_finite() || total <= 0.0 {
+                return Err(Error::BadTeam("sampling weights must have positive finite total".into()));
+            }
+            Some(cumulative)
+        } else {
+            None
+        };
+        Ok(Sampler { teams, cumulative_weights, format })
     }
 
     /// How many teams there are.
@@ -467,13 +491,23 @@ impl Sampler {
         self.teams.is_empty()
     }
 
+    fn draw_team(&self, rng: &mut crate::rng::Rng) -> usize {
+        match &self.cumulative_weights {
+            None => rng.below(self.teams.len() as u32) as usize,
+            Some(weights) => {
+                let draw = rng.below(1_000_000_000) as f64 / 1_000_000_000.0 * weights.last().unwrap();
+                weights.partition_point(|&w| w <= draw).min(weights.len() - 1)
+            }
+        }
+    }
+
     /// A team of the pool drawn at random, varied as `how` says. Whatever was
     /// done to it, it is legal.
     pub fn sample(&self, rng: &mut crate::rng::Rng, how: &Variation) -> Sampled {
         let happens = |rng: &mut crate::rng::Rng, chance: f64| {
             chance > 0.0 && (rng.below(1_000_000) as f64) < chance * 1_000_000.0
         };
-        let from = rng.below(self.teams.len() as u32) as usize;
+        let from = self.draw_team(rng);
         let mut out = Sampled { team: self.teams[from].clone(), from, swapped: 0, respread: 0 };
         // One draw decides between no swap, one and two.
         let swaps = if self.teams.len() < 2 {
@@ -490,7 +524,7 @@ impl Sampler {
             // A few tries at a replacement the regulation allows; if none turns up, the Pokémon stays.
             for _ in 0..8 {
                 let slot = rng.below(out.team.len() as u32) as usize;
-                let donor = &self.teams[rng.below(self.teams.len() as u32) as usize];
+                let donor = &self.teams[self.draw_team(rng)];
                 let incoming = &donor[rng.below(donor.len() as u32) as usize];
                 if taken[slot] || *incoming == out.team[slot] {
                     continue;

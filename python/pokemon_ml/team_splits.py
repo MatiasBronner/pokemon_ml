@@ -1,10 +1,16 @@
 """Split tournament pools by species composition, keeping spread variants together."""
 
 import argparse
+import copy
 import hashlib
 import json
 import random
 from pathlib import Path
+
+try:
+    from .team_mix import reweight
+except ImportError:  # Standalone invocation on machines without the package installed.
+    from team_mix import reweight
 
 
 def key(team):
@@ -32,9 +38,11 @@ def split(pool, fraction=0.2, seed=1):
         raise ValueError("at least two species compositions are needed")
     random.Random(seed).shuffle(groups)
     test = set(groups[: min(len(groups) - 1, max(1, round(len(groups) * fraction)))])
-    train, evaluation = dict(pool), dict(pool)
-    train["teams"] = [t for t in pool["teams"] if key(t) not in test]
-    evaluation["teams"] = [t for t in pool["teams"] if key(t) in test]
+    train, evaluation = copy.deepcopy(pool), copy.deepcopy(pool)
+    train["teams"] = [t for t in train["teams"] if key(t) not in test]
+    evaluation["teams"] = [t for t in evaluation["teams"] if key(t) in test]
+    reweight(train)
+    reweight(evaluation)
     assert_disjoint(train, evaluation)
     return train, evaluation
 
@@ -53,6 +61,18 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
     for name, data in [("train", train), ("eval", evaluation)]:
         (out / (name + ".json")).write_text(json.dumps(data, indent=2) + "\n")
+    if pool.get("sampling"):
+        for group in ("current", "worlds"):
+            subset = copy.deepcopy(evaluation)
+            subset["teams"] = [
+                t for t in evaluation["teams"] if t["sampling_group"] == group
+            ]
+            if subset["teams"]:
+                subset["sampling"]["worlds_fraction"] = float(group == "worlds")
+                reweight(subset)
+                (out / f"eval-{group}.json").write_text(
+                    json.dumps(subset, indent=2) + "\n"
+                )
     (out / "split.json").write_text(
         json.dumps(
             dict(

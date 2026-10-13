@@ -17,6 +17,10 @@ fn pool(teams: usize, seed: u16) -> Pool {
     let format = Format::current();
     let mut rng = Rng::from_words([seed, 1, 2, 3]);
     let team = |k: usize, rng: &mut Rng| PoolTeam {
+        event: String::new(),
+        source: String::new(),
+        sampling_group: String::new(),
+        sampling_weight: None,
         player: format!("player {k}"),
         placing: Some(k as u32 + 1),
         record: String::new(),

@@ -1,4 +1,4 @@
-# Small-policy training findings through October 13, 2026
+# Small-policy training findings through October 14, 2026
 
 The small doubles policy learned useful strategy and benefited from training on
 additional tournaments. Subsequent continuations show no measurable head-to-head
@@ -296,25 +296,103 @@ Periodic low-LR ratings reached 137 in reported excerpts, fell to 103 later and
 finished at 111. Their volatility did not prevent a stronger final head-to-head
 result. Selecting a peak noisy rating would have been an unreliable selection rule.
 
-**Low-LR update 7132 is the leading continuation candidate**, not yet confirmed
-across additional seeds. Next tests: low-LR directly against control, and low-LR
-against source with a second evaluation seed, each over 3000 games. Neither has
-been reported yet. Panel scores are not a direct low-LR-vs-control matchup, and
-one training seed cannot establish robustness across independent training runs.
-If confirmed, resume the low-LR run at **0.0001**, preserving source and control
-checkpoints and keeping other settings unchanged. No speed ablation or medium
-network was trained in this experiment.
+Low-LR update 7132 became the leading candidate and was subsequently confirmed
+against control and against the source with another seed; see the continuation
+results below. This confirmed the first reduction, not a universal optimal rate
+or robustness across independent training seeds. No speed ablation or medium
+network was trained in these experiments.
 
 Reproduction and artifact paths are in
 [learning-rate-experiment.md](learning-rate-experiment.md). Exact elapsed times
 and learner-decision totals should be checked from the retained checkpoints and
 logs before making training-efficiency claims.
 
+## Longer continuation and second learning-rate reduction, October 14
+
+The first reduction was confirmed before longer training. At update 7132, LR
+0.0001 scored **54.57% [52.78%, 56.34%]** directly against its 0.0003 control and
+**55.57% [53.78%, 57.34%]** against the frozen source using another evaluation seed
+(9902347), 3000 games each. This supported continuing at 0.0001 rather than moving
+to a larger network.
+
+The longer continuation saved update **12450**, with **33,952,065 cumulative games**.
+Periodic greedy scores fluctuated around 80–82%, but direct matches showed:
+
+| Matchup | Seed scores, 3000 games each | Combined score |
+|---|---:|---:|
+| Update 9450 vs 7132 | 54.7%, 53.43% | 54.07% |
+| Update 12450 vs 9450 | 51.57%, 52.37% | 51.97% |
+| Update 12450 vs 11450 | 51.3%, 48.77% | 50.03% |
+
+The first two comparisons supported continued, diminishing progress despite flat
+periodic greedy results. The final comparison showed no detectable advantage in
+the most recent 1000 updates on this benchmark, motivating another controlled LR
+experiment rather than an unchanged long continuation. These tests had zero
+timeouts and do not establish a capacity ceiling or a plateau in every matchup.
+
+### Matched continuation from update 12450
+
+Both arms in `runs/learning-rate-12450-ab` restored the same source weights,
+optimizer starting state, RNG, counters and historical snapshots, keeping the
+small model, speed features, weighted dataset, legacy league and other PPO
+settings unchanged. Control used **0.0001**; low-LR used **0.00003**. Both ultimately
+completed **1000 additional updates**, reaching **13450**.
+
+Job **7379274** exited cleanly after **03:54:35**, but its five-minute warning
+stopped low-LR at **13151**, after control had completed. Clean scheduler status
+alone did not mean the experiment was complete. Resubmission **7392303** resumed
+that arm, reached 13450, completed its panel and direct-control evaluations, and
+reported **COMPLETED, exit 0:0, elapsed 00:41:44**. Combined allocated elapsed time
+was 04:36:19, including repeated evaluations, compilation and training; it is not
+pure learner time. Resumption occurred on a new allocation, so this was not an
+entirely uninterrupted same-card comparison.
+
+Low-LR saved with **36,624,285 cumulative games**, adding **2,672,220** beyond the
+source. Its KL was approximately 0.001–0.0013, consistent with smaller updates.
+Periodic greedy scores were encouraging, but the fixed comparisons below drove
+the conclusion. All listed evaluations reported zero timeouts.
+
+### Final evaluations
+
+Panel/source evaluations used seed **9702347**, current-format held-out teams,
+and **3000 games per matchup**:
+
+| Opponent | Low-LR score | Reported 95% interval |
+|---|---:|---:|
+| Initial warm-start snapshot 000000 | 75.73% | 74.17–77.23% |
+| Snapshot 006225 | 61.90% | 60.15–63.62% |
+| Snapshot 009325 | 57.43% | 55.66–59.19% |
+| Snapshot 012425 | 52.47% | 50.68–54.25% |
+| Greedy | 85.87% | 84.57–87.07% |
+| Frozen source, update 12450 | 54.40% | 52.61–56.18% |
+
+Direct low-LR-versus-control confirmation:
+
+| Seed | Games | Low-LR score | Reported 95% interval |
+|---|---:|---:|---:|
+| 10702347 | 3000 | 53.73% | 51.95–55.51% |
+| 10802347 | 3000 | 54.40% | 52.61–56.18% |
+
+Across the direct-control games the score was **54.07%**. Each interval excluded
+50%, supporting the lower rate for this tested continuation, beyond a greedy-only
+improvement. Control's full panel was not included in the latest pasted summary;
+retain its JSON outputs for complete panel comparisons. Independent training seeds,
+Worlds transfer for this latest checkpoint, and long-run behavior at 0.00003 remain
+unverified. Repeatedly lowering LR is not established as a universal strategy.
+
+**The leading checkpoint is now
+`runs/learning-rate-12450-ab/low-lr/checkpoint.pt`, update 13450, LR 0.00003.** Preserve
+it as a fixed reference before resuming. Preserve source and control as well.
+Continue with unchanged settings if pursuing a longer run, and measure progress
+against this reference rather than react to individual periodic rating peaks.
+No further LR reduction is supported without another diagnosed plateau and a
+controlled experiment.
+
 ## Decisions and remaining uncertainty
 
-1. Preserve source update 6132 and all experimental checkpoints. Low-LR update
-   7132 is the leading candidate, pending direct-control and second-seed
-   confirmation. Retain legacy selection; do not adopt the broad configuration.
+1. Preserve the historical sources and all experimental checkpoints. The leading
+   model is low-LR update 13450 at 0.00003, with two direct-control confirmations.
+   Retain legacy selection; do not adopt the broad configuration.
 2. Keep speed inference enabled. No controlled speed ablation has been performed,
    and these results do not implicate it in the plateau.
 3. Do not claim a model-capacity ceiling. Medium/large networks have not been
@@ -324,18 +402,20 @@ logs before making training-efficiency claims.
    direct source-checkpoint comparisons, fixed historical panels, repeated seeds,
    and separate current-format/Worlds reports. Compare learner decisions and GPU
    hours as well as updates and game counters.
-5. Low-LR improved over the source while unchanged-rate control did not. This
-   supports LR 0.0001 for the tested continuation, pending confirmation, rather
-   than a universal rate recommendation. Independent training seeds and
-   longer-term behavior remain untested.
+5. Both tested reductions improved over their sources and controls. Use LR
+   0.00003 for the leading continuation; preserve fixed references and reassess
+   longer-term learning before changing it again. Independent training seeds and
+   longer-term behavior at this rate remain untested.
 6. Outcome-based opponent weighting, focused battle-trace review and labelled
    archetype evaluation remain untested directions. Do not tune on held-out team
    identities or treat small per-team samples as confirmed strategic failures.
 
 Useful artifacts are `config.json`, `log.jsonl`, checkpoints and snapshots under
-`runs/multi-tournament-small-fp32`, `runs/learning-rate-ab`, and
+`runs/multi-tournament-small-fp32`, `runs/learning-rate-ab`,
+`runs/learning-rate-12450-ab`, and
 `runs/league-diversity-ab`, plus the experiments'
 `experiment.json` and `evaluation/{source,legacy,broad}` directories. Keep these
 outside scratch-purge risk. Setup and reproduction details are in
 [policy-training.md](policy-training.md), [tournament-sampling.md](tournament-sampling.md),
-[learner-tuning.md](learner-tuning.md), and [league-experiment.md](league-experiment.md).
+[learner-tuning.md](learner-tuning.md), [league-experiment.md](league-experiment.md),
+and [learning-rate-experiment.md](learning-rate-experiment.md).

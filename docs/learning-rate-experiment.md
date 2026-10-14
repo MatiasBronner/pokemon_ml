@@ -54,7 +54,7 @@ echo "$LR_JOB"
 squeue -j "$LR_JOB"
 ```
 
-The preparation guard checks source update and learning rate (0.0003), avoiding an
+The preparation guard checks source update and that control LR matches the source, avoiding an
 accidental change of baseline. The source must not be actively training. The
 original checkpoint is preserved, mutable state is copied, and immutable
 snapshots are linked or copied. No new Rust build is needed for these Python-only
@@ -92,3 +92,47 @@ the frozen source; control scored 50.3% [48.5%, 52.1%], each across 3000 games.
 Low-LR also improved across the historical panel. It is the leading candidate,
 pending direct low-LR-vs-control and second-seed source comparisons. Full results
 and limitations are in [the training findings](training-findings-2026-10-13.md#controlled-learning-rate-experiment).
+
+
+## Second reduction after update 12450
+
+The longer 0.0001 continuation saved update 12450 with 33,952,065 cumulative games.
+Update 9450 scored 54.1% against 7132 across two 3000-game seeds. Final 12450 scored
+52.0% against 9450 across two further seeds, suggesting modest progress over that
+longer interval. Against 11450, however, it scored 51.3% and 48.77% (combined
+50.03% over 6000 games). No detectable advantage over the last 1000 updates was
+found on this benchmark. This supports testing another reduction, not assuming
+zero progress everywhere or that LR is the sole cause.
+
+The new experiment compares source LR **0.0001** with **0.00003**, both restoring
+update 12450 and targeting **13450**. The original run remains intact. Preparation
+now accepts configurable rates; control must equal the checkpoint's saved rate,
+and the lower rate must be finite, positive and strictly below it. Original
+experiment commands retain their defaults. The wrapper additionally runs direct
+low-LR-vs-control matches with seeds 10702347 and 10802347, 3000 games each, after
+both arms complete. It inherits the source's evaluation settings for those matches.
+
+After merging, on Oscar's login node:
+
+```bash
+cd /users/mcbronne/pokemon_ml
+git switch main
+git pull --ff-only
+module load python/3.12.8-zr3c
+source .venv/bin/activate
+
+python scripts/prepare-league-experiment.py \
+  --source runs/learning-rate-ab/low-lr \
+  --out runs/learning-rate-12450-ab --experiment learning-rate \
+  --expected-update 12450 --updates 1000 \
+  --control-lr 0.0001 --low-lr 0.00003
+
+export POLICY_REPO=/users/mcbronne/pokemon_ml
+export POLICY_EXPERIMENT="$POLICY_REPO/runs/learning-rate-12450-ab"
+LR_JOB=$(sbatch --parsable scripts/oscar/learning-rate-experiment.sbatch)
+echo "$LR_JOB"
+```
+
+No learning outcome for this second reduction is known yet. Review fixed-source,
+control, panel and greedy results before adopting it. The first reduction's success
+does not imply repeatedly lowering LR will keep improving the model.

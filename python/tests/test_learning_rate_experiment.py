@@ -85,3 +85,49 @@ def test_lr_arms_restore_same_state_and_change_only_lr(pool, tmp_path):
         )
         assert saved["league"]["selection"] == "legacy"
     assert (source / "checkpoint.pt").read_bytes() == before
+
+
+def test_second_lr_experiment_validates_rates_before_creating_output(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    source = tmp_path / "source"
+    (source / "snapshots").mkdir(parents=True)
+    (source / "config.json").write_text(json.dumps({"args": {}}))
+    torch.save(
+        dict(update=12450, ppo_config={"lr": 0.0001}, league={"snapshots": ["000000"]}),
+        source / "checkpoint.pt",
+    )
+    (source / "snapshots/000000.pt").write_bytes(b"immutable history")
+    prepare = runpy.run_path(str(root / "scripts/prepare-league-experiment.py"))[
+        "prepare"
+    ]
+    out = tmp_path / "experiment"
+    for control, low in [
+        (0.0003, 0.00003),
+        (0.0001, 0.0001),
+        (0.0001, float("nan")),
+        (0.0001, 0),
+    ]:
+        with pytest.raises(ValueError):
+            prepare(
+                source,
+                out,
+                experiment="learning-rate",
+                expected_update=12450,
+                control_lr=control,
+                low_lr=low,
+            )
+        assert not out.exists()
+    prepare(
+        source,
+        out,
+        experiment="learning-rate",
+        expected_update=12450,
+        control_lr=0.0001,
+        low_lr=0.00003,
+    )
+    manifest = json.loads((out / "experiment.json").read_text())
+    assert manifest["learning_rates"] == {"control": 0.0001, "low-lr": 0.00003}
+    assert manifest["target_update"] == 13450
+    assert (out / "control/checkpoint.pt").read_bytes() == (
+        out / "low-lr/checkpoint.pt"
+    ).read_bytes()

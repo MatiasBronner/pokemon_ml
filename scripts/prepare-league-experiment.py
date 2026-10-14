@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -10,7 +11,15 @@ import shutil
 import torch
 
 
-def prepare(source, out, updates=1000, experiment="league", expected_update=None):
+def prepare(
+    source,
+    out,
+    updates=1000,
+    experiment="league",
+    expected_update=None,
+    control_lr=None,
+    low_lr=0.0001,
+):
     source, out = Path(source).resolve(), Path(out).resolve()
     if updates < 1:
         raise ValueError("additional updates must be positive")
@@ -23,8 +32,20 @@ def prepare(source, out, updates=1000, experiment="league", expected_update=None
     if experiment not in ("league", "learning-rate"):
         raise ValueError("unknown experiment")
     arms = ("legacy", "broad") if experiment == "league" else ("control", "low-lr")
-    if experiment == "learning-rate" and saved["ppo_config"]["lr"] != 0.0003:
-        raise ValueError("this learning-rate experiment requires source lr 0.0003")
+    rates = {}
+    if experiment == "learning-rate":
+        source_lr = saved["ppo_config"]["lr"]
+        control_lr = source_lr if control_lr is None else control_lr
+        if control_lr != source_lr:
+            raise ValueError(f"control LR must match source LR {source_lr}")
+        if (
+            not all(math.isfinite(x) and x > 0 for x in (control_lr, low_lr))
+            or low_lr >= control_lr
+        ):
+            raise ValueError(
+                "learning rates must be finite, positive, and low LR below control LR"
+            )
+        rates = {"control": control_lr, "low-lr": low_lr}
     if not (source / "snapshots").is_dir():
         raise ValueError("source snapshot history is required")
     if not saved.get("league"):
@@ -52,6 +73,9 @@ def prepare(source, out, updates=1000, experiment="league", expected_update=None
     shutil.copy2(source / "checkpoint.pt", out / "source-checkpoint.pt")
     import hashlib
 
+    # Prefer earlier opponents so a final-update snapshot does not duplicate
+    # the explicit frozen-source comparison.
+    names = [name for name in names if int(name) < saved["update"]] or names
     panel = list(
         dict.fromkeys(
             [names[0], names[len(names) // 2], names[3 * len(names) // 4], names[-1]]
@@ -61,9 +85,7 @@ def prepare(source, out, updates=1000, experiment="league", expected_update=None
         source=str(source),
         experiment=experiment,
         arms=list(arms),
-        learning_rates={"control": 0.0003, "low-lr": 0.0001}
-        if experiment == "learning-rate"
-        else {},
+        learning_rates=rates,
         panel=panel,
         source_update=saved["update"],
         source_sha256=hashlib.sha256(
@@ -87,5 +109,17 @@ if __name__ == "__main__":
         "--experiment", choices=("league", "learning-rate"), default="league"
     )
     parser.add_argument("--expected-update", type=int)
+    parser.add_argument(
+        "--control-lr", type=float, help="must match source LR; defaults to source LR"
+    )
+    parser.add_argument("--low-lr", type=float, default=0.0001)
     args = parser.parse_args()
-    prepare(args.source, args.out, args.updates, args.experiment, args.expected_update)
+    prepare(
+        args.source,
+        args.out,
+        args.updates,
+        args.experiment,
+        args.expected_update,
+        args.control_lr,
+        args.low_lr,
+    )

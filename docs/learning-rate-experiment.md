@@ -84,3 +84,11 @@ source protection and the experiment's real evaluation subprocess including turn
 limits and direct-source matches. The scheduler wrapper is syntax-checked. Full
 CUDA runtime, duration and learning outcomes must be verified on Oscar; no cluster
 jobs were launched while implementing these scripts.
+
+## Reported outcome, October 13, 2026
+
+Both arms reached update 7132. Low-LR scored 55.3% [53.5%, 57.0%] against
+the frozen source; control scored 50.3% [48.5%, 52.1%], each across 3000 games.
+Low-LR also improved across the historical panel. It is the leading candidate,
+pending direct low-LR-vs-control and second-seed source comparisons. Full results
+and limitations are in [the training findings](training-findings-2026-10-13.md#controlled-learning-rate-experiment).

@@ -91,3 +91,37 @@ def test_experiment_driver_calls_real_evaluator_with_turn_limit(
     assert direct["opponent_sha256"] == checkpoint.file_hash(
         tmp_path / "source-checkpoint.pt"
     )
+    # Direct low-LR/control evaluation preserves the requested seed and settings.
+    manifest = json.loads((tmp_path / "experiment.json").read_text())
+    manifest["arms"] = ["control", "low-lr"]
+    (tmp_path / "experiment.json").write_text(json.dumps(manifest))
+    for arm in manifest["arms"]:
+        (tmp_path / arm).mkdir()
+        torch.save(saved, tmp_path / arm / "checkpoint.pt")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "evaluate-league-experiment.py",
+            "--experiment",
+            str(tmp_path),
+            "--arm",
+            "low-lr",
+            "--games",
+            "2",
+            "--control-only",
+            "--seed",
+            "10802347",
+        ],
+    )
+    runpy.run_path(
+        str(root / "scripts/evaluate-league-experiment.py"), run_name="__main__"
+    )
+    match = json.loads(
+        (tmp_path / "evaluation/low-lr/vs-control-10802347.json").read_text()
+    )
+    assert match["seed"] == 10802347
+    assert match["max_turns"] == 3
+    assert match["opponent_sha256"] == checkpoint.file_hash(
+        tmp_path / "control/checkpoint.pt"
+    )

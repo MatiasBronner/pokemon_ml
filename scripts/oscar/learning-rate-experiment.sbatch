@@ -51,3 +51,12 @@ print(f"Completed {arm}: update={saved['update']}, lr={saved['ppo_config']['lr']
 PY
   python scripts/evaluate-league-experiment.py --experiment "$POLICY_EXPERIMENT" --arm "$arm" --games 3000 --include-source
 done
+
+if [[ "$exit_requested" == 0 ]]; then
+  for match_seed in 10702347 10802347; do
+    echo "Evaluating low-lr directly against control, seed $match_seed"
+    python scripts/evaluate-league-experiment.py \
+      --experiment "$POLICY_EXPERIMENT" --arm low-lr --control-only \
+      --games 3000 --seed "$match_seed"
+  done
+fi

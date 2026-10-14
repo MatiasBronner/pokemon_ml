@@ -18,10 +18,16 @@ def main():
     )
     parser.add_argument("--games", type=int, default=1500)
     parser.add_argument("--include-source", action="store_true")
+    parser.add_argument("--seed", type=int, default=9702347)
+    parser.add_argument("--control-only", action="store_true")
     args = parser.parse_args()
     root = Path(args.experiment)
     manifest = json.loads((root / "experiment.json").read_text())
     config = manifest["source_args"]
+    if args.control_only and (
+        args.arm != "low-lr" or "control" not in manifest.get("arms", [])
+    ):
+        parser.error("--control-only requires a low-lr arm with a control counterpart")
     arms = manifest.get("arms", ["legacy", "broad"])
     if args.arm != "source" and args.arm not in arms:
         parser.error("arm does not belong to this experiment")
@@ -33,7 +39,7 @@ def main():
     out = root / "evaluation" / args.arm
     out.mkdir(parents=True, exist_ok=True)
     # Use copied immutable snapshots, including for source evaluations.
-    rivals = manifest["panel"] + ["greedy"]
+    rivals = ["control"] if args.control_only else manifest["panel"] + ["greedy"]
     if args.include_source and args.arm != "source":
         rivals.append("source")
     for rival in rivals:
@@ -44,6 +50,8 @@ def main():
         )
         if rival == "source":
             opponent = str(root / "source-checkpoint.pt")
+        elif rival == "control":
+            opponent = str(root / "control" / "checkpoint.pt")
         print(f"Evaluating {args.arm} against {rival}", flush=True)
         subprocess.run(
             [
@@ -67,13 +75,20 @@ def main():
                 "--max-turns",
                 str(config["max_turns"]),
                 "--seed",
-                "9702347",
+                str(args.seed),
                 "--device",
                 "cuda",
                 "--trace-games",
                 "0",
                 "--out",
-                str(out / (rival + ".json")),
+                str(
+                    out
+                    / (
+                        f"vs-control-{args.seed}.json"
+                        if args.control_only
+                        else rival + ".json"
+                    )
+                ),
             ],
             check=True,
         )

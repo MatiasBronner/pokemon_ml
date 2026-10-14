@@ -133,6 +133,22 @@ LR_JOB=$(sbatch --parsable scripts/oscar/learning-rate-experiment.sbatch)
 echo "$LR_JOB"
 ```
 
-No learning outcome for this second reduction is known yet. Review fixed-source,
-control, panel and greedy results before adopting it. The first reduction's success
-does not imply repeatedly lowering LR will keep improving the model.
+### Reported completion and outcome
+
+The initial job 7379274 stopped low-LR at update 13151 at its saving warning, even
+though scheduler accounting reported a clean exit. Job 7392303 resumed it to 13450
+and completed in 00:41:44 with state COMPLETED and exit 0:0. Both arms therefore
+finished their matched 1000 additional updates. The resume used a new allocation.
+
+Low-LR at 0.00003 scored **54.4% [52.6%, 56.2%]** against the frozen source and
+**85.9% [84.6%, 87.1%]** against greedy, 3000 games each. Direct comparisons
+against the 0.0001 control scored **53.7% [51.9%, 55.5%]** and
+**54.4% [52.6%, 56.2%]** over two 3000-game seeds, with zero timeouts. Their
+combined score was 54.1%. These support adopting 0.00003 for this continuation.
+
+Preserve update-13450 `runs/learning-rate-12450-ab/low-lr/checkpoint.pt` before
+longer training, retaining its optimizer and legacy league. Keep source/control
+artifacts too. The reduction's success does not imply further automatic reductions
+or unlimited progress; independent training seeds and long-term behavior remain
+untested. The [consolidated training report](training-findings-2026-10-13.md)
+contains the full latest panel, earlier continuation checks and limitations.

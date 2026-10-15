@@ -78,32 +78,53 @@ worth.
 
 ## Running it on Oscar
 
-Rebuild the extension on this branch first (`maturin develop --release`).
 Every run plays one checkpoint with search against a copy of itself without
 search (`--opponent self`). Searching sides alternate between player 1 and
 player 2, and each slot's first game counts once, as in `evaluation.py`.
+The job script defaults to the preserved
+`runs/plateau-comparison-15342/source-checkpoint.pt` and
+`teams/multi-tournament-warmstart/eval-current.json`. `SEARCH_CHECKPOINT` and
+`SEARCH_POOL` override them.
+
+On the login node, update the checkout and rebuild the extension, since the
+Rust side changed:
 
 ```bash
+cd /users/mcbronne/pokemon_ml
+git switch main && git pull --ff-only
+module load python/3.12.8-zr3c
+source .venv/bin/activate
+maturin develop --release
+python -m pytest python/tests/test_search.py -q
 export POLICY_REPO=$PWD
-export SEARCH_CHECKPOINT=runs/multi-tournament-small-fp32/snapshots/015342.pt
-export SEARCH_POOL=teams/split/eval.json
-
-# The main comparison: two seeds, 3,000 games each.
-SEARCH_OUT=runs/search/15342-self-seed9502347.json sbatch scripts/oscar/search-eval.sbatch --seed 9502347
-SEARCH_OUT=runs/search/15342-self-seed9602347.json sbatch scripts/oscar/search-eval.sbatch --seed 9602347
-
-# How much the remaining hidden information is worth (an upper bound, not a fair player).
-SEARCH_OUT=runs/search/15342-self-privileged.json sbatch scripts/oscar/search-eval.sbatch --seed 9502347 --privileged
-
-# Cheaper and wider settings, to see where the gain comes from.
-SEARCH_OUT=runs/search/15342-self-w1d1.json sbatch scripts/oscar/search-eval.sbatch --seed 9502347 --worlds 1 --dice 1
-SEARCH_OUT=runs/search/15342-self-c12r12.json sbatch scripts/oscar/search-eval.sbatch --seed 9502347 --candidates 12 --replies 12
+SLURM_OPTS="--partition=gpu --account=default --qos=norm-gpu --constraint=geforce3090"
 ```
 
-Add your partition, account and QOS as usual for your allocation
-(`sbatch -p gpu --account=...`). Set `SEARCH_OPPONENT=greedy` or a
-checkpoint path to play something other than itself. `SEARCH_GAMES` and
-`SEARCH_ENVS` override the defaults of 3,000 and 64.
+A smoke test first (40 games; it also reports `seconds_per_search` for sizing the real runs):
+
+```bash
+SEARCH_GAMES=40 SEARCH_OUT=runs/search/smoke.json \
+  sbatch $SLURM_OPTS --time=01:00:00 scripts/oscar/search-eval.sbatch --seed 1
+```
+
+Then the comparison:
+
+```bash
+# The main comparison: two seeds, 3,000 games each.
+SEARCH_OUT=runs/search/15342-self-seed9502347.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347
+SEARCH_OUT=runs/search/15342-self-seed9602347.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9602347
+
+# How much the remaining hidden information is worth (an upper bound, not a fair player).
+SEARCH_OUT=runs/search/15342-self-privileged.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347 --privileged
+
+# Cheaper and wider settings, to see where the gain comes from.
+SEARCH_OUT=runs/search/15342-self-w1d1.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347 --worlds 1 --dice 1
+SEARCH_OUT=runs/search/15342-self-c12r12.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347 --candidates 12 --replies 12
+```
+
+Set `SEARCH_OPPONENT=greedy` or a checkpoint path to play something other
+than itself. `SEARCH_GAMES` and `SEARCH_ENVS` override the defaults of 3,000
+and 64.
 
 The report (`SEARCH_OUT`) contains:
 

@@ -6,10 +6,11 @@ controlled learning-rate reductions improved head-to-head performance; broadenin
 the historical league did not. The latest unchanged continuation at **0.00003**
 showed no detectable advantage over update 13450 across 6000 direct games.
 
-Keep the small architecture and speed features. The next experiment compares
-constant LR, bounded LR decay and targeted historical selection, all retaining
-**50/40/10**, from update 15342. See [the OSCAR runbook](plateau-experiment.md).
-This replaces the earlier 60/30/10 proposal; neither experiment has been run. These findings do not establish a hard network-capacity limit.
+Keep the small architecture and speed features. The subsequent constant-LR,
+bounded-decay and targeted-selection experiment completed without a clear
+head-to-head gain. The next task is decision-trace inspection and a representation
+audit. The earlier 60/30/10 mixture remains untested, not automatically selected.
+These findings do not establish a hard network-capacity limit.
 The dated filename is retained so earlier documentation links continue to work.
 
 This report records the Oscar runs and evaluation outputs reported during the
@@ -503,6 +504,21 @@ before repeating long continuations or adding capacity. The present findings
 support useful learned strategy and two effective LR reductions, followed by
 another period of diminishing returns; they do not establish a hard architecture
 ceiling or simulator correctness for all mechanics.
+
+## Completed decay/targeted comparison and next diagnostic step
+
+The three-arm experiment from update 15342 reached update 16342 in all arms and
+completed all expected reports. Two-seed direct-source means were 48.93% control,
+50.42% decay and 49.80% targeted. Direct-control means were 50.67% decay and 50.80%
+targeted. These 6000-game comparisons did not establish improvement. Decay scored
+better against greedy/older opponents, but that did not translate into a clear
+source/control advantage. Both experimental jobs completed with exit 0:0.
+
+Do not adopt decay or targeted selection on these results. Pause unchanged long
+runs and inspect actual decisions and representation limitations. The proposed
+60/30/10 mix remains untested and is not automatically the next experiment.
+Full results, cost measurements, code-review findings and trace collection commands
+are consolidated in [policy-decision-review.md](policy-decision-review.md).
 
 ## Decisions and remaining uncertainty
 

@@ -66,7 +66,15 @@ def calibration(predictions, outcomes, bins=10):
 
 @torch.no_grad()
 def play(
-    env, first, second, games, device, greedy=False, trace_games=0, archetypes=None
+    env,
+    first,
+    second,
+    games,
+    device,
+    greedy=False,
+    trace_games=0,
+    archetypes=None,
+    trace_policy_details=False,
 ):
     if games < 1:
         raise ValueError("games must be positive")
@@ -101,7 +109,8 @@ def play(
                 teams[g] = composition(roster[mine[g], :6, 0].cpu())
                 opponents[g] = composition(roster[mine[g], 6:, 0].cpu())
         h = histories[0].tensors(mine) if first.config.history else None
-        chosen, _, value, _, _ = first.act(
+        first_history = h
+        chosen, chosen_logp, value, _, _ = first.act(
             f[mine], i[mine], mask[mine], greedy=greedy, history=h
         )
         if isinstance(second, str):
@@ -125,9 +134,29 @@ def play(
                             "phase": int(info[mine[g], 0]),
                             "actions": chosen[g].cpu().tolist(),
                             "value": float(value[g]),
+                            "log_probability": float(chosen_logp[g]),
                             "f": f[mine[g]].cpu().tolist(),
                             "i": i[mine[g]].cpu().tolist(),
                         }
+                    )
+        if trace_policy_details and len(records) < trace_games:
+            from .policy_audit import decision_details
+
+            for g in range(min(trace_games, env.envs)):
+                if active[g] and int(info[mine[g], 3]) == 1:
+                    row = int(mine[g])
+                    hh = (
+                        tuple(x[g : g + 1] for x in first_history)
+                        if first_history is not None
+                        else None
+                    )
+                    traces[g][-1]["policy"] = decision_details(
+                        first,
+                        f[row : row + 1],
+                        i[row : row + 1],
+                        mask[row : row + 1],
+                        chosen[g : g + 1],
+                        hh,
                     )
         for hist in histories:
             hist.append(
@@ -187,6 +216,7 @@ def play(
         "archetypes": {k: outcome_summary(v) for k, v in styles.items()},
         "calibration": calibration(predictions, labels),
         "traces": records,
+        "trace_schema_version": 2 if trace_policy_details else 1,
         "timeouts": timeouts,
         "mean_turns": completed_turns / len(results),
         "team_names": {
@@ -226,6 +256,11 @@ def main(argv=None):
     p.add_argument("--device", default="auto")
     p.add_argument("--open-sheets", type=float, default=0.5)
     p.add_argument("--trace-games", type=int, default=2)
+    p.add_argument(
+        "--trace-policy-details",
+        action="store_true",
+        help="add public-view action probabilities, alternatives and packed legal masks to traces",
+    )
     p.add_argument("--max-turns", type=int, default=100)
     p.add_argument("--archetypes", help="JSON mapping composition keys to labels")
     a = p.parse_args(argv)
@@ -257,6 +292,7 @@ def main(argv=None):
         a.games,
         device,
         trace_games=a.trace_games,
+        trace_policy_details=a.trace_policy_details,
         archetypes=json.loads(Path(a.archetypes).read_text()) if a.archetypes else None,
     )
     report.update(

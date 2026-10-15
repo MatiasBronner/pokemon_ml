@@ -257,6 +257,101 @@ impl Game {
         info[3] = (n > 1) as i16;
     }
 
+    /// For search: redraws what `view` has not been shown of the other side,
+    /// so that a copy of the game can be played on without knowing the truth.
+    ///
+    /// * Which Pokémon wait unseen on the bench: each place there is given
+    ///   to a registered Pokémon not yet seen, drawn at random (the one
+    ///   really there among them). Not on a team that registered an
+    ///   Illusion Pokémon, whose disguises are tied to where its team-mates
+    ///   stand.
+    /// * Every Pokémon's stat points: Speed drawn from what the order of
+    ///   moves still allows ([`Speeds::belief`]), the rest by the rule of
+    ///   thumb of `teams::guess_spread`. HP keeps the percentage and the
+    ///   colour of bar `view` was shown.
+    ///
+    /// Moves, items, abilities and natures are left as they are: with open
+    /// team sheets `view` has been given them. With closed sheets they are
+    /// still the truth, which a search should not be given.
+    ///
+    /// The random number generator is left alone; [`Game::reseed`] it too.
+    pub fn determinize(&mut self, view: usize, rng: &mut Rng) -> Result<(), Error> {
+        let opp = 1 - view;
+        let Some(b) = self.battle.as_mut() else {
+            return Ok(());
+        };
+        let illusion = self.rosters[opp].iter().any(|s| s.ability == ab::ILLUSION);
+        if !illusion {
+            let side = &b.sides[opp];
+            let taken = side.taken();
+            let places: Vec<usize> =
+                (0..side.n as usize).filter(|&i| side.shown[i].seen == 0 && !side.team[i].is_active).collect();
+            let mut free: Vec<usize> = (0..side.n_roster as usize).filter(|&j| taken & (1 << j) == 0).collect();
+            if !places.is_empty() && free.len() >= places.len() {
+                // The first places.len() of a shuffle.
+                for k in 0..places.len() {
+                    let pick = k + rng.below((free.len() - k) as u32) as usize;
+                    free.swap(k, pick);
+                }
+                for &i in &places {
+                    let roster = &mut b.sides[opp].roster;
+                    if let Some(old) = roster.iter_mut().find(|l| l.brought == i as u8) {
+                        old.brought = NOT_LISTED;
+                    }
+                }
+                for (&i, &j) in places.iter().zip(&free) {
+                    let position = b.sides[opp].team[i].position as usize;
+                    let mon = b.new_mon(&self.rosters[opp][j], position)?;
+                    b.sides[opp].team[i] = mon;
+                    b.sides[opp].roster[j].brought = i as u8;
+                }
+            }
+        }
+        for i in 0..b.sides[opp].n as usize {
+            let Some(j) = b.sides[opp].roster.iter().position(|l| l.brought == i as u8) else { continue };
+            let m = &mut b.sides[opp].team[i];
+            if m.transformed {
+                continue;
+            }
+            let mut points = guess_points(&self.rosters[opp][j], self.speeds.belief(opp, j), rng);
+            // What the bar shows can rule out a maximum HP (20% on a red bar needs one divisible
+            // by 5): move HP points until the bar can be shown, or keep the truth if nothing can.
+            let (old_max, hp) = (m.stats[0], m.hp);
+            let (species, nature, guessed) = (m.set_species, m.nature, points);
+            let max_with = |hp_points: u8| {
+                let mut p = guessed;
+                p[0] = hp_points;
+                calc_stats(species, nature, p)[0]
+            };
+            let room = 66 - points.iter().map(|&p| p as u32).sum::<u32>();
+            let first = points[0];
+            let shifts = (0..=32i32).flat_map(|d| [-d, d]);
+            let candidates =
+                shifts.map(|d| first as i32 + d).filter(|&p| (0..=32).contains(&p) && p - first as i32 <= room as i32);
+            let fit = candidates.map(|p| p as u8).find_map(|p| {
+                let max = max_with(p);
+                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max).map(|h| (p, h)) }
+            });
+            let Some((hp_points, new_hp)) = fit else { continue };
+            points[0] = hp_points;
+            m.stat_points = points;
+            let mut stats = calc_stats(m.species, m.nature, points);
+            stats[0] = calc_stats(m.set_species, m.nature, points)[0];
+            m.stats = stats;
+            m.hp = new_hp;
+            m.speed = m.stats[5] as i32;
+        }
+        b.update_speed();
+        Ok(())
+    }
+
+    /// Gives the battle a fresh random number generator, so that a copy played on does not roll the real game's dice.
+    pub fn reseed(&mut self, seed: [u16; 4]) {
+        if let Some(b) = self.battle.as_mut() {
+            b.rng = Rng::from_words(seed);
+        }
+    }
+
     /// What a [`Baseline`] player does on `side`.
     pub fn baseline(&self, side: usize, kind: Baseline, rng: &mut Rng) -> [usize; 2] {
         let Some(b) = &self.battle else {
@@ -709,6 +804,51 @@ impl VecEnv {
                 });
         });
     }
+}
+
+/// Stat points for a Pokémon whose real ones are not known: Speed drawn from
+/// what `belief` still allows with its nature and item, then the rule of thumb
+/// of `teams::guess_spread` for the rest (an attacker's attacking stat and HP,
+/// a support's HP, then Defense and Special Defense with what is left).
+fn guess_points(set: &PokemonSet, belief: &speed::Belief, rng: &mut Rng) -> [u8; 6] {
+    const HP: usize = 0;
+    const ATK: usize = 1;
+    const DEF: usize = 2;
+    const SPA: usize = 3;
+    const SPD: usize = 4;
+    const SPE: usize = 5;
+    let possible: Vec<u8> = (0..=32u8).filter(|&p| belief.has(set.nature, p, set.item)).collect();
+    let speed =
+        if possible.is_empty() { rng.below(33) as u8 } else { possible[rng.below(possible.len() as u32) as usize] };
+    let (mut physical, mut special, mut attacks) = (0u32, 0u32, 0);
+    for &m in &set.moves {
+        let data = &MOVES[m as usize];
+        match data.category {
+            Category::Physical => physical += data.base_power.max(40) as u32,
+            Category::Special => special += data.base_power.max(40) as u32,
+            Category::Status => continue,
+        }
+        attacks += 1;
+    }
+    let base = SPECIES[set.species as usize].base;
+    let offence = if physical > special || (physical == special && base[ATK] >= base[SPA]) { ATK } else { SPA };
+    let mut points = [0u8; 6];
+    points[SPE] = speed;
+    let mut left = 66 - speed;
+    let order: &[usize] = if attacks >= 2 { &[offence, HP, DEF, SPD] } else { &[HP, DEF, SPD] };
+    for &k in order {
+        points[k] = left.min(32);
+        left -= points[k];
+    }
+    points
+}
+
+/// An HP that, out of `new_max`, shows the same percentage and colour of bar as `hp` out of `old_max`, if there is one.
+fn same_bar(hp: u16, old_max: u16, new_max: u16) -> Option<u16> {
+    let shown = crate::shown::hp_shown(hp, old_max);
+    let guess = ((hp as u32 * new_max as u32 + old_max as u32 / 2) / old_max as u32).clamp(1, new_max as u32) as u16;
+    let near = (0..=8u16).flat_map(|d| [guess.saturating_add(d), guess.saturating_sub(d)]);
+    near.filter(|&h| h >= 1 && h <= new_max).find(|&h| crate::shown::hp_shown(h, new_max) == shown)
 }
 
 fn observe_both(game: &Game, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {

@@ -282,6 +282,7 @@ The pieces, from the engine up:
 | `python/pokemon_ml/model.py` | PyTorch | embeddings, a small transformer, policy and value heads |
 | `python/pokemon_ml/ppo.py`, `train.py` | PyTorch | PPO self-play and checkpoints |
 | `python/pokemon_ml/league.py` | PyTorch | snapshots of the network, games between them, ratings |
+| `python/pokemon_ml/search.py` | PyTorch | one turn ahead at play time: redrawn worlds, a payoff grid, its equilibrium |
 | `src/follow.rs` | Rust | a battle on Showdown, followed from what a player is sent, as the same arrays |
 | `python/pokemon_ml/showdown.py` | Python | a client that plays the network on a Showdown server |
 
@@ -510,7 +511,9 @@ and scripted opponents. Small/medium/large model presets, a Speed-feature
 ablation, public decision-history tokens, opponent/hidden-set prediction,
 semantic action conditioning and joint preview scoring are configurable.
 Experiments are off by default; the small model, Speed features and league
-are on. Search is not implemented. See [the training guide](docs/policy-training.md)
+are on. One-turn search at play time over redrawn worlds, solved for the
+mixed equilibrium, can be put on top of any checkpoint
+([docs/search.md](docs/search.md)). See [the training guide](docs/policy-training.md)
 for held-out splits, calibration and matchup reports, benchmarking,
 checkpoint contracts and the Oscar job template.
 
@@ -1378,7 +1381,10 @@ likely first steps when speed starts to matter.
    network's own predictions and consistent with what has been shown. This
    is what search needs.
 4. **Search at play time**: one turn ahead as the simultaneous game it is,
-   over sampled worlds.
+   over sampled worlds. A first version is in `pokemon_ml.search`
+   ([docs/search.md](docs/search.md)): open team sheets only, the bench and
+   stat points redrawn, and only in local evaluation so far, not yet in the
+   Showdown client.
 5. **The public server.** The [Showdown client](#playing-on-showdown) has
    played only on a server of its own: a first session on the real one,
    then results there kept beside the ratings.

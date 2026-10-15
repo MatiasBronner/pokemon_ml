@@ -9,10 +9,11 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::data::{ABILITIES, ITEMS, MOVES, SPECIES};
-use crate::env::{Baseline, Config, N_ACTIONS, N_PREVIEW, OBS_M, VecEnv, preview_table};
+use crate::env::{Baseline, Config, Game, N_ACTIONS, N_PREVIEW, OBS_M, VecEnv, preview_table};
 use crate::follow::Follower;
 use crate::format::{Format, ShowdownSet};
 use crate::obs::{self, OBS_F, OBS_I, Phase, Table};
+use crate::rng::Rng;
 use crate::teams::{Pool, Variation};
 
 fn failed(e: crate::Error) -> PyErr {
@@ -123,6 +124,37 @@ impl PyVecEnv {
         self.env.last_episodes().to_vec()
     }
 
+    /// For each game, whether the players have each other's team sheets.
+    fn open_sheets(&self) -> Vec<bool> {
+        self.env.games().iter().map(|g| g.open_team_sheets()).collect()
+    }
+
+    /// `count` copies of game `game` for `view` to search from. With `redraw`
+    /// (the default) each copy has what `view` has not been shown of the
+    /// other side drawn anew (`Game::determinize`); without, the copies are
+    /// the truth, which no player knows. Each copy rolls its own dice.
+    #[pyo3(signature = (game, view, count, seed, redraw=true))]
+    fn worlds(&self, game: usize, view: usize, count: usize, seed: u64, redraw: bool) -> PyResult<PyWorlds> {
+        let real = self.env.games().get(game).ok_or_else(|| PyValueError::new_err("no such game"))?;
+        if view > 1 || count == 0 {
+            return Err(PyValueError::new_err("view must be 0 or 1, and count at least 1"));
+        }
+        if real.battle().is_none() {
+            return Err(PyValueError::new_err("there is nothing to search at Team Preview"));
+        }
+        let mut rng = Rng { seed: mix(seed), calls: 0 };
+        let mut games = Vec::with_capacity(count);
+        for _ in 0..count {
+            let mut world = real.clone();
+            if redraw {
+                world.determinize(view, &mut rng).map_err(failed)?;
+            }
+            world.reseed(words(rng.next_u32() as u64 | (rng.next_u32() as u64) << 32));
+            games.push(world);
+        }
+        Ok(PyWorlds { games, view })
+    }
+
     /// Totals since the environment was made.
     fn stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let s = self.env.stats();
@@ -147,6 +179,152 @@ impl PyVecEnv {
         }
         Ok(())
     }
+}
+
+/// splitmix64, so that neighbouring seeds give unrelated streams.
+fn mix(seed: u64) -> u64 {
+    let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+fn words(x: u64) -> [u16; 4] {
+    [(x >> 48) as u16, (x >> 32) as u16, (x >> 16) as u16, x as u16]
+}
+
+/// Copies of one game, for one side to search one turn ahead from. See `pokemon_ml.search`.
+#[pyclass(name = "Worlds")]
+struct PyWorlds {
+    games: Vec<Game>,
+    /// The side searching.
+    view: usize,
+}
+
+#[pymethods]
+impl PyWorlds {
+    #[getter]
+    fn count(&self) -> usize {
+        self.games.len()
+    }
+
+    #[getter]
+    fn view(&self) -> usize {
+        self.view
+    }
+
+    /// Every copy as `side` sees it: `f` (count × OBS_F float32), `i` (count × OBS_I int16),
+    /// `mask` (count × OBS_M uint8). For the other side, that is its view of a copy whose
+    /// hidden half is the searching side's guess.
+    fn observe(
+        &self,
+        py: Python<'_>,
+        side: usize,
+        mut f: PyReadwriteArray2<'_, f32>,
+        mut i: PyReadwriteArray2<'_, i16>,
+        mut mask: PyReadwriteArray2<'_, u8>,
+    ) -> PyResult<()> {
+        let (f, i, mask) = (whole(&mut f, "f")?, whole(&mut i, "i")?, whole(&mut mask, "mask")?);
+        rows(self.games.len(), f.len(), i.len(), mask.len())?;
+        if side > 1 {
+            return Err(PyValueError::new_err("side must be 0 or 1"));
+        }
+        let games = &self.games;
+        py.detach(|| {
+            for (k, g) in games.iter().enumerate() {
+                g.observe(
+                    side,
+                    &mut f[k * OBS_F..][..OBS_F],
+                    &mut i[k * OBS_I..][..OBS_I],
+                    &mut mask[k * OBS_M..][..OBS_M],
+                );
+            }
+        });
+        Ok(())
+    }
+
+    /// Every pair of actions `side` may give in copy `world`.
+    fn legal(&self, world: usize, side: usize) -> PyResult<Vec<[usize; 2]>> {
+        let g = self.games.get(world).ok_or_else(|| PyValueError::new_err("no such world"))?;
+        Ok(g.legal(side.min(1)))
+    }
+
+    /// Plays the turn out in copy `world` for every pair of the searching side's
+    /// actions `own` (K × 2 int32) and the other side's `theirs` (M × 2 int32),
+    /// `dice` times each with dice of its own, and writes where each ends up as the
+    /// searching side sees it, in the order (own, theirs, dice): `f`, `i` and `mask`
+    /// (K·M·dice rows) and `outcome` (K·M·dice float32: 1 if the searching side has
+    /// won, -1 if it has lost, 0 for a tie, NaN while the game goes on).
+    #[allow(clippy::too_many_arguments)]
+    fn expand(
+        &self,
+        py: Python<'_>,
+        world: usize,
+        own: PyReadonlyArray2<'_, i32>,
+        theirs: PyReadonlyArray2<'_, i32>,
+        dice: usize,
+        seed: u64,
+        mut f: PyReadwriteArray2<'_, f32>,
+        mut i: PyReadwriteArray2<'_, i16>,
+        mut mask: PyReadwriteArray2<'_, u8>,
+        mut outcome: PyReadwriteArray1<'_, f32>,
+    ) -> PyResult<()> {
+        let g = self.games.get(world).ok_or_else(|| PyValueError::new_err("no such world"))?;
+        let pairs = |a: &PyReadonlyArray2<'_, i32>, what: &str| -> PyResult<Vec<[usize; 2]>> {
+            let flat = a
+                .as_slice()
+                .map_err(|_| PyValueError::new_err(format!("{what} must be a C-contiguous int32 array")))?;
+            if flat.len() % 2 != 0 || flat.is_empty() {
+                return Err(PyValueError::new_err(format!("{what} must be N × 2 with N at least 1")));
+            }
+            Ok(flat.chunks(2).map(|c| [c[0].max(0) as usize, c[1].max(0) as usize]).collect())
+        };
+        let (own, theirs) = (pairs(&own, "own")?, pairs(&theirs, "theirs")?);
+        let n = own.len() * theirs.len() * dice;
+        let (f, i, mask) = (whole(&mut f, "f")?, whole(&mut i, "i")?, whole(&mut mask, "mask")?);
+        let outcome = outcome.as_slice_mut().map_err(|_| PyValueError::new_err("outcome must be contiguous"))?;
+        rows(n, f.len(), i.len(), mask.len())?;
+        if outcome.len() != n || dice == 0 {
+            return Err(PyValueError::new_err(format!("outcome must hold {n} numbers, and dice be at least 1")));
+        }
+        let view = self.view;
+        let base = mix(seed);
+        py.detach(|| {
+            use rayon::prelude::*;
+            (f.par_chunks_mut(OBS_F), i.par_chunks_mut(OBS_I), mask.par_chunks_mut(OBS_M), outcome.par_iter_mut())
+                .into_par_iter()
+                .enumerate()
+                .with_min_len(4)
+                .try_for_each(|(row, (f, i, mask, out))| -> Result<(), crate::Error> {
+                    let (k, rest) = (row / (theirs.len() * dice), row % (theirs.len() * dice));
+                    let m = rest / dice;
+                    let mut copy = g.clone();
+                    copy.reseed(words(mix(base ^ row as u64)));
+                    let mut actions = [[0usize; 2]; 2];
+                    actions[view] = own[k];
+                    actions[1 - view] = theirs[m];
+                    copy.act(actions, [0; 4])?;
+                    copy.observe(view, f, i, mask);
+                    *out = match (copy.ended(), copy.winner()) {
+                        (false, _) => f32::NAN,
+                        (true, None) => 0.0,
+                        (true, Some(w)) if w == view => 1.0,
+                        (true, Some(_)) => -1.0,
+                    };
+                    Ok(())
+                })
+        })
+        .map_err(failed)
+    }
+}
+
+fn rows(n: usize, f: usize, i: usize, mask: usize) -> PyResult<()> {
+    if f != n * OBS_F || i != n * OBS_I || mask != n * OBS_M {
+        return Err(PyValueError::new_err(format!(
+            "observation arrays must be {n} × {OBS_F} float32, {n} × {OBS_I} int16 and {n} × {OBS_M} uint8"
+        )));
+    }
+    Ok(())
 }
 
 /// A team given as JSON (a list of sets as a team pool has them) in the engine's terms.
@@ -317,6 +495,7 @@ fn names(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 fn _engine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVecEnv>()?;
     m.add_class::<PyFollower>()?;
+    m.add_class::<PyWorlds>()?;
     m.add_function(wrap_pyfunction!(packed_team, m)?)?;
     m.add_function(wrap_pyfunction!(team_problems, m)?)?;
     m.add_function(wrap_pyfunction!(layout, m)?)?;

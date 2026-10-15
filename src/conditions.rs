@@ -61,6 +61,7 @@ impl Battle {
             (Status::Slp, Ev::Start) => {
                 let t = [2u8, 3, 3][self.rand(3, "sleep turns") as usize];
                 self.mon_mut(holder).status_time = t;
+                self.mon_mut(holder).drawn[SLEEP_CLOCK] = t;
                 Res::Undef
             }
             (Status::Slp, Ev::BeforeMove) => {
@@ -230,6 +231,7 @@ impl Battle {
                 let t = self.rand_range(min, 6, "confusion turns");
                 if let Some(v) = self.vol_mut(holder, VolKind::Confusion) {
                     v.data = t as u16;
+                    self.mon_mut(holder).drawn[CONFUSION_CLOCK] = t as u8;
                 }
                 Res::Undef
             }
@@ -1131,6 +1133,7 @@ impl Battle {
                 if let Some(v) = self.vol_mut(holder, kind) {
                     v.st.a = turns;
                     v.data = id;
+                    self.mon_mut(holder).drawn[RAMPAGE_CLOCK] = turns as u8;
                 }
                 Res::Undef
             }
@@ -1536,7 +1539,7 @@ impl Battle {
     pub(crate) fn cond_duration(
         &mut self,
         eff: Eff,
-        _target: Option<MonRef>,
+        target: Option<MonRef>,
         source: Option<MonRef>,
         source_effect: Eff,
     ) -> u8 {
@@ -1545,7 +1548,13 @@ impl Battle {
         match eff {
             // durationCallback(target, source): 4 or 5 turns of damage.
             // (Grip Claw, which would make it 7, is not in Champions.)
-            Eff::Vol(VolKind::Partiallytrapped) => self.rand_range(5, 7, "binding move turns") as u8,
+            Eff::Vol(VolKind::Partiallytrapped) => {
+                let turns = self.rand_range(5, 7, "binding move turns") as u8;
+                if let Some(t) = target {
+                    self.mon_mut(t).drawn[BINDING_CLOCK] = turns;
+                }
+                turns
+            }
             // durationCallback(target, source, effect): two turns from Psychic Noise.
             Eff::Vol(VolKind::Healblock) => {
                 if self.eff_is_named(source_effect, "psychicnoise") {

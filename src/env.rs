@@ -328,9 +328,11 @@ impl Game {
             let shifts = (0..=32i32).flat_map(|d| [-d, d]);
             let candidates =
                 shifts.map(|d| first as i32 + d).filter(|&p| (0..=32).contains(&p) && p - first as i32 <= room as i32);
+            // One draw whatever happens, so that how many are made says nothing hidden.
+            let pick = rng.next_u32();
             let fit = candidates.map(|p| p as u8).find_map(|p| {
                 let max = max_with(p);
-                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max).map(|h| (p, h)) }
+                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max, pick).map(|h| (p, h)) }
             });
             let Some((hp_points, new_hp)) = fit else { continue };
             points[0] = hp_points;
@@ -342,6 +344,10 @@ impl Game {
             m.speed = m.stats[5] as i32;
         }
         b.update_speed();
+        // Countdowns nobody is shown, the searching side's own included.
+        for side in 0..2 {
+            redraw_clocks(b, side, rng);
+        }
         Ok(())
     }
 
@@ -843,12 +849,83 @@ fn guess_points(set: &PokemonSet, belief: &speed::Belief, rng: &mut Rng) -> [u8;
     points
 }
 
-/// An HP that, out of `new_max`, shows the same percentage and colour of bar as `hp` out of `old_max`, if there is one.
-fn same_bar(hp: u16, old_max: u16, new_max: u16) -> Option<u16> {
+/// An HP that, out of `new_max`, shows the same percentage and colour of bar as
+/// `hp` out of `old_max`, if there is one: each such HP as likely as the next,
+/// picked by `pick` (a draw of 32 random bits). The HP shown no more
+/// precisely than that, the truth within the bar has nothing to do with it.
+fn same_bar(hp: u16, old_max: u16, new_max: u16, pick: u32) -> Option<u16> {
     let shown = crate::shown::hp_shown(hp, old_max);
-    let guess = ((hp as u32 * new_max as u32 + old_max as u32 / 2) / old_max as u32).clamp(1, new_max as u32) as u16;
-    let near = (0..=8u16).flat_map(|d| [guess.saturating_add(d), guess.saturating_sub(d)]);
-    near.filter(|&h| h >= 1 && h <= new_max).find(|&h| crate::shown::hp_shown(h, new_max) == shown)
+    // The HP that show it are one run: percentage and bar both rise with HP.
+    let fits: Vec<u16> = (1..=new_max).filter(|&h| crate::shown::hp_shown(h, new_max) == shown).collect();
+    (!fits.is_empty()).then(|| fits[((pick as u64 * fits.len() as u64) >> 32) as usize])
+}
+
+/// Draws again, for each of `side`'s Pokémon, the countdowns nobody is shown:
+/// how long its sleep (2 turns one time in three, otherwise 3), confusion (2
+/// to 5 attempts), rampage (2 or 3 turns) and binding (5 or 6 turns) last.
+/// What everyone has seen is kept: how long each has gone on so far
+/// (`Pokemon::drawn` less what is left), so only lengths longer than that are
+/// drawn, as often as the game would draw them. Rest's sleep, which is not
+/// drawn, and a countdown whose start is not known (a position written by
+/// hand) are left as they are. Exactly four draws a Pokémon, used or not.
+fn redraw_clocks(b: &mut Battle, side: usize, rng: &mut Rng) {
+    const SLEEP: &[(u8, u32)] = &[(2, 1), (3, 2)];
+    const CONFUSION: &[(u8, u32)] = &[(2, 1), (3, 1), (4, 1), (5, 1)];
+    const RAMPAGE: &[(u8, u32)] = &[(2, 1), (3, 1)];
+    const BINDING: &[(u8, u32)] = &[(5, 1), (6, 1)];
+    for i in 0..b.sides[side].n as usize {
+        let r = MonRef { side: side as u8, idx: i as u8 };
+        let draws = [rng.next_u32(), rng.next_u32(), rng.next_u32(), rng.next_u32()];
+        let m = b.mon(r);
+        let (drawn, active) = (m.drawn, m.is_active);
+        if m.status == Status::Slp
+            && let Some((start, left)) = redraw(drawn[SLEEP_CLOCK], m.status_time, SLEEP, draws[0])
+        {
+            let m = b.mon_mut(r);
+            (m.drawn[SLEEP_CLOCK], m.status_time) = (start, left);
+        }
+        if !active {
+            continue;
+        }
+        if let Some(v) = b.vol_mut(r, VolKind::Confusion)
+            && let Some((start, left)) = redraw(drawn[CONFUSION_CLOCK], v.data.min(255) as u8, CONFUSION, draws[1])
+        {
+            v.data = left as u16;
+            b.mon_mut(r).drawn[CONFUSION_CLOCK] = start;
+        }
+        if let Some(v) = b.vol_mut(r, VolKind::Lockedmove)
+            && let Some((start, left)) = redraw(drawn[RAMPAGE_CLOCK], v.st.a.clamp(0, 255) as u8, RAMPAGE, draws[2])
+        {
+            v.st.a = left as i16;
+            b.mon_mut(r).drawn[RAMPAGE_CLOCK] = start;
+        }
+        if let Some(v) = b.vol_mut(r, VolKind::Partiallytrapped)
+            && let Some((start, left)) = redraw(drawn[BINDING_CLOCK], v.duration, BINDING, draws[3])
+        {
+            v.duration = left;
+            b.mon_mut(r).drawn[BINDING_CLOCK] = start;
+        }
+    }
+}
+
+/// A countdown drawn at `start` with `left` to go has gone on `start - left`;
+/// draws a new start among `lengths` (each with its weight) longer than that,
+/// with `pick`, and returns it with what it leaves to go.
+fn redraw(start: u8, left: u8, lengths: &[(u8, u32)], pick: u32) -> Option<(u8, u8)> {
+    if start == 0 || left == 0 || left > start {
+        return None;
+    }
+    let gone = start - left;
+    let fits: Vec<(u8, u32)> = lengths.iter().copied().filter(|&(n, _)| n > gone).collect();
+    let total: u32 = fits.iter().map(|&(_, w)| w).sum();
+    let mut at = ((pick as u64 * total as u64) >> 32) as u32;
+    for (n, w) in fits {
+        if at < w {
+            return Some((n, n - gone));
+        }
+        at -= w;
+    }
+    None
 }
 
 fn observe_both(game: &Game, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {
@@ -857,4 +934,180 @@ fn observe_both(game: &Game, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {
     let (m0, m1) = mask.split_at_mut(OBS_M);
     game.observe(0, f0, i0, m0);
     game.observe(1, f1, i1, m1);
+}
+
+#[cfg(test)]
+mod hidden_truth {
+    //! `tests/search.rs` checks that a redrawn copy depends on nothing hidden by
+    //! redrawing two truths, but builds the second truth with `determinize`
+    //! itself, which cannot catch what `determinize` forgets to redraw. Here the
+    //! second truth is changed by hand instead, in everything the searching
+    //! side has not been shown: countdowns given every other length the game
+    //! could have drawn, the other side's HP moved within its bar, its stat
+    //! points other than HP and Speed moved, and an unseen Pokémon on its bench
+    //! swapped for one it did not bring. Anything copied rather than drawn
+    //! again would show.
+
+    use super::*;
+    use crate::format::Format;
+
+    /// Gives every running countdown on both sides another length the game
+    /// could have drawn, keeping how long it has gone on. Returns how many it changed.
+    fn other_lengths(g: &mut Game) -> usize {
+        let b = g.battle.as_mut().unwrap();
+        let mut changed = 0;
+        let other = |start: u8, left: u8, lengths: &[u8]| -> Option<(u8, u8)> {
+            if start == 0 || left == 0 || left > start {
+                return None;
+            }
+            let gone = start - left;
+            lengths.iter().find(|&&n| n > gone && n != start).map(|&n| (n, n - gone))
+        };
+        for side in 0..2 {
+            for i in 0..b.sides[side].n as usize {
+                let r = MonRef { side: side as u8, idx: i as u8 };
+                let m = b.mon(r);
+                let (drawn, active) = (m.drawn, m.is_active);
+                if m.status == Status::Slp
+                    && let Some((s, l)) = other(drawn[SLEEP_CLOCK], m.status_time, &[2, 3])
+                {
+                    let m = b.mon_mut(r);
+                    (m.drawn[SLEEP_CLOCK], m.status_time) = (s, l);
+                    changed += 1;
+                }
+                if !active {
+                    continue;
+                }
+                if let Some(v) = b.vol_mut(r, VolKind::Confusion)
+                    && let Some((s, l)) = other(drawn[CONFUSION_CLOCK], v.data as u8, &[2, 3, 4, 5])
+                {
+                    v.data = l as u16;
+                    b.mon_mut(r).drawn[CONFUSION_CLOCK] = s;
+                    changed += 1;
+                }
+                if let Some(v) = b.vol_mut(r, VolKind::Lockedmove)
+                    && let Some((s, l)) = other(drawn[RAMPAGE_CLOCK], v.st.a as u8, &[2, 3])
+                {
+                    v.st.a = l as i16;
+                    b.mon_mut(r).drawn[RAMPAGE_CLOCK] = s;
+                    changed += 1;
+                }
+                if let Some(v) = b.vol_mut(r, VolKind::Partiallytrapped)
+                    && let Some((s, l)) = other(drawn[BINDING_CLOCK], v.duration, &[5, 6])
+                {
+                    v.duration = l;
+                    b.mon_mut(r).drawn[BINDING_CLOCK] = s;
+                    changed += 1;
+                }
+            }
+        }
+        changed
+    }
+
+    /// Changes what `view` has not been shown of the other side, by hand. Returns how many things it changed.
+    fn other_truth(g: &mut Game, view: usize, rng: &mut Rng) -> usize {
+        let opp = 1 - view;
+        let mut changed = other_lengths(g);
+        let rosters = g.rosters.clone();
+        let b = g.battle.as_mut().unwrap();
+        let side = &b.sides[opp];
+        let unseen = (0..side.n as usize).find(|&i| side.shown[i].seen == 0 && !side.team[i].is_active);
+        let unbrought = (0..side.n_roster as usize).find(|&j| side.roster[j].brought == NOT_LISTED);
+        let illusion = rosters[opp].iter().any(|s| s.ability == ab::ILLUSION);
+        if let (Some(i), Some(j), false) = (unseen, unbrought, illusion) {
+            let position = b.sides[opp].team[i].position as usize;
+            let old = b.sides[opp].roster.iter().position(|l| l.brought == i as u8).unwrap();
+            b.sides[opp].roster[old].brought = NOT_LISTED;
+            b.sides[opp].team[i] = b.new_mon(&rosters[opp][j], position).unwrap();
+            b.sides[opp].roster[j].brought = i as u8;
+            changed += 1;
+        }
+        let brought: Vec<Option<usize>> = (0..b.sides[opp].n as usize)
+            .map(|i| b.sides[opp].roster.iter().position(|l| l.brought == i as u8))
+            .collect();
+        for (i, m) in b.sides[opp].team[..b.sides[opp].n as usize].iter_mut().enumerate() {
+            if m.transformed {
+                continue;
+            }
+            // Speed: any amount the order of moves still allows.
+            if let Some(j) = brought[i] {
+                let set = &rosters[opp][j];
+                let belief = g.speeds.belief(opp, j);
+                let room = 66 - m.stat_points.iter().map(|&p| p as u32).sum::<u32>() + m.stat_points[5] as u32;
+                let options: Vec<u8> =
+                    (0..=32u8).filter(|&p| p as u32 <= room && belief.has(set.nature, p, set.item)).collect();
+                if !options.is_empty() {
+                    let p = options[rng.below(options.len() as u32) as usize];
+                    changed += (p != m.stat_points[5]) as usize;
+                    m.stat_points[5] = p;
+                    m.stats[5] = calc_stats(m.species, m.nature, m.stat_points)[5];
+                }
+            }
+            // Attack and the defences: shown by nothing but damage, which is not kept.
+            let mut points = m.stat_points;
+            let spare = 66 - points.iter().map(|&p| p as u32).sum::<u32>()
+                + (points[1] + points[2] + points[3] + points[4]) as u32;
+            for k in 1..=4 {
+                points[k] = 0;
+            }
+            let mut left = spare;
+            for k in [4, 3, 2, 1] {
+                points[k] = (rng.below(33).min(left)) as u8;
+                left -= points[k] as u32;
+            }
+            if points != m.stat_points {
+                let stats = calc_stats(m.species, m.nature, points);
+                m.stats[1..5].copy_from_slice(&stats[1..5]);
+                m.stat_points = points;
+                changed += 1;
+            }
+            // HP: anywhere the bar shows the same.
+            if m.hp > 0 {
+                let shown = crate::shown::hp_shown(m.hp, m.stats[0]);
+                let fits: Vec<u16> =
+                    (1..=m.stats[0]).filter(|&h| crate::shown::hp_shown(h, m.stats[0]) == shown).collect();
+                let h = fits[rng.below(fits.len() as u32) as usize];
+                changed += (h != m.hp) as usize;
+                m.hp = h;
+            }
+        }
+        changed
+    }
+
+    #[test]
+    fn what_is_hidden_is_drawn_again_not_copied() {
+        let format = Format::current();
+        let (mut positions, mut changed) = (0, 0);
+        for seed in 0..600u16 {
+            let mut rng = Rng::from_words([seed, 5, 5, 5]);
+            let teams = [format.random_team(&mut rng), format.random_team(&mut rng)];
+            let mut game = Game::new(teams, true).unwrap();
+            while !game.battle.as_ref().is_some_and(|b| b.ended || b.turn > 150) {
+                if game.battle.is_some() {
+                    for view in 0..2 {
+                        let mut other = game.clone();
+                        let n = other_truth(&mut other, view, &mut rng);
+                        if n > 0 {
+                            changed += n;
+                            positions += 1;
+                            let same = rng.next_u32() as u64;
+                            let redraw = |g: &Game| {
+                                let mut copy = g.clone();
+                                copy.determinize(view, &mut Rng { seed: same, calls: 0 }).unwrap();
+                                copy.battle.unwrap()
+                            };
+                            let (a, b) = (redraw(&game), redraw(&other));
+                            assert_eq!(a.sides, b.sides, "game {seed}, turn {}, side {view}", a.turn);
+                            assert!(a.vols == b.vols, "game {seed}, turn {}, side {view}: volatiles", a.turn);
+                        }
+                    }
+                }
+                let actions =
+                    [game.baseline(0, Baseline::Random, &mut rng), game.baseline(1, Baseline::Random, &mut rng)];
+                game.act(actions, [seed, 2, 3, 4]).unwrap();
+            }
+        }
+        println!("{positions} positions with {changed} hidden things changed by hand");
+        assert!(positions > 1000, "too few positions to tell ({positions})");
+    }
 }

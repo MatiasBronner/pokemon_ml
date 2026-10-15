@@ -49,14 +49,45 @@ and (unless `--closed-sheets`) games with closed team sheets.
 
 ## What is and is not hidden
 
-`tests/search.rs` plays random games with open and closed sheets. At every
-decision it redraws each side's view of the other and requires that side's
-observation to stay **identical, number for number**. Over 1,500 games
-(60,260 redrawn views) the observation never changed. The bench was redrawn
-in 15,611 of those views and the stats in all of them. The test also caught
-one real leak while this was being written: a bar showing "20%, red" is only
-possible when max HP is a multiple of 5, so a guessed HP stat now has to fit
-what the bar shows.
+A redrawn copy has to be drawn from what the searching side has seen, and
+from nothing else. What `Game::determinize` draws again:
+
+| Hidden from a player | How it is drawn |
+|---|---|
+| The opposing bench | Each unseen spot gets a registered Pokémon not yet seen. |
+| Opposing stat points | Speed comes from what move order allows (`Speeds::belief`). The other stats follow the `guess_spread` rule of thumb. HP points are moved if needed so the shown bar is still possible. |
+| Exact opposing HP | Uniformly among every HP that shows the same percentage and bar colour. |
+| Sleep length (2 turns one time in three, else 3) | Only lengths longer than it has already lasted, as often as the game would draw them. Rest's fixed 3 turns are kept. |
+| Confusion (2–5 attempts), rampage (2–3 turns), binding (5–6 turns) | The same way. |
+
+The four countdowns are redrawn for **both** sides. Showdown doesn't tell a
+player its own Pokémon's sleep length either. To know how long a countdown
+has visibly lasted, the engine records what each one was drawn at
+(`Pokemon::drawn`, never shown, exported with positions).
+
+Three tests check it:
+
+- **The copy looks the same** (`tests/search.rs`). At every decision of
+  1,500 random games, the searching side's observation of a redrawn copy is
+  identical to its observation of the real game, number for number.
+- **The copy depends on nothing hidden** (`tests/search.rs`). The real game
+  and a different possible truth are both redrawn with the same random
+  numbers. The results must be identical, and must stay identical when
+  played three turns further with the same dice and choices. 59,932
+  positions were checked.
+- **The second truth is changed by hand** (the unit test in `src/env.rs`).
+  The check above makes its second truth with `determinize` itself, so it
+  cannot catch something `determinize` forgets to redraw. Here the second
+  truth is changed independently: other countdown lengths, HP moved within
+  its bar, other attack, defence and Speed points, and a different unseen
+  bench Pokémon. That is 192,337 hidden values over 24,656 positions.
+
+To check the tests themselves, each fix was undone in turn: HP scaled from
+the truth, countdowns copied (on both sides, or on the searching side only),
+the real attack and defence points, the real Speed, the real bench. The
+tests caught every one. Before that, the first test had already caught a
+real leak: a bar showing "20%, red" is only possible when max HP is a
+multiple of 5.
 
 What the search still knows that a player would not:
 
@@ -64,17 +95,21 @@ What the search still knows that a player would not:
   abilities are the real ones. That is why closed-sheet games fall back to
   the policy unless `--closed-sheets` is given. Sampling those sets is the
   next step (roadmap item 3).
-- **Natures and items** on open sheets are given by the sheet, so they are
-  legitimately known.
-- **PP and hidden volatile conditions** of the opponent's Pokémon (such as
-  turns left on a rampage) are copied from the real game. They only matter
-  in rare positions.
 - **On a team that registered an Illusion Pokémon**, the bench is not
-  redrawn: disguises depend on where teammates stand. Stat points still are.
+  redrawn, because disguises depend on where teammates stand. Stat points
+  still are.
+- **Axe Kick's confusion** lasts 3–5 attempts, not 2–5. The redraw ignores
+  the difference, so it may draw a length the game could not. That is a
+  wrong guess, not a leak.
+- **A position written by hand** has no record of what its countdowns were
+  drawn at, so those countdowns are kept as written.
+
+Natures and items on open sheets are given by the sheet, so they are
+legitimately known. PP and stat stages are public: every move used and every
+stat change is shown.
 
 `--privileged` searches the real game without redrawing anything. Compare it
-with the honest search to see how much the remaining hidden information is
-worth.
+with the honest search to see how much hidden information is worth.
 
 ## Running it on Oscar
 

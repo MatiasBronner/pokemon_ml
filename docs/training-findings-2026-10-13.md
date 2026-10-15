@@ -6,9 +6,10 @@ controlled learning-rate reductions improved head-to-head performance; broadenin
 the historical league did not. The latest unchanged continuation at **0.00003**
 showed no detectable advantage over update 13450 across 6000 direct games.
 
-Keep the small architecture and speed features. The next agreed hypothesis is a
-matched **60/30/10 versus 50/40/10** league-proportion experiment at LR 0.00003;
-it has not been run. These findings do not establish a hard network-capacity limit.
+Keep the small architecture and speed features. The next experiment compares
+constant LR, bounded LR decay and targeted historical selection, all retaining
+**50/40/10**, from update 15342. See [the OSCAR runbook](plateau-experiment.md).
+This replaces the earlier 60/30/10 proposal; neither experiment has been run. These findings do not establish a hard network-capacity limit.
 The dated filename is retained so earlier documentation links continue to work.
 
 This report records the Oscar runs and evaluation outputs reported during the
@@ -464,9 +465,13 @@ For example, reading the original LR experiment's log ending at 7132 while the
 continuation was past 10000 did not mean training had reset. Evaluation commands
 read checkpoints and do not roll back the running model.
 
-## Next proposed experiment: league proportions
+## Superseded proposal: league proportions
 
-**Status: proposed and agreed, not implemented or run in this report.** Pause
+**Status: superseded by the [three-arm OSCAR comparison](plateau-experiment.md).**
+The original proposal below is retained as history; do not combine it with the new
+experiment. It was not implemented or run in this report.
+
+The original proposal was to pause
 unchanged long continuations. Start two matched continuations from preserved
 **update 15342** to test the following proportions:
 
@@ -503,7 +508,7 @@ ceiling or simulator correctness for all mechanics.
 
 1. Preserve update 13450 and current update 15342 at LR 0.00003. The latest model
    has not demonstrated a meaningful advantage over 13450. Use preserved 15342 as
-   the common source for the proposed proportions experiment; verify that source
+   the common source for the three-arm plateau comparison; verify that source
    before cloning. Do not adopt the previously tested broad selection.
 2. Keep speed inference enabled. No controlled speed ablation has been performed,
    and these results do not implicate it in the plateau.

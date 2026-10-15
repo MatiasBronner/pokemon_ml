@@ -18,9 +18,8 @@ the proposed 60/30/10 experiment; do not change proportions in these runs.
 
 ## Prepare on OSCAR
 
-These files must first be committed and transferred to the OSCAR checkout; local
-cloud edits do not appear in the published repository automatically. No PR has
-been published by this workflow.
+After merging the implementation PR, update the OSCAR checkout with
+`git switch main` and `git pull --ff-only` before running these commands.
 
 On the login node, activate the existing environment and set the actual finished
 source directory (it must contain config.json, checkpoint.pt and snapshots/):
@@ -120,7 +119,7 @@ The previous implementation run passed 49 Python tests with one optional
 live-server test skipped. The three focused tests also passed after final changes,
 including real CPU training, partial-schedule resume, source preservation, targeted
 sampling and evaluation subprocesses writing six reports. The Slurm wrapper passed
-bash -n. These results were produced from local, uncommitted cloud files; they do
-not establish publication, CUDA performance or improved policy strength. No OSCAR
+`bash -n`. These local CPU results do not establish CUDA performance or
+improved policy strength. No OSCAR
 jobs have been submitted from the cloud machine. The optional diagnose stage remains
 available in the CLI for future experiments; it is not part of this run.

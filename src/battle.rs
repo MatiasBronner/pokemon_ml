@@ -1089,6 +1089,7 @@ impl Battle {
             m.base_unknown_pp = 0;
             m.n_moves = m.base_n_moves;
             m.transformed = false;
+            m.copied_from = None;
         }
         m.ability = m.base_ability;
         // Linked volatiles (`trapped` and `trapper`) release their other halves.
@@ -1217,6 +1218,7 @@ impl Battle {
         {
             let m = self.mon_mut(r);
             m.transformed = true;
+            m.copied_from = Some(target);
             m.types = t.types;
             m.added_type = t.added_type;
             // Each side sees on it what it sees on the one it turned into.

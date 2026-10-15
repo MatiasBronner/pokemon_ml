@@ -310,38 +310,29 @@ impl Game {
         for i in 0..b.sides[opp].n as usize {
             let Some(j) = b.sides[opp].roster.iter().position(|l| l.brought == i as u8) else { continue };
             let m = &mut b.sides[opp].team[i];
-            if m.transformed {
-                continue;
-            }
-            let mut points = guess_points(&self.rosters[opp][j], self.speeds.belief(opp, j), rng);
-            // What the bar shows can rule out a maximum HP (20% on a red bar needs one divisible
-            // by 5): move HP points until the bar can be shown, or keep the truth if nothing can.
-            let (old_max, hp) = (m.stats[0], m.hp);
-            let (species, nature, guessed) = (m.set_species, m.nature, points);
-            let max_with = |hp_points: u8| {
-                let mut p = guessed;
-                p[0] = hp_points;
-                calc_stats(species, nature, p)[0]
-            };
-            let room = 66 - points.iter().map(|&p| p as u32).sum::<u32>();
-            let first = points[0];
-            let shifts = (0..=32i32).flat_map(|d| [-d, d]);
-            let candidates =
-                shifts.map(|d| first as i32 + d).filter(|&p| (0..=32).contains(&p) && p - first as i32 <= room as i32);
-            // One draw whatever happens, so that how many are made says nothing hidden.
-            let pick = rng.next_u32();
-            let fit = candidates.map(|p| p as u8).find_map(|p| {
-                let max = max_with(p);
-                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max, pick).map(|h| (p, h)) }
-            });
-            let Some((hp_points, new_hp)) = fit else { continue };
-            points[0] = hp_points;
+            let guessed = guess_points(&self.rosters[opp][j], self.speeds.belief(opp, j), rng);
+            // The bar shown, never the HP behind it.
+            let shown = (m.hp > 0).then(|| crate::shown::hp_shown(m.hp, m.stats[0]));
+            let (points, hp) = fit_hp(guessed, m.set_species, m.nature, shown, rng.next_u32());
             m.stat_points = points;
-            let mut stats = calc_stats(m.species, m.nature, points);
-            stats[0] = calc_stats(m.set_species, m.nature, points)[0];
-            m.stats = stats;
-            m.hp = new_hp;
+            // Its own HP, transformed or not (Transform copies everything but HP).
+            m.stats[0] = calc_stats(m.set_species, m.nature, points)[0];
+            m.hp = hp;
+            if !m.transformed {
+                let stats = calc_stats(m.species, m.nature, points);
+                m.stats[1..].copy_from_slice(&stats[1..]);
+            }
             m.speed = m.stats[5] as i32;
+        }
+        // A Pokémon that turned into a team-mate copied that team-mate's stats: the ones
+        // just drawn, not the truth. (One that turned into the searching side's own
+        // Pokémon copied stats that side knows.)
+        for i in 0..b.sides[opp].n as usize {
+            let m = b.sides[opp].team[i];
+            if let Some(from) = m.copied_from.filter(|r| m.transformed && r.side as usize == opp) {
+                let copied = b.sides[opp].team[from.idx as usize].stats;
+                b.sides[opp].team[i].stats[1..].copy_from_slice(&copied[1..]);
+            }
         }
         b.update_speed();
         // Countdowns nobody is shown, the searching side's own included.
@@ -849,15 +840,47 @@ fn guess_points(set: &PokemonSet, belief: &speed::Belief, rng: &mut Rng) -> [u8;
     points
 }
 
-/// An HP that, out of `new_max`, shows the same percentage and colour of bar as
-/// `hp` out of `old_max`, if there is one: each such HP as likely as the next,
-/// picked by `pick` (a draw of 32 random bits). The HP shown no more
-/// precisely than that, the truth within the bar has nothing to do with it.
-fn same_bar(hp: u16, old_max: u16, new_max: u16, pick: u32) -> Option<u16> {
-    let shown = crate::shown::hp_shown(hp, old_max);
-    // The HP that show it are one run: percentage and bar both rise with HP.
-    let fits: Vec<u16> = (1..=new_max).filter(|&h| crate::shown::hp_shown(h, new_max) == shown).collect();
-    (!fits.is_empty()).then(|| fits[((pick as u64 * fits.len() as u64) >> 32) as usize])
+/// Stat points like `guessed`, with the HP points moved as little as needed for
+/// the bar to be able to show `shown` (`None`: fainted), and an HP that shows it,
+/// each such HP as likely as the next (picked by `pick`, 32 random bits).
+///
+/// It sees the bar, never the HP behind it or the real stat points, and always
+/// finds a fit: the HP points the Pokémon really has are one, and every amount
+/// from 0 to 32 is tried, nearest the guess first. Points HP takes beyond what is
+/// spare come from Attack and the defences, the largest first; Speed is left as
+/// guessed, since the order of moves has a say in it.
+fn fit_hp(
+    guessed: [u8; 6],
+    species: u16,
+    nature: (u8, u8),
+    shown: Option<(u8, crate::shown::Bar)>,
+    pick: u32,
+) -> ([u8; 6], u16) {
+    let with_hp = |hp_points: u8| {
+        let mut p = guessed;
+        p[0] = hp_points;
+        let mut over = p.iter().map(|&x| x as i32).sum::<i32>() - 66;
+        while over > 0 {
+            let k = (1..=4).max_by_key(|&k| (p[k], std::cmp::Reverse(k))).unwrap();
+            let take = (p[k] as i32).min(over);
+            p[k] -= take as u8;
+            over -= take;
+        }
+        p
+    };
+    let tries = (0..=32i32).flat_map(|d| [guessed[0] as i32 - d, guessed[0] as i32 + d]);
+    for hp_points in tries.filter(|p| (0..=32).contains(p)) {
+        let points = with_hp(hp_points as u8);
+        let max = calc_stats(species, nature, points)[0];
+        let Some(shown) = shown else { return (points, 0) };
+        let fits: Vec<u16> = (1..=max).filter(|&h| crate::shown::hp_shown(h, max) == shown).collect();
+        if !fits.is_empty() {
+            return (points, fits[((pick as u64 * fits.len() as u64) >> 32) as usize]);
+        }
+    }
+    // Not reached (see above). Should it be, the guess stands, still without the truth.
+    let max = calc_stats(species, nature, guessed)[0];
+    (guessed, if shown.is_some() { (((pick as u64 * max as u64) >> 32) as u16).max(1) } else { 0 })
 }
 
 /// Draws again, for each of `side`'s Pokémon, the countdowns nobody is shown:
@@ -1026,11 +1049,10 @@ mod hidden_truth {
             .map(|i| b.sides[opp].roster.iter().position(|l| l.brought == i as u8))
             .collect();
         for (i, m) in b.sides[opp].team[..b.sides[opp].n as usize].iter_mut().enumerate() {
-            if m.transformed {
-                continue;
-            }
+            // Transformed, its stats other than HP are the ones it copied: its own points change nothing shown.
+            let own_stats = !m.transformed;
             // Speed: any amount the order of moves still allows.
-            if let Some(j) = brought[i] {
+            if let Some(j) = brought[i].filter(|_| own_stats) {
                 let set = &rosters[opp][j];
                 let belief = g.speeds.belief(opp, j);
                 let room = 66 - m.stat_points.iter().map(|&p| p as u32).sum::<u32>() + m.stat_points[5] as u32;
@@ -1056,8 +1078,10 @@ mod hidden_truth {
                 left -= points[k] as u32;
             }
             if points != m.stat_points {
-                let stats = calc_stats(m.species, m.nature, points);
-                m.stats[1..5].copy_from_slice(&stats[1..5]);
+                if own_stats {
+                    let stats = calc_stats(m.species, m.nature, points);
+                    m.stats[1..5].copy_from_slice(&stats[1..5]);
+                }
                 m.stat_points = points;
                 changed += 1;
             }
@@ -1071,7 +1095,178 @@ mod hidden_truth {
                 m.hp = h;
             }
         }
+        // A copy of a team-mate has that team-mate's stats, whatever they now are.
+        for i in 0..b.sides[opp].n as usize {
+            let m = b.sides[opp].team[i];
+            if let Some(from) = m.copied_from.filter(|r| m.transformed && r.side as usize == opp) {
+                let copied = b.sides[opp].team[from.idx as usize].stats;
+                b.sides[opp].team[i].stats[1..].copy_from_slice(&copied[1..]);
+            }
+        }
         changed
+    }
+
+    /// Redraws `game` as `view` would, from `game` and from another truth made by
+    /// hand, with the same random numbers; the two must come out the same.
+    fn same_either_way(game: &Game, view: usize, rng: &mut Rng) -> usize {
+        let mut other = game.clone();
+        let changed = other_truth(&mut other, view, rng);
+        let same = rng.next_u32() as u64;
+        let redraw = |g: &Game| {
+            let mut copy = g.clone();
+            copy.determinize(view, &mut Rng { seed: same, calls: 0 }).unwrap();
+            copy.battle.unwrap()
+        };
+        let (a, b) = (redraw(game), redraw(&other));
+        assert_eq!(a.sides, b.sides, "turn {}, side {view}", a.turn);
+        assert!(a.vols == b.vols, "turn {}, side {view}: volatiles", a.turn);
+        changed
+    }
+
+    fn set(species: &str, moves: &[&str], ability: &str) -> PokemonSet {
+        PokemonSet::from_names(species, moves, "Bold", [32, 0, 32, 0, 2, 0]).unwrap().ability(ability).unwrap()
+    }
+
+    /// A transformed Pokémon keeps its own HP: that must be drawn again within the bar
+    /// like anyone's. One that turned into a team-mate copied the team-mate's hidden
+    /// stats, so it must take the team-mate's redrawn ones.
+    #[test]
+    fn transformed_pokemon_are_redrawn_too() {
+        let format = Format::current();
+        let (mut into_foe, mut into_ally) = (0, 0);
+        for seed in 0..400u16 {
+            let mut rng = Rng::from_words([seed, 6, 6, 6]);
+            let imposter = seed % 2 == 0;
+            let mut theirs = format.random_team(&mut rng);
+            theirs[0] = if imposter {
+                set("Ditto", &["Transform"], "Imposter")
+            } else {
+                set("Ditto", &["Transform"], "Limber")
+            };
+            let ours = format.random_team(&mut rng);
+            let mut game = Game::new([ours, theirs], true).unwrap();
+            game.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [seed, 1, 1, 1]).unwrap();
+            for _ in 0..4 {
+                if game.ended() {
+                    break;
+                }
+                let mut actions =
+                    [game.baseline(0, Baseline::Random, &mut rng), game.baseline(1, Baseline::Random, &mut rng)];
+                // Ditto's Transform at its own team-mate (target 4: own second position), when it may.
+                if !imposter && game.legal(1).iter().any(|a| a[0] == 8) {
+                    actions[1] = *game.legal(1).iter().find(|a| a[0] == 8).unwrap();
+                }
+                game.act(actions, [seed, 2, 2, 2]).unwrap();
+                let ditto = game.battle.as_ref().unwrap().sides[1].team[0];
+                if !ditto.transformed || ditto.hp == 0 {
+                    continue;
+                }
+                match ditto.copied_from {
+                    Some(r) if r.side == 1 => into_ally += 1,
+                    Some(_) => into_foe += 1,
+                    None => panic!("a transformed Pokémon that does not know whom it copied"),
+                }
+                same_either_way(&game, 0, &mut rng);
+                // And the copy carries the stats its team-mate was given.
+                let mut copy = game.clone();
+                copy.determinize(0, &mut rng).unwrap();
+                let side = &copy.battle.as_ref().unwrap().sides[1];
+                if let Some(r) = side.team[0].copied_from.filter(|r| r.side == 1) {
+                    assert_eq!(side.team[0].stats[1..], side.team[r.idx as usize].stats[1..]);
+                }
+            }
+        }
+        println!("{into_foe} positions transformed into a foe, {into_ally} into a team-mate");
+        assert!(into_foe > 100 && into_ally > 20, "too few transformed positions ({into_foe}, {into_ally})");
+    }
+
+    /// The case found by review: an opposing Gholdengo whose guessed spread (Special
+    /// Attack and Speed first) leaves too few points for any HP that shows its bar,
+    /// such as 20% on a red bar, which only a maximum divisible by 5 can show. Two
+    /// truths that differ in nothing but its hidden Special Attack must be redrawn
+    /// the same, for every amount of HP points it may really have and every HP.
+    #[test]
+    fn a_spread_that_cannot_show_the_bar_does_not_fall_back_on_the_truth() {
+        let format = Format::current();
+        let mut rng = Rng::from_words([8, 8, 8, 8]);
+        let mut theirs = format.random_team(&mut rng);
+        theirs[0] = PokemonSet::from_names(
+            "Gholdengo",
+            &["Make It Rain", "Shadow Ball", "Nasty Plot", "Protect"],
+            "Timid",
+            [0, 0, 0, 32, 0, 32],
+        )
+        .unwrap()
+        .ability("Good as Gold")
+        .unwrap();
+        let mut game = Game::new([format.random_team(&mut rng), theirs], true).unwrap();
+        game.start([&[0, 1, 2, 3], &[0, 1, 2, 3]], [8, 3, 3, 3]).unwrap();
+        let (mut checked, mut picky) = (0, 0);
+        for speed in 0..=32u8 {
+            let mut truth = game.clone();
+            let m = &mut truth.battle.as_mut().unwrap().sides[1].team[0];
+            m.stat_points = [(34 - speed).min(32), 0, 0, 32, 0, speed];
+            m.stats = calc_stats(m.species, m.nature, m.stat_points);
+            let max = m.stats[0];
+            for hp in 1..=max {
+                let shown = crate::shown::hp_shown(hp, max);
+                // Only bars some maximum HP near this one cannot show.
+                if (max - 3..=max + 3).all(|mx| (1..=mx).any(|h| crate::shown::hp_shown(h, mx) == shown)) {
+                    continue;
+                }
+                picky += 1;
+                for _ in 0..40 {
+                    let mut a = truth.clone();
+                    a.battle.as_mut().unwrap().sides[1].team[0].hp = hp;
+                    let mut b = a.clone();
+                    let m = &mut b.battle.as_mut().unwrap().sides[1].team[0];
+                    m.stat_points[3] = 10;
+                    m.stats[3] = calc_stats(m.species, m.nature, m.stat_points)[3];
+                    let same = rng.next_u32() as u64;
+                    let redraw = |g: &Game| {
+                        let mut copy = g.clone();
+                        copy.determinize(0, &mut Rng { seed: same, calls: 0 }).unwrap();
+                        copy.battle.unwrap().sides
+                    };
+                    assert_eq!(redraw(&a), redraw(&b), "Gholdengo at {hp}/{max}");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(picky > 0 && checked > 100, "no bar that rules out a maximum HP ({picky})");
+    }
+
+    /// Fitting HP to the bar never needs the truth: for every species, whatever the
+    /// guess, some HP points show the bar, and the HP found shows exactly it.
+    #[test]
+    fn hp_is_always_fitted_to_the_bar_without_the_truth() {
+        let mut rng = Rng::from_words([7, 7, 7, 7]);
+        let mut checked = 0;
+        for species in 0..SPECIES.len() as u16 {
+            for _ in 0..40 {
+                let nature = (rng.below(6) as u8, rng.below(6) as u8);
+                let random_points = |rng: &mut Rng| {
+                    let mut p = [0u8; 6];
+                    let mut left = 66u32;
+                    for k in 0..6 {
+                        p[k] = rng.below(33).min(left) as u8;
+                        left -= p[k] as u32;
+                    }
+                    p
+                };
+                let (truth, guess) = (random_points(&mut rng), random_points(&mut rng));
+                let max = calc_stats(species, nature, truth)[0];
+                let hp = 1 + rng.below(max as u32) as u16;
+                let shown = crate::shown::hp_shown(hp, max);
+                let (points, new_hp) = fit_hp(guess, species, nature, Some(shown), rng.next_u32());
+                let new_max = calc_stats(species, nature, points)[0];
+                assert_eq!(crate::shown::hp_shown(new_hp, new_max), shown, "species {species}");
+                assert!(points.iter().all(|&p| p <= 32) && points.iter().map(|&p| p as u32).sum::<u32>() <= 66);
+                assert_eq!(points[5], guess[5], "Speed is left as guessed");
+                checked += 1;
+            }
+        }
+        assert!(checked > 10_000);
     }
 
     #[test]
@@ -1085,20 +1280,10 @@ mod hidden_truth {
             while !game.battle.as_ref().is_some_and(|b| b.ended || b.turn > 150) {
                 if game.battle.is_some() {
                     for view in 0..2 {
-                        let mut other = game.clone();
-                        let n = other_truth(&mut other, view, &mut rng);
+                        let n = same_either_way(&game, view, &mut rng);
                         if n > 0 {
                             changed += n;
                             positions += 1;
-                            let same = rng.next_u32() as u64;
-                            let redraw = |g: &Game| {
-                                let mut copy = g.clone();
-                                copy.determinize(view, &mut Rng { seed: same, calls: 0 }).unwrap();
-                                copy.battle.unwrap()
-                            };
-                            let (a, b) = (redraw(&game), redraw(&other));
-                            assert_eq!(a.sides, b.sides, "game {seed}, turn {}, side {view}", a.turn);
-                            assert!(a.vols == b.vols, "game {seed}, turn {}, side {view}: volatiles", a.turn);
                         }
                     }
                 }

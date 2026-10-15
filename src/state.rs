@@ -264,6 +264,10 @@ pub struct Pokemon {
     /// lasted, which everyone has seen, so a search can draw the rest anew
     /// (`Game::determinize`). Nothing reads it in battle.
     pub(crate) drawn: [u8; 4],
+    /// While transformed: the Pokémon it turned into, whose stats other than HP it
+    /// copied. Bookkeeping for search, like `drawn`: a redrawn copy of the game
+    /// gives it the redrawn stats of a team-mate it copied (`Game::determinize`).
+    pub(crate) copied_from: Option<MonRef>,
     /// Toxic damage stage (Showdown's `statusState.stage`).
     pub tox_stage: u8,
     pub status_st: EffState,

@@ -331,6 +331,11 @@ pub struct PokemonState {
     /// hand, the countdowns it has are not drawn again by `Game::determinize`.
     #[serde(skip_serializing_if = "is_default")]
     pub drawn: [u8; 4],
+    /// Bookkeeping for search: while transformed, the side and team index of the
+    /// Pokémon it copied. Left out of a position written by hand, a redrawn copy
+    /// keeps the stats it copied.
+    #[serde(skip_serializing_if = "is_default")]
+    pub copied_from: Option<[u8; 2]>,
     /// Stat stages: atk, def, spa, spd, spe, accuracy, evasion.
     #[serde(skip_serializing_if = "is_default")]
     pub boosts: [i8; 7],
@@ -1196,6 +1201,7 @@ impl Battle {
             toxic_stage: m.tox_stage,
             status_extra: Extra { order: m.status_st.order, a: m.status_st.a, b: m.status_st.b, item: String::new() },
             drawn: m.drawn,
+            copied_from: m.copied_from.map(|r| [r.side, r.idx]),
             boosts: m.boosts,
             moves: Battle::move_states(&m.moves[..m.n_moves as usize]),
             transformed: m.transformed,
@@ -1588,6 +1594,7 @@ impl Battle {
         mon.tox_stage = ps.toxic_stage;
         mon.status_st = EffState { order: ps.status_extra.order, uid: 0, a: ps.status_extra.a, b: ps.status_extra.b };
         mon.drawn = ps.drawn;
+        mon.copied_from = ps.copied_from.map(|[side, idx]| MonRef { side, idx });
         if ps.boosts.iter().any(|b| !(-6..=6).contains(b)) {
             return Err(bad(format!("{}: stat stages run from -6 to 6", ps.species)));
         }

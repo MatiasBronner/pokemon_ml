@@ -55,17 +55,19 @@ from nothing else. What `Game::determinize` draws again:
 | Hidden from a player | How it is drawn |
 |---|---|
 | The opposing bench | Each unseen spot gets a registered Pokémon not yet seen. |
-| Opposing stat points | Speed comes from what move order allows (`Speeds::belief`). The other stats follow the `guess_spread` rule of thumb. HP points are moved if needed so the shown bar is still possible. |
-| Exact opposing HP | Uniformly among every HP that shows the same percentage and bar colour. |
+| Opposing stat points | Speed comes from what move order allows (`Speeds::belief`). The other stats follow the `guess_spread` rule of thumb. HP points are moved as little as needed for the shown bar to be possible, borrowing from Attack and the defences; every amount from 0 to 32 is tried, so a fit is always found without falling back on the real spread. |
+| Exact opposing HP | Uniformly among every HP that shows the same percentage and bar colour, transformed Pokémon included (Transform keeps a Pokémon's own HP). |
+| What a transformed opponent copied | If it turned into a teammate, it takes that teammate's redrawn stats, not the real ones. If it turned into one of the searching side's Pokémon, it copied stats that side already knows. |
 | Sleep length (2 turns one time in three, else 3) | Only lengths longer than it has already lasted, as often as the game would draw them. Rest's fixed 3 turns are kept. |
 | Confusion (2–5 attempts), rampage (2–3 turns), binding (5–6 turns) | The same way. |
 
 The four countdowns are redrawn for **both** sides. Showdown doesn't tell a
 player its own Pokémon's sleep length either. To know how long a countdown
 has visibly lasted, the engine records what each one was drawn at
-(`Pokemon::drawn`, never shown, exported with positions).
+(`Pokemon::drawn`, never shown, exported with positions). Likewise, a
+transformed Pokémon records whom it copied (`Pokemon::copied_from`).
 
-Three tests check it:
+These tests check it:
 
 - **The copy looks the same** (`tests/search.rs`). At every decision of
   1,500 random games, the searching side's observation of a redrawn copy is
@@ -81,13 +83,32 @@ Three tests check it:
   truth is changed independently: other countdown lengths, HP moved within
   its bar, other attack, defence and Speed points, and a different unseen
   bench Pokémon. That is 192,337 hidden values over 24,656 positions.
+- **Targeted cases** (also in `src/env.rs`). Random games rarely produce
+  these:
+  - A Ditto transformed into a foe (Imposter) or into its own teammate (the
+    move Transform), with its HP and its teammate's stats changed by hand.
+  - An opposing Gholdengo whose guessed spread leaves too few HP points to
+    show its bar (such as 37/185, which is 20% on a red bar), with two truths
+    that differ only in hidden Special Attack.
+  - A property check over every species: fitting HP to a bar never needs
+    the real spread.
 
-To check the tests themselves, each fix was undone in turn: HP scaled from
-the truth, countdowns copied (on both sides, or on the searching side only),
-the real attack and defence points, the real Speed, the real bench. The
-tests caught every one. Before that, the first test had already caught a
-real leak: a bar showing "20%, red" is only possible when max HP is a
-multiple of 5.
+To check the tests themselves, each fix was undone in turn:
+- HP scaled from the truth;
+- countdowns copied, on both sides or on the searching side only;
+- the real attack and defence points, or the real Speed;
+- the real bench;
+- a transformed Pokémon's real HP;
+- a teammate's real copied stats;
+- the real spread kept when the guess cannot show the bar.
+
+The tests caught every one.
+
+Two of those leaks were found by review after the first fix was merged. The
+random-game tests had passed over 2,000 games because both cases are rare in
+random play: transformed Pokémon, and a guess that can't show a "picky" bar
+such as 20% on red, which needs a max HP divisible by 5. That is why the
+targeted tests exist.
 
 What the search still knows that a player would not:
 
@@ -102,7 +123,8 @@ What the search still knows that a player would not:
   the difference, so it may draw a length the game could not. That is a
   wrong guess, not a leak.
 - **A position written by hand** has no record of what its countdowns were
-  drawn at, so those countdowns are kept as written.
+  drawn at, or of whom a transformed Pokémon copied. Those countdowns, and
+  the copied stats, are kept as written.
 
 Natures and items on open sheets are given by the sheet, so they are
 legitimately known. PP and stat stages are public: every move used and every

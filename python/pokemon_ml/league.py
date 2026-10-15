@@ -327,9 +327,9 @@ class TrainingLeague:
         self.pool_size = (
             pool_size if pool_size is not None else (state or {}).get("pool_size", 12)
         )
-        if self.selection not in ("legacy", "broad") or self.pool_size < 4:
+        if self.selection not in ("legacy", "broad", "targeted") or self.pool_size < 4:
             raise ValueError(
-                "league selection must be legacy/broad and pool size at least four"
+                "league selection must be legacy/broad/targeted and pool size at least four"
             )
         self.results = {k: dict(v) for k, v in (state or {}).get("results", {}).items()}
         self.update_results = {}
@@ -384,6 +384,17 @@ class TrainingLeague:
                 probabilities = [0.5 / recent] * recent + [
                     0.5 / (len(candidates) - recent)
                 ] * (len(candidates) - recent)
+        if self.selection == "targeted" and candidates:
+            # Same bounded candidates as legacy: isolate weighting from diversity.
+            # Beta-style shrinkage avoids reacting strongly to sparse results.
+            scores = []
+            for name in candidates:
+                row = self.results.get("snapshot:" + name, {})
+                n = row.get("games", 0)
+                win = (row.get("wins", 0) + 0.5 * row.get("ties", 0) + 25) / (n + 50)
+                scores.append(win * (1 - win))
+            scores = np.asarray(scores)
+            probabilities = 0.2 / len(candidates) + 0.8 * scores / scores.sum()
         for game in np.flatnonzero(done):
             kind = int(self.rng.choice(3, p=self.weights))
             opponent = (

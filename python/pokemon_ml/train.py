@@ -58,6 +58,9 @@ def parser():
     p.add_argument("--envs", type=int, default=512)
     p.add_argument("--updates", type=int, default=1000)
     p.add_argument("--hours", type=float)
+    p.add_argument("--lr-decay-end", type=float)
+    p.add_argument("--lr-decay-start-update", type=int)
+    p.add_argument("--lr-decay-end-update", type=int)
     p.add_argument("--device", default="auto")
     p.add_argument("--precision", choices=["fp32", "bf16"], default=None)
     p.add_argument(
@@ -90,7 +93,7 @@ def parser():
         default=25,
         help="checkpoint opponent cadence independent of evaluation",
     )
-    p.add_argument("--league-selection", choices=("legacy", "broad"), default=None)
+    p.add_argument("--league-selection", choices=("legacy", "broad", "targeted"), default=None)
     p.add_argument("--league-pool-size", type=int, default=None)
     p.add_argument("--league-cache-size", type=int, default=4)
     p.add_argument("--league-current", type=float, default=0.5)
@@ -173,6 +176,19 @@ def main(argv=None):
         or ppo_config.lr <= 0
     ):
         p.error("PPO counts and learning rate must be positive")
+    schedule = saved.get("lr_schedule") if saved else None
+    supplied = (args.lr_decay_end, args.lr_decay_start_update, args.lr_decay_end_update)
+    if any(x is not None for x in supplied):
+        if not all(x is not None for x in supplied):
+            p.error("provide all three LR decay options together")
+        candidate = dict(start_lr=ppo_config.lr, end_lr=args.lr_decay_end,
+                         start_update=args.lr_decay_start_update, end_update=args.lr_decay_end_update)
+        if schedule and candidate != schedule:
+            p.error("cannot change a saved LR schedule")
+        schedule = candidate
+    if schedule:
+        from .schedules import learning_rate
+        learning_rate(schedule, schedule["start_update"])  # validate before training
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -224,7 +240,7 @@ def main(argv=None):
         optimizer.load_state_dict(saved["optimizer"])
         totals = {k: saved.get(k, 0) for k in totals}
         for group in optimizer.param_groups:
-            group["lr"] = ppo_config.lr
+            group["lr"] = learning_rate(schedule, totals["update"]) if schedule else ppo_config.lr
     env = Env(
         args.pool,
         args.envs,
@@ -278,6 +294,7 @@ def main(argv=None):
         model=asdict(net_config),
         runtime=asdict(execution),
         ppo=asdict(ppo_config),
+        lr_schedule=schedule,
         provenance=provenance,
         args=vars(args),
         contract=checkpoint.contract(),
@@ -295,6 +312,7 @@ def main(argv=None):
             model_config=asdict(net_config),
             runtime=asdict(execution),
             ppo_config=asdict(ppo_config),
+            lr_schedule=schedule,
             contract=checkpoint.contract(),
             rng=checkpoint.rng_state(),
             league=training_league.state_dict(),
@@ -369,7 +387,12 @@ def main(argv=None):
             before = env.stats()
             ppo.collect(env, model, roll, training_league)
             t1 = time.perf_counter()
+            if schedule:
+                rate = learning_rate(schedule, totals["update"] + 1)
+                for group in optimizer.param_groups:
+                    group["lr"] = rate
             log = ppo.update(model, optimizer, roll, ppo_config)
+            log["lr"] = optimizer.param_groups[0]["lr"]
             if device.type == "cuda":
                 torch.cuda.synchronize(device)
             t2 = time.perf_counter()

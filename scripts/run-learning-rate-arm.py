@@ -21,7 +21,7 @@ def training_args(root, arm, device="cuda"):
         "--updates",
         str(manifest["target_update"]),
         "--lr",
-        str(manifest["learning_rates"][arm]),
+        str(manifest["learning_rates"].get(arm, manifest["learning_rates"]["control"])),
         "--device",
         device,
         "--precision",

@@ -1,5 +1,10 @@
 # Small-model learning-rate experiment
 
+For the next staged OSCAR workflow, see [Plateau diagnosis and controlled
+continuations](plateau-experiment.md). It first measures constant-LR progress,
+then prepares matched constant-LR, bounded-decay and targeted-league arms only
+if the diagnosis warrants them.
+
 The original small-model run plateaued around updates 4125–6132 on tested
 head-to-head benchmarks. A broader historical league did not produce a detectable
 improvement and substantially reduced throughput. This next experiment tests a

@@ -661,6 +661,7 @@ impl Battle {
                     return result;
                 }
                 self.mon_mut(target).status_time = 3;
+                self.mon_mut(target).sleep_rest = true;
                 let max = self.mon(target).max_hp() as i32;
                 self.heal(max, None, None, Eff::None);
                 Res::Undef

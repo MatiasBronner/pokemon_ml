@@ -58,7 +58,24 @@ one real leak while this was being written: a bar showing "20%, red" is only
 possible when max HP is a multiple of 5, so a guessed HP stat now has to fit
 what the bar shows.
 
-What the search still knows that a player would not:
+HP sampling now uses only the displayed percentage and bar colour: different
+true fractions with the same display give identical samples for the same seed.
+A compatible maximum HP is chosen without falling back to the true spread,
+including for transformed opponents (whose copied non-HP stats are preserved).
+
+Sleep, confusion and rampage counters are redrawn on **both sides**. Condition
+handlers retain elapsed decrements independently of the sampled duration.
+Sleep uses Champions' `[2, 3, 3]` prior conditioned on still being asleep;
+Rest has a fixed total of three and Early Bird counts two decrements per attempt.
+Confusion uses 2–5 attempts (3–5 for Axe Kick); rampages use 2–3 turns,
+conditioned on elapsed time and the condition still being present. These
+counters do not add features to the policy or change the actual battle's RNG.
+
+This replaces the initial search implementation used in the 40-game smoke test.
+Discard strength comparisons from that implementation and rerun after rebuilding
+the Python extension. No policy retraining is required.
+
+Remaining information limitations (this is not a complete information-safety audit):
 
 - **With closed sheets**, the opponent's unrevealed moves, items and
   abilities are the real ones. That is why closed-sheet games fall back to
@@ -66,15 +83,15 @@ What the search still knows that a player would not:
   next step (roadmap item 3).
 - **Natures and items** on open sheets are given by the sheet, so they are
   legitimately known.
-- **PP and hidden volatile conditions** of the opponent's Pokémon (such as
-  turns left on a rampage) are copied from the real game. They only matter
-  in rare positions.
+- **Opponent PP and other hidden condition state** are still copied from the
+  real game. Sleep, confusion and rampage durations are now sampled, but this
+  change does not establish that every other hidden field is safe.
 - **On a team that registered an Illusion Pokémon**, the bench is not
   redrawn: disguises depend on where teammates stand. Stat points still are.
 
 `--privileged` searches the real game without redrawing anything. Compare it
-with the honest search to see how much the remaining hidden information is
-worth.
+with the sampled search as a diagnostic. This is not a guaranteed upper bound
+on strength, and cannot isolate every source of error.
 
 ## Running it on Oscar
 
@@ -114,7 +131,7 @@ Then the comparison:
 SEARCH_OUT=runs/search/15342-self-seed9502347.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347
 SEARCH_OUT=runs/search/15342-self-seed9602347.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9602347
 
-# How much the remaining hidden information is worth (an upper bound, not a fair player).
+# How much the remaining hidden information is worth (a privileged diagnostic, not a fair player).
 SEARCH_OUT=runs/search/15342-self-privileged.json sbatch $SLURM_OPTS scripts/oscar/search-eval.sbatch --seed 9502347 --privileged
 
 # Cheaper and wider settings, to see where the gain comes from.
@@ -158,3 +175,15 @@ the first report before sizing `--time`. The 8-hour default is a guess.
    wrong".
 3. Sample the opponent's unrevealed sets so closed-sheet games can be
    searched too.
+
+### Hidden HP and duration regression checks (October 15)
+
+The corrected sampler was checked with 2,000 randomized games in
+`tests/search.rs` (both views, observation equality and playable continuations),
+four targeted unit tests for hidden-state independence and conditional priors,
+the engine environment/position/effect suites, and all five Python search tests.
+The Rust selection passed 60 tests in total. Handler checks include actual Rest,
+Early Bird, confusion and Outrage actions. Matching displayed HP bars and matching
+public timer histories produce identical sampled values with a fixed seed even
+when the original hidden values differ. These are correctness checks, not evidence
+of increased playing strength. The 3,000-game strength comparisons must be rerun.

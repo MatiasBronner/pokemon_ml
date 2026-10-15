@@ -33,6 +33,8 @@ impl Battle {
             hp: 0,
             status: Status::None,
             status_time: 0,
+            sleep_elapsed: 0,
+            sleep_rest: false,
             tox_stage: 0,
             status_st: EffState::default(),
             boosts: [0; 7],

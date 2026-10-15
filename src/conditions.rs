@@ -60,12 +60,17 @@ impl Battle {
             // Champions: asleep for 2 turns one time in three, otherwise 3.
             (Status::Slp, Ev::Start) => {
                 let t = [2u8, 3, 3][self.rand(3, "sleep turns") as usize];
-                self.mon_mut(holder).status_time = t;
+                let m = self.mon_mut(holder);
+                m.status_time = t;
+                // Track public history separately from the true remaining duration.
+                m.sleep_rest = false;
+                m.sleep_elapsed = 0;
                 Res::Undef
             }
             (Status::Slp, Ev::BeforeMove) => {
                 let early = self.has_ability(holder, ab::EARLYBIRD);
                 let m = self.mon_mut(holder);
+                m.sleep_elapsed += if early { 2 } else { 1 };
                 if early {
                     m.status_time = m.status_time.saturating_sub(1);
                 }
@@ -230,6 +235,8 @@ impl Battle {
                 let t = self.rand_range(min, 6, "confusion turns");
                 if let Some(v) = self.vol_mut(holder, VolKind::Confusion) {
                     v.data = t as u16;
+                    v.search_min = min as u8;
+                    v.search_elapsed = 0;
                 }
                 Res::Undef
             }
@@ -238,6 +245,7 @@ impl Battle {
                 let Some(v) = self.vol_mut(holder, VolKind::Confusion) else {
                     return Res::Undef;
                 };
+                v.search_elapsed += 1;
                 v.data = v.data.saturating_sub(1);
                 if v.data == 0 {
                     self.remove_volatile(holder, VolKind::Confusion);
@@ -1130,6 +1138,7 @@ impl Battle {
                 };
                 if let Some(v) = self.vol_mut(holder, kind) {
                     v.st.a = turns;
+                    v.search_elapsed = 0;
                     v.data = id;
                 }
                 Res::Undef
@@ -1149,6 +1158,7 @@ impl Battle {
                     self.drop_vol(holder, kind);
                 } else if let Some(v) = self.vol_mut(holder, kind) {
                     v.st.a -= 1;
+                    v.search_elapsed += 1;
                 }
                 Res::Undef
             }

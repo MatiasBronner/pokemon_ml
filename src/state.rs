@@ -88,6 +88,10 @@ pub struct Cond<K: Copy> {
     /// Showdown sorts a pseudo-weather's handlers differently from then on.
     pub(crate) targeted: bool,
     pub st: EffState,
+    /// Public elapsed decrements and initial minimum, for search beliefs only.
+    /// Not part of the mechanical position or sampled duration.
+    pub(crate) search_elapsed: u8,
+    pub(crate) search_min: u8,
 }
 
 impl<K: Copy> Cond<K> {
@@ -100,6 +104,8 @@ impl<K: Copy> Cond<K> {
             source_slot: NO_SLOT,
             targeted: false,
             st: EffState { order: 0, uid: 0, a: 0, b: 0 },
+            search_elapsed: 0,
+            search_min: 0,
         }
     }
 }
@@ -251,6 +257,9 @@ pub struct Pokemon {
     pub status: Status,
     /// Sleep / freeze turn counter (Showdown's `statusState.time`).
     pub status_time: u8,
+    /// Public sleep history for search; never controls real battle mechanics.
+    pub(crate) sleep_elapsed: u8,
+    pub(crate) sleep_rest: bool,
     /// Toxic damage stage (Showdown's `statusState.stage`).
     pub tox_stage: u8,
     pub status_st: EffState,

@@ -274,12 +274,25 @@ impl Game {
     /// team sheets `view` has been given them. With closed sheets they are
     /// still the truth, which a search should not be given.
     ///
+    /// Sleep, confusion and rampage durations on both sides are sampled conditional
+    /// on public elapsed decrements. Even one's own true random durations are hidden.
     /// The random number generator is left alone; [`Game::reseed`] it too.
     pub fn determinize(&mut self, view: usize, rng: &mut Rng) -> Result<(), Error> {
         let opp = 1 - view;
         let Some(b) = self.battle.as_mut() else {
             return Ok(());
         };
+        // The player does not know its own randomly selected durations either.
+        for side in &mut b.sides {
+            for m in &mut side.team[..side.n as usize] {
+                redraw_sleep(m, rng);
+            }
+        }
+        for row in &mut b.vols {
+            for vols in row {
+                redraw_volatiles(vols, rng);
+            }
+        }
         let illusion = self.rosters[opp].iter().any(|s| s.ability == ab::ILLUSION);
         if !illusion {
             let side = &b.sides[opp];
@@ -310,12 +323,9 @@ impl Game {
         for i in 0..b.sides[opp].n as usize {
             let Some(j) = b.sides[opp].roster.iter().position(|l| l.brought == i as u8) else { continue };
             let m = &mut b.sides[opp].team[i];
-            if m.transformed {
-                continue;
-            }
             let mut points = guess_points(&self.rosters[opp][j], self.speeds.belief(opp, j), rng);
             // What the bar shows can rule out a maximum HP (20% on a red bar needs one divisible
-            // by 5): move HP points until the bar can be shown, or keep the truth if nothing can.
+            // by 5): move HP points until the public bar can be represented.
             let (old_max, hp) = (m.stats[0], m.hp);
             let (species, nature, guessed) = (m.set_species, m.nature, points);
             let max_with = |hp_points: u8| {
@@ -326,14 +336,26 @@ impl Game {
             let room = 66 - points.iter().map(|&p| p as u32).sum::<u32>();
             let first = points[0];
             let shifts = (0..=32i32).flat_map(|d| [-d, d]);
-            let candidates =
-                shifts.map(|d| first as i32 + d).filter(|&p| (0..=32).contains(&p) && p - first as i32 <= room as i32);
+            let candidates = shifts.map(|d| first as i32 + d).filter(|&p| (0..=32).contains(&p));
             let fit = candidates.map(|p| p as u8).find_map(|p| {
                 let max = max_with(p);
-                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max).map(|h| (p, h)) }
+                if hp == 0 { Some((p, 0)) } else { same_bar(hp, old_max, max, rng).map(|h| (p, h)) }
             });
-            let Some((hp_points, new_hp)) = fit else { continue };
+            let (hp_points, new_hp) = fit.expect("some legal HP spread can represent the public bar");
             points[0] = hp_points;
+            // A bar-compatible HP spread can need points moved from the guessed bulk/offence.
+            let mut excess = (hp_points as i32 - first as i32 - room as i32).max(0) as u8;
+            for k in [1, 2, 3, 4] {
+                let take = excess.min(points[k]);
+                points[k] -= take;
+                excess -= take;
+            }
+            if m.transformed {
+                // Transform retains original max HP, but copies the other combat stats.
+                m.stats[0] = max_with(hp_points);
+                m.hp = new_hp;
+                continue;
+            }
             m.stat_points = points;
             let mut stats = calc_stats(m.species, m.nature, points);
             stats[0] = calc_stats(m.set_species, m.nature, points)[0];
@@ -844,11 +866,39 @@ fn guess_points(set: &PokemonSet, belief: &speed::Belief, rng: &mut Rng) -> [u8;
 }
 
 /// An HP that, out of `new_max`, shows the same percentage and colour of bar as `hp` out of `old_max`, if there is one.
-fn same_bar(hp: u16, old_max: u16, new_max: u16) -> Option<u16> {
+fn same_bar(hp: u16, old_max: u16, new_max: u16, rng: &mut Rng) -> Option<u16> {
     let shown = crate::shown::hp_shown(hp, old_max);
-    let guess = ((hp as u32 * new_max as u32 + old_max as u32 / 2) / old_max as u32).clamp(1, new_max as u32) as u16;
-    let near = (0..=8u16).flat_map(|d| [guess.saturating_add(d), guess.saturating_sub(d)]);
-    near.filter(|&h| h >= 1 && h <= new_max).find(|&h| crate::shown::hp_shown(h, new_max) == shown)
+    if hp == 0 {
+        return Some(0);
+    }
+    // Only the public bar enters the distribution, never the exact old fraction.
+    let possible: Vec<u16> = (1..=new_max).filter(|&h| crate::shown::hp_shown(h, new_max) == shown).collect();
+    if possible.is_empty() { None } else { Some(possible[rng.below(possible.len() as u32) as usize]) }
+}
+
+/// Condition priors conditioned on publicly elapsed decrements and survival.
+/// Bookkeeping fields are populated by the condition handlers, without consulting the sampled total.
+fn redraw_sleep(m: &mut Pokemon, rng: &mut Rng) {
+    if m.status == Status::Slp {
+        let elapsed = m.sleep_elapsed;
+        let prior: &[u8] = if m.sleep_rest { &[3] } else { &[2, 3, 3] };
+        let remaining: Vec<u8> = prior.iter().copied().filter(|&t| t > elapsed).map(|t| t - elapsed).collect();
+        assert!(!remaining.is_empty(), "sleep elapsed past its maximum duration");
+        m.status_time = remaining[rng.below(remaining.len() as u32) as usize];
+    }
+}
+
+fn redraw_volatiles(vols: &mut Volatiles, rng: &mut Rng) {
+    if let Some(v) = vols.get_mut(VolKind::Confusion) {
+        let elapsed = v.search_elapsed as u16;
+        let min = (v.search_min.max(2) as u16).max(elapsed + 1);
+        v.data = min + rng.below((6 - min) as u32) as u16 - elapsed;
+    }
+    if let Some(v) = vols.get_mut(VolKind::Lockedmove) {
+        let elapsed = v.search_elapsed as i16;
+        let min = 2.max(elapsed + 1);
+        v.st.a = min + rng.below((4 - min) as u32) as i16 - elapsed;
+    }
 }
 
 fn observe_both(game: &Game, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {
@@ -857,4 +907,161 @@ fn observe_both(game: &Game, f: &mut [f32], i: &mut [i16], mask: &mut [u8]) {
     let (m0, m1) = mask.split_at_mut(OBS_M);
     game.observe(0, f0, i0, m0);
     game.observe(1, f1, i1, m1);
+}
+
+#[cfg(test)]
+mod hidden_search_tests {
+    use super::*;
+
+    fn game() -> Game {
+        let set = PokemonSet::from_names("Snorlax", &["Protect"], "Hardy", [0; 6]).unwrap();
+        let mut g = Game::new([vec![set.clone(); 6], vec![set; 6]], true).unwrap();
+        g.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+        g
+    }
+
+    #[test]
+    fn matching_public_bars_give_identical_hp_samples() {
+        for seed in 0..128 {
+            let mut a = Rng::from_words([seed, 1, 2, 3]);
+            let mut b = a.clone();
+            // Different true fractions, identical 50%, green display.
+            assert_eq!(same_bar(151, 300, 400, &mut a), same_bar(152, 301, 400, &mut b));
+        }
+        let mut rng = Rng::from_words([1, 2, 3, 4]);
+        let samples: std::collections::BTreeSet<_> =
+            (0..128).map(|_| same_bar(150, 300, 400, &mut rng).unwrap()).collect();
+        // Yellow at 50% permits precisely 200/400; green permits 201..203.
+        assert_eq!(samples, [200].into_iter().collect());
+        let samples: std::collections::BTreeSet<_> =
+            (0..128).map(|_| same_bar(151, 300, 400, &mut rng).unwrap()).collect();
+        assert_eq!(samples, [201, 202, 203].into_iter().collect());
+    }
+
+    #[test]
+    fn worlds_do_not_depend_on_real_hidden_timers_on_either_side() {
+        let mut a = game();
+        let b = a.battle.as_mut().unwrap();
+        for side in 0..2 {
+            let m = &mut b.sides[side].team[0];
+            m.status = Status::Slp;
+            m.status_time = 1;
+            m.sleep_elapsed = 1;
+            let mut confusion = Cond::new(VolKind::Confusion);
+            confusion.data = 1;
+            confusion.search_min = 2;
+            confusion.search_elapsed = 1;
+            b.vols[side][0].push(confusion);
+            let mut rampage = Cond::new(VolKind::Lockedmove);
+            rampage.data = crate::data::mv::OUTRAGE + 1;
+            rampage.duration = 1;
+            rampage.st.a = 1;
+            rampage.search_elapsed = 1;
+            b.vols[side][1].push(rampage);
+        }
+        a.battle.as_mut().unwrap().sides[1].team[0].hp = 1;
+        let mut other = a.clone();
+        other.battle.as_mut().unwrap().sides[1].team[0].hp = 2;
+        for side in 0..2 {
+            let b = other.battle.as_mut().unwrap();
+            b.sides[side].team[0].status_time = 2;
+            b.vols[side][0].get_mut(VolKind::Confusion).unwrap().data = 4;
+            b.vols[side][1].get_mut(VolKind::Lockedmove).unwrap().st.a = 2;
+        }
+        for seed in 0..64 {
+            let (mut x, mut y) = (a.clone(), other.clone());
+            let mut rng = Rng::from_words([seed, 1, 2, 3]);
+            let mut rng2 = rng.clone();
+            x.determinize(0, &mut rng).unwrap();
+            y.determinize(0, &mut rng2).unwrap();
+            for side in 0..2 {
+                let (xb, yb) = (x.battle().unwrap(), y.battle().unwrap());
+                assert_eq!(xb.sides[side].team[0].status_time, yb.sides[side].team[0].status_time);
+                assert_eq!(xb.vols[side], yb.vols[side]);
+                assert_eq!(xb.sides[side].team[0].hp, yb.sides[side].team[0].hp);
+                assert_eq!(xb.sides[side].team[0].stats, yb.sides[side].team[0].stats);
+            }
+        }
+    }
+
+    #[test]
+    fn handlers_record_elapsed_attempts_without_using_remaining_totals() {
+        let mut g = game();
+        let b = g.battle.as_mut().unwrap();
+        let r0 = MonRef { side: 0, idx: 0 };
+        let r1 = MonRef { side: 0, idx: 1 };
+        b.set_status(r0, Status::Slp, None, Eff::None);
+        b.add_volatile(r1, VolKind::Confusion, None, Eff::None);
+        g.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+        let b = g.battle().unwrap();
+        assert_eq!(b.sides[0].team[0].sleep_elapsed, 1);
+        assert_eq!(b.vols[0][1].get(VolKind::Confusion).unwrap().search_elapsed, 1);
+
+        let mut rest = game();
+        let b = rest.battle.as_mut().unwrap();
+        b.sides[0].team[0].moves[0].id = crate::data::mv::REST;
+        b.sides[0].team[0].hp /= 2;
+        rest.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+        let m = &rest.battle().unwrap().sides[0].team[0];
+        assert!(m.sleep_rest);
+        assert_eq!(m.sleep_elapsed, 0);
+        assert_eq!(m.status_time, 3);
+
+        let mut early = game();
+        let b = early.battle.as_mut().unwrap();
+        b.set_status(r0, Status::Slp, None, Eff::None);
+        b.sides[0].team[0].ability = ab::EARLYBIRD;
+        b.sides[0].team[0].status_time = 3;
+        early.act([[0, 0], [0, 0]], [1, 2, 3, 4]).unwrap();
+        let m = &early.battle().unwrap().sides[0].team[0];
+        assert_eq!(m.sleep_elapsed, 2);
+        assert_eq!(m.status_time, 1);
+
+        let mut g = game();
+        let b = g.battle.as_mut().unwrap();
+        b.sides[0].team[0].moves[0].id = crate::data::mv::OUTRAGE;
+        for m in &mut b.sides[1].team {
+            m.moves[0].id = crate::data::mv::SWORDSDANCE;
+        }
+        // Choose the move rather than a random switch.
+        let choice = g.legal(0).into_iter().find(|a| a[0] < SWITCH && a[1] == 0).unwrap();
+        g.act([choice, [0, 0]], [1, 2, 3, 4]).unwrap();
+        let v = g.battle().unwrap().vols[0][0].get(VolKind::Lockedmove).unwrap();
+        assert_eq!(v.search_elapsed, 1);
+        assert!((1..=2).contains(&v.st.a));
+    }
+
+    #[test]
+    fn surviving_conditions_use_conditional_priors_and_rest_is_fixed() {
+        let mut g = game();
+        let m = &mut g.battle.as_mut().unwrap().sides[0].team[0];
+        m.status = Status::Slp;
+        let mut rng = Rng::from_words([1, 2, 3, 4]);
+        let mut threes = 0;
+        for _ in 0..6000 {
+            m.sleep_elapsed = 0;
+            redraw_sleep(m, &mut rng);
+            threes += (m.status_time == 3) as usize;
+        }
+        assert!((3800..4200).contains(&threes));
+        m.sleep_elapsed = 2;
+        for _ in 0..100 {
+            redraw_sleep(m, &mut rng);
+            assert_eq!(m.status_time, 1);
+        }
+        m.sleep_rest = true;
+        m.sleep_elapsed = 1;
+        for _ in 0..100 {
+            redraw_sleep(m, &mut rng);
+            assert_eq!(m.status_time, 2);
+        }
+        let mut vols = Volatiles::new(VolKind::Confusion);
+        let mut c = Cond::new(VolKind::Confusion);
+        c.search_min = 3; // Axe Kick has a three-attempt minimum.
+        vols.push(c);
+        for _ in 0..100 {
+            redraw_volatiles(&mut vols, &mut rng);
+            assert!((3..=5).contains(&vols.get(VolKind::Confusion).unwrap().data));
+        }
+    }
 }

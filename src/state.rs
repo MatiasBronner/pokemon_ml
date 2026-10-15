@@ -215,6 +215,12 @@ pub enum Trapped {
     Hidden,
 }
 
+// The countdowns of `Pokemon::drawn`.
+pub(crate) const SLEEP_CLOCK: usize = 0;
+pub(crate) const CONFUSION_CLOCK: usize = 1;
+pub(crate) const RAMPAGE_CLOCK: usize = 2;
+pub(crate) const BINDING_CLOCK: usize = 3;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pokemon {
     /// Current species (index into `data::SPECIES`); changes on Mega Evolution.
@@ -251,6 +257,13 @@ pub struct Pokemon {
     pub status: Status,
     /// Sleep / freeze turn counter (Showdown's `statusState.time`).
     pub status_time: u8,
+    /// What each countdown nobody is shown was drawn at when it began, by
+    /// `*_CLOCK` index (sleep, confusion, rampage, binding); 0 when
+    /// it was not drawn (Rest's sleep) or is not known (a position written by
+    /// hand). With the countdown itself it says how long the condition has
+    /// lasted, which everyone has seen, so a search can draw the rest anew
+    /// (`Game::determinize`). Nothing reads it in battle.
+    pub(crate) drawn: [u8; 4],
     /// Toxic damage stage (Showdown's `statusState.stage`).
     pub tox_stage: u8,
     pub status_st: EffState,

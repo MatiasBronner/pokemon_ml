@@ -324,6 +324,13 @@ pub struct PokemonState {
     pub toxic_stage: u8,
     #[serde(skip_serializing_if = "is_default")]
     pub status_extra: Extra,
+    /// Bookkeeping for search: what its sleep, confusion, rampage and binding
+    /// countdowns were drawn at when they began (0: not drawn, or not known).
+    /// Nobody is shown these; with what is left of each they say how long it
+    /// has lasted, which everyone has seen. Left out of a position written by
+    /// hand, the countdowns it has are not drawn again by `Game::determinize`.
+    #[serde(skip_serializing_if = "is_default")]
+    pub drawn: [u8; 4],
     /// Stat stages: atk, def, spa, spd, spe, accuracy, evasion.
     #[serde(skip_serializing_if = "is_default")]
     pub boosts: [i8; 7],
@@ -1188,6 +1195,7 @@ impl Battle {
             status_turns: m.status_time,
             toxic_stage: m.tox_stage,
             status_extra: Extra { order: m.status_st.order, a: m.status_st.a, b: m.status_st.b, item: String::new() },
+            drawn: m.drawn,
             boosts: m.boosts,
             moves: Battle::move_states(&m.moves[..m.n_moves as usize]),
             transformed: m.transformed,
@@ -1579,6 +1587,7 @@ impl Battle {
         mon.status_time = ps.status_turns;
         mon.tox_stage = ps.toxic_stage;
         mon.status_st = EffState { order: ps.status_extra.order, uid: 0, a: ps.status_extra.a, b: ps.status_extra.b };
+        mon.drawn = ps.drawn;
         if ps.boosts.iter().any(|b| !(-6..=6).contains(b)) {
             return Err(bad(format!("{}: stat stages run from -6 to 6", ps.species)));
         }

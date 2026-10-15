@@ -106,3 +106,72 @@ fn reseeded_copies_roll_their_own_dice() {
     }
     assert!(differ > 20, "reseeding hardly ever changes what happens ({differ} of 40)");
 }
+
+/// What a redrawn copy is drawn from must be what the searching side has seen,
+/// and nothing else. A redrawn copy is itself a game that agrees with all of
+/// that, so redrawing the real game and redrawing such a copy, with the same
+/// random numbers, must come to the same thing: the same Pokémon, stats, HP,
+/// countdowns and bench, and, played on with the same dice and the same
+/// choices, the same turns. Anything hidden that slipped through (exact HP
+/// within the bar, how long a sleep was drawn to last, the real stat points)
+/// would tell the two apart.
+#[test]
+fn a_redrawn_copy_depends_on_nothing_the_searching_side_has_not_seen() {
+    let games: u16 = std::env::var("SEARCH_GAMES").ok().and_then(|s| s.parse().ok()).unwrap_or(120);
+    let (mut compared, mut clocks) = (0, 0);
+    for seed in 0..games {
+        let mut rng = Rng::from_words([seed, 9, 9, 9]);
+        // Open sheets: with closed ones the moves, items and abilities are not redrawn.
+        let mut game = Game::new(teams(seed), true).unwrap();
+        while !finished(&game) {
+            if game.battle().is_some() {
+                for view in 0..2 {
+                    let mut other_truth = game.clone();
+                    other_truth.determinize(view, &mut rng).unwrap();
+                    let same = rng.next_u32() as u64;
+                    let redraw = |g: &Game| {
+                        let mut copy = g.clone();
+                        copy.determinize(view, &mut Rng { seed: same, calls: 0 }).unwrap();
+                        copy.reseed([seed, 4, 4, view as u16]);
+                        copy
+                    };
+                    let (mut a, mut b) = (redraw(&game), redraw(&other_truth));
+                    let turn = game.battle().unwrap().turn;
+                    assert_eq!(
+                        a.battle().unwrap().sides,
+                        b.battle().unwrap().sides,
+                        "game {seed}, turn {turn}, side {view}"
+                    );
+                    let sides = &game.battle().unwrap().sides;
+                    clocks += sides.iter().flat_map(|s| &s.team[..s.n as usize]).any(|m| m.status_time > 0) as u32;
+                    let mut dice = Rng::from_words([seed, turn, view as u16, 1]);
+                    for _ in 0..3 {
+                        if finished(&a) {
+                            break;
+                        }
+                        let actions = random_actions(&a, &mut dice);
+                        a.act(actions, [0; 4]).unwrap();
+                        b.act(actions, [0; 4]).unwrap();
+                        for side in 0..2 {
+                            assert_eq!(
+                                observation(&a, side),
+                                observation(&b, side),
+                                "game {seed}, turn {turn}: played on"
+                            );
+                        }
+                        assert_eq!(
+                            a.battle().unwrap().sides,
+                            b.battle().unwrap().sides,
+                            "game {seed}, turn {turn}: played on"
+                        );
+                    }
+                    compared += 1;
+                }
+            }
+            let actions = random_actions(&game, &mut rng);
+            game.act(actions, [seed, 2, 3, 4]).unwrap();
+        }
+    }
+    println!("{compared} positions redrawn from two different truths; {clocks} with a sleep or freeze counter running");
+    assert!(compared > 1000);
+}

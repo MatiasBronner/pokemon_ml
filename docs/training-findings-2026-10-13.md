@@ -1,13 +1,15 @@
 # Small-policy training findings through October 14, 2026
 
-The small doubles policy learned useful strategy and benefited from training on
-additional tournaments. Subsequent continuations show no measurable head-to-head
-improvement on the tested held-out current-format distribution. A broader frozen
-league did not improve these benchmarks and reduced throughput substantially.
-A later controlled lower-learning-rate continuation improved against the source
-and historical panel, showing that the small model still had room to learn.
-These results establish diminishing returns under the original settings, not a
-hard capacity limit or proof that the small architecture cannot improve further.
+This is the consolidated record of the small-policy experiments through update
+**15342**. The policy learned useful strategy across tournament teams. Two
+controlled learning-rate reductions improved head-to-head performance; broadening
+the historical league did not. The latest unchanged continuation at **0.00003**
+showed no detectable advantage over update 13450 across 6000 direct games.
+
+Keep the small architecture and speed features. The next agreed hypothesis is a
+matched **60/30/10 versus 50/40/10** league-proportion experiment at LR 0.00003;
+it has not been run. These findings do not establish a hard network-capacity limit.
+The dated filename is retained so earlier documentation links continue to work.
 
 This report records the Oscar runs and evaluation outputs reported during the
 project. It does not imply independent reruns of every measurement. Scores are
@@ -380,19 +382,129 @@ retain its JSON outputs for complete panel comparisons. Independent training see
 Worlds transfer for this latest checkpoint, and long-run behavior at 0.00003 remain
 unverified. Repeatedly lowering LR is not established as a universal strategy.
 
-**The leading checkpoint is now
-`runs/learning-rate-12450-ab/low-lr/checkpoint.pt`, update 13450, LR 0.00003.** Preserve
-it as a fixed reference before resuming. Preserve source and control as well.
-Continue with unchanged settings if pursuing a longer run, and measure progress
-against this reference rather than react to individual periodic rating peaks.
-No further LR reduction is supported without another diagnosed plateau and a
-controlled experiment.
+At this stage the leading checkpoint was
+`runs/learning-rate-12450-ab/low-lr/checkpoint.pt`, update 13450, LR 0.00003.
+The next recommendation was to preserve it and continue unchanged, measuring
+progress against that reference rather than periodic rating peaks. The outcome
+of that continuation is recorded below. No automatic further LR reduction was
+justified by the second reduction's success alone.
+
+## Continuation at LR 0.00003 through update 15342
+
+After the second LR reduction was confirmed, the source/control checkpoints were
+retained and the winning low-LR arm continued unchanged. Job **7400321** requested
+four hours, with training configured for approximately 3.75 hours plus saving
+margin, one RTX 3090, four CPUs and 32 GB host RAM. It resumed **13450** and saved
+**15342**, an additional **1892 updates**. Exact final scheduler accounting was
+not included in the latest pasted results; the checkpoint save was reported.
+
+Final counters were **41,499,647 cumulative games**, **4,875,362 additional games**
+beyond update 13450. Logged learner throughput near completion was approximately
+12,100 decisions/second; KL was approximately 0.001–0.0016. Small periodic greedy
+evaluations generally fluctuated in the low-to-mid 80s, without a clear sustained
+upward trend. That alone was insufficient to establish a plateau, given earlier
+instances where flat greedy scores hid head-to-head improvements.
+
+### Direct comparison against preserved update 13450
+
+The current checkpoint was held fixed while evaluating against
+`runs/learning-rate-12450-ab/reference/low-lr-update-13450.pt` on current-format
+held-out teams:
+
+| Seed | Games | Update-15342 score | Reported 95% interval |
+|---|---:|---:|---:|
+| 10902347 | 3000 | 51.83% | 50.04–53.62% |
+| 11002347 | 3000 | 49.27% | 47.48–51.06% |
+
+The combined score was **50.55% over 6000 games**, with an approximate pooled
+interval of **49.3–51.8%**. Both evaluations reported zero timeouts. The first
+seed's narrow advantage did not reproduce in the second. No detectable overall
+advantage was established for update 15342 against 13450 in this matchup; this
+is not proof of exact equality or zero improvement in every situation.
+
+### Historical panel
+
+Update 15342 was evaluated over **3000 games per opponent**, seed **11102347**,
+with zero timeouts throughout. The earlier update-13450 panel used seed 9702347.
+
+| Opponent | Update 13450, earlier seed | Update 15342 | Latest reported 95% interval |
+|---|---:|---:|---:|
+| Snapshot 000000 | 75.73% | 74.77% | 73.18–76.29% |
+| Snapshot 006225 | 61.90% | 62.57% | 60.82–64.28% |
+| Snapshot 009325 | 57.43% | 56.00% | 54.22–57.77% |
+| Snapshot 012425 | 52.47% | 53.77% | 51.98–55.54% |
+| Greedy | 85.87% | 85.40% | 84.09–86.62% |
+| Frozen source, update 12450 | 54.40% | 56.37% | 54.58–58.13% |
+
+The panel does not show a clear broad improvement. Because evaluation seeds
+differed, these changes are descriptive comparisons, not matched-seed evidence
+of individual regressions or improvements. The direct 6000-game source-reference
+comparison is the stronger evidence for assessing this continuation.
+
+### Artifact preservation
+
+The panel driver reused filenames under
+`runs/learning-rate-12450-ab/evaluation/low-lr`, replacing some earlier evaluation
+JSON reports. It did not change checkpoint weights or training history. Earlier
+scores remain recorded in this document and conversation; original detailed
+reports can be regenerated with preserved checkpoints and original seeds if
+needed. Their per-team breakdowns should not be claimed as retained without
+checking backups.
+
+A directory listing confirmed that both the update-13450 reference and current
+checkpoint existed. The user was instructed to additionally copy the current
+checkpoint to `reference/low-lr-update-15342.pt`; that copy's completion was not
+independently verified in the supplied output. Before another experiment, verify
+that the intended source checkpoint is update 15342 and preserve it.
+
+Model counters are local to each run or inherited continuation, not globally
+unique training identities. Warm starts reset counters; full resumes inherit
+them. Old job logs remain frozen even when the run directory's checkpoint advances.
+For example, reading the original LR experiment's log ending at 7132 while the
+continuation was past 10000 did not mean training had reset. Evaluation commands
+read checkpoints and do not roll back the running model.
+
+## Next proposed experiment: league proportions
+
+**Status: proposed and agreed, not implemented or run in this report.** Pause
+unchanged long continuations. Start two matched continuations from preserved
+**update 15342** to test the following proportions:
+
+| Arm | Current self-play | Historical opponents | Scripted opponents |
+|---|---:|---:|---:|
+| Control | 50% | 40% | 10% |
+| Experiment | 60% | 30% | 10% |
+
+Restore identical weights, optimizer starting state, RNG, counters and snapshot
+history. Keep **LR 0.00003**, the small network, speed features, weighted dataset,
+PPO settings and legacy historical-selection method unchanged. Target **1000
+additional updates per arm**, reaching **16342**, then evaluate against the frozen
+source, each other across two seeds, and the same historical panel with matched
+seeds. Report actual learner decisions, games and GPU time alongside update counts.
+Current self-play supplies eligible training rows from both sides, whereas frozen
+and scripted matches train only the learner side; equal updates therefore do not
+mean exactly equal training data. This is part of the practical effect being tested,
+not an isolated comparison at equal learner decisions.
+
+This modest mix change is a hypothesis, not an expected cure. The earlier broad
+league experiment changed historical opponent diversity, not the 50/40/10 mix,
+so it does not settle this question. An 80/20 current/historical mix was discussed
+but not selected; neither option has been tested here. Search-assisted training,
+speed ablation, medium-model training and another LR reduction should not be
+introduced simultaneously with this experiment.
+
+If neither arm improves, inspect battle traces and recurring decision errors
+before repeating long continuations or adding capacity. The present findings
+support useful learned strategy and two effective LR reductions, followed by
+another period of diminishing returns; they do not establish a hard architecture
+ceiling or simulator correctness for all mechanics.
 
 ## Decisions and remaining uncertainty
 
-1. Preserve the historical sources and all experimental checkpoints. The leading
-   model is low-LR update 13450 at 0.00003, with two direct-control confirmations.
-   Retain legacy selection; do not adopt the broad configuration.
+1. Preserve update 13450 and current update 15342 at LR 0.00003. The latest model
+   has not demonstrated a meaningful advantage over 13450. Use preserved 15342 as
+   the common source for the proposed proportions experiment; verify that source
+   before cloning. Do not adopt the previously tested broad selection.
 2. Keep speed inference enabled. No controlled speed ablation has been performed,
    and these results do not implicate it in the plateau.
 3. Do not claim a model-capacity ceiling. Medium/large networks have not been
@@ -405,8 +517,13 @@ controlled experiment.
 5. Both tested reductions improved over their sources and controls. Use LR
    0.00003 for the leading continuation; preserve fixed references and reassess
    longer-term learning before changing it again. Independent training seeds and
-   longer-term behavior at this rate remain untested.
-6. Outcome-based opponent weighting, focused battle-trace review and labelled
+   behavior after additional changes remain untested. The latest unchanged longer
+   continuation did not establish further head-to-head improvement.
+6. Repeated evaluation-guided experiment selection makes this holdout an ongoing
+   validation set. Reserve an untouched final test set before claiming broad
+   generalization or selecting a deployment policy; these intervals do not cover
+   all uncertainty from repeated tuning and independent training seeds.
+7. Outcome-based opponent weighting, focused battle-trace review and labelled
    archetype evaluation remain untested directions. Do not tune on held-out team
    identities or treat small per-team samples as confirmed strategic failures.
 

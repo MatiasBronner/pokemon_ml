@@ -47,6 +47,44 @@ of actions and the team sheets are open:
 The policy still decides Team Preview, forced or single-option decisions,
 and (unless `--closed-sheets`) games with closed team sheets.
 
+## Exploration, for games to learn from
+
+By default, the search only considers the policy's favourite pairs. That is
+right for play. It is wrong for producing training data: a move the policy
+ranks below 8th is never tested, so a network trained on the search would
+keep the policy's blind spots. Like AlphaZero, the search can explore
+(`choose` in `search.py`):
+
+| Setting | What it does | AlphaZero's equivalent |
+|---|---|---|
+| `--noise 0.25` | Mixes 25% Dirichlet noise into the policy's odds before the candidate pairs are picked, so lower-ranked pairs sometimes make the cut. | Dirichlet noise on the root priors (ε = 0.25) |
+| `--noise-alpha` | The noise's concentration. The default, 0, means 10 divided by the number of legal pairs: lower values put the noise on fewer pairs. | α scaled to the typical number of legal moves |
+| `--explore 2` | Adds 2 candidate pairs drawn uniformly from the legal pairs left out. | — |
+| `--explore-replies 2` | The same for the opponent's replies in each world, so the data also covers unexpected opponent moves. | — |
+
+Explored pairs are scored and solved like any other. A pair that turns out
+to be bad gets no weight in the equilibrium, so exploring costs compute,
+not strength. A pair the policy underrated gets the weight it earns, and
+that is how new moves reach a network trained on the search. The noise and
+`--noise-alpha` apply to the opponent's replies too.
+
+The report adds:
+- `mean_explored_weight`: the equilibrium's average weight on pairs that
+  only exploration brought in;
+- `played_explored_pair`: how often such a pair was played.
+
+If the weight is clearly above 0, the policy is missing moves the search
+finds.
+
+**All of it is off by default. Keep it off for evaluation and real games**,
+where it would only slow the search down. To measure how much the policy
+misses, run once with exploration on:
+
+```bash
+SEARCH_OUT=runs/search/15342-self-explore.json sbatch $SLURM_OPTS --time=02:00:00 \
+  scripts/oscar/search-eval.sbatch --seed 9502347 --noise 0.25 --explore 2 --explore-replies 2
+```
+
 ## What is and is not hidden
 
 A redrawn copy has to be drawn from what the searching side has seen, and

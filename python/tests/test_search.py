@@ -8,7 +8,7 @@ import torch
 from pokemon_ml import ppo
 from pokemon_ml.env import N_ACTIONS, OBS_F, OBS_I, OBS_M, PREVIEW, Env, part
 from pokemon_ml.model import Config as ModelConfig, Model
-from pokemon_ml.search import Config, duel, joint_log_policy, search, solve
+from pokemon_ml.search import Config, choose, duel, joint_log_policy, ranked, search, solve
 
 
 def test_the_solver_finds_known_equilibria():
@@ -115,3 +115,60 @@ def test_search_plays_a_legal_pair_and_whole_games(pool):
         assert report["games"] == 6 and 0 <= report["score"] <= 1 and report["searched_decisions"] > 0
     report = duel(Env(pool, envs=4, seed=15, threads=2, max_turns=30), model, "greedy", 4, config, "cpu")
     assert report["games"] == 4
+
+
+def test_without_exploration_the_policy_s_favourites_are_searched():
+    rng = np.random.default_rng(0)
+    logp = np.log(rng.dirichlet(np.ones(N_ACTIONS * N_ACTIONS))).reshape(N_ACTIONS, N_ACTIONS)
+    legal = [(a, b) for a in range(0, 40, 3) for b in range(1, 40, 5)]
+    pairs, score, explored = choose(logp, legal, 8, rng=rng)
+    top, top_score = ranked(logp, legal, 8)
+    assert (pairs == top).all() and np.allclose(score, top_score) and not explored.any()
+
+
+def test_exploration_brings_in_pairs_the_policy_rates_low():
+    rng = np.random.default_rng(1)
+    logp = np.full((N_ACTIONS, N_ACTIONS), -np.inf)
+    legal = [(a, b) for a in range(0, 40, 3) for b in range(1, 40, 5)]
+    # A policy sure of a few pairs and nearly sure the rest are worthless.
+    for k, (a, b) in enumerate(legal):
+        logp[a, b] = -0.1 * k if k < 8 else -30.0 - k
+    favourites = {tuple(p) for p in ranked(logp, legal, 8)[0]}
+    outsiders = 0
+    for _ in range(200):
+        pairs, _, explored = choose(logp, legal, 8, extra=2, noise=0.25, rng=rng)
+        as_tuples = [tuple(p) for p in pairs]
+        assert len(set(as_tuples)) == len(as_tuples) == 10 and set(as_tuples) <= set(legal)
+        # What is marked explored is exactly what the policy's own eight leave out.
+        assert [t not in favourites for t in as_tuples] == list(explored)
+        assert explored.sum() >= 2
+        outsiders += explored.sum()
+    # The noise, not only the two random extras, lets outsiders in now and then.
+    assert outsiders > 200 * 2
+    # More extras than there are pairs left: every legal pair, once.
+    pairs, _, _ = choose(logp, legal[:5], 3, extra=10, rng=rng)
+    assert sorted(map(tuple, pairs)) == sorted(legal[:5])
+    with pytest.raises(ValueError):
+        Config(noise=1.5)
+
+
+def test_search_and_whole_games_with_exploration(pool):
+    model = tiny_model(4)
+    config = Config(candidates=3, replies=3, worlds=2, dice=1, iterations=50, noise=0.25, explore=2, explore_replies=2)
+    env = to_battle(Env(pool, envs=8, seed=16, open_sheets=1.0, threads=2))
+    info = part(env.i, "i", "info")
+    rng = np.random.default_rng(3)
+    searched = 0
+    for g in range(env.envs):
+        row = 2 * g
+        if info[row, 0] == PREVIEW or info[row, 3] != 1:
+            continue
+        pair, found = search(model, env, g, 0, env.f[row], env.i[row], env.mask[row], config, 9, rng, "cpu")
+        legal = {tuple(p) for p in env.raw.worlds(g, 0, 1, 0).legal(0, 0)}
+        assert tuple(int(a) for a in pair) in legal
+        if found["searched"]:
+            searched += 1
+            assert found["candidates"] <= 5 and 0 <= found["explored_weight"] <= 1 + 1e-9
+    assert searched > 0
+    report = duel(Env(pool, envs=4, seed=17, open_sheets=1.0, threads=2, max_turns=30), model, tiny_model(5), 4, config, "cpu")
+    assert report["games"] == 4 and report["mean_explored_weight"] is not None

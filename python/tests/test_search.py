@@ -274,3 +274,84 @@ def test_a_strong_anchor_plays_what_the_policy_would(pool):
             searched += 1
             assert found["policy_top"] and not found["played_explored"]
     assert searched > 0
+
+
+def test_the_batched_solver_matches_the_solver_before_batching():
+    # The solver as merged in #53, kept verbatim, against the batched one: one game at a
+    # time and many at once, padded to different sizes, plain and anchored.
+    import reference_solver
+    from pokemon_ml.search import solve_batch
+
+    rng = np.random.default_rng(9)
+    for anchor in (0.0, 0.01, 0.03, 0.3):
+        games = []
+        for _ in range(12):
+            rows = int(rng.integers(2, 11))
+            payoffs = [rng.uniform(-1, 1, (rows, int(rng.integers(1, 11)))) for _ in range(4)]
+            prior = rng.dirichlet(np.full(rows, 0.5))
+            priors = [rng.dirichlet(np.full(a.shape[1], 0.5)) for a in payoffs]
+            games.append((payoffs, prior, priors))
+        together = solve_batch(games, 400, anchor)
+        for (payoffs, prior, priors), mine in zip(games, together):
+            old = reference_solver.solve(payoffs, 400, anchor, prior, priors)
+            alone = solve(payoffs, 400, anchor, prior, priors)
+            for new in (mine, alone):
+                assert np.allclose(new[0], old[0], atol=1e-7), anchor
+                assert all(np.allclose(a, b, atol=1e-7) for a, b in zip(new[1], old[1]))
+                assert abs(new[2] - old[2]) < 1e-7 and abs(new[3] - old[3]) < 1e-7
+
+
+def test_searching_together_chooses_what_searching_one_by_one_does(pool):
+    # With nothing left to chance (the best pair played, no exploration), a game is
+    # searched the same whatever is searched with it.
+    from pokemon_ml.search import search_batch
+
+    model = tiny_model(9)
+    for anchor in (0.0, 0.03):
+        config = Config(candidates=4, replies=3, worlds=2, dice=2, iterations=300, pick="best", anchor=anchor)
+        env = to_battle(Env(pool, envs=12, seed=21, open_sheets=1.0, threads=2))
+        info = part(env.i, "i", "info")
+        requests = [
+            (g, g % 2, env.f[2 * g + g % 2], env.i[2 * g + g % 2], env.mask[2 * g + g % 2], 100 + g)
+            for g in range(env.envs)
+            if info[2 * g + g % 2, 0] != PREVIEW and info[2 * g + g % 2, 3] == 1
+        ]
+        assert len(requests) > 3
+        rng = np.random.default_rng(0)
+        together = search_batch(model, env, requests, config, rng, "cpu")
+        alone = [search(model, env, *r[:5], config, r[5], rng, "cpu") for r in requests]
+        for (pair_a, found_a), (pair_b, found_b) in zip(together, alone):
+            assert tuple(pair_a) == tuple(pair_b) and found_a["searched"] == found_b["searched"]
+            if found_a["searched"]:
+                assert abs(found_a["value"] - found_b["value"]) < 1e-6 and found_a["cells"] == found_b["cells"]
+        # Whole games: the same results, decision for decision.
+        reports = [
+            duel(Env(pool, envs=6, seed=22, open_sheets=1.0, threads=2, max_turns=30), model, tiny_model(10), 6,
+                 config, "cpu", seed=3, batched=batched)
+            for batched in (True, False)
+        ]
+        for key in ("wins", "losses", "ties", "searched_decisions", "mean_cells", "played_policy_top_pair"):
+            assert reports[0][key] == reports[1][key], key
+
+
+def test_scoring_in_chunks_changes_nothing(pool):
+    from dataclasses import replace
+    from pokemon_ml.search import search_batch
+
+    model = tiny_model(11)
+    config = Config(candidates=4, replies=3, worlds=2, dice=2, iterations=200, pick="best", anchor=0.03)
+    env = to_battle(Env(pool, envs=10, seed=23, open_sheets=1.0, threads=2))
+    info = part(env.i, "i", "info")
+    requests = [
+        (g, 0, env.f[2 * g], env.i[2 * g], env.mask[2 * g], 200 + g)
+        for g in range(env.envs)
+        if info[2 * g, 0] != PREVIEW and info[2 * g, 3] == 1
+    ]
+    results = [
+        search_batch(model, env, requests, replace(config, chunk=chunk), np.random.default_rng(0), "cpu")
+        for chunk in (50, 100_000)
+    ]
+    for (pair_a, found_a), (pair_b, found_b) in zip(*results):
+        assert tuple(pair_a) == tuple(pair_b)
+        if found_a["searched"]:
+            assert abs(found_a["value"] - found_b["value"]) < 1e-6 and abs(found_a["gap"] - found_b["gap"]) < 1e-9

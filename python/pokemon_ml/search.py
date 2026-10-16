@@ -59,6 +59,9 @@ class Config:
     noise_alpha: float = 0.0  # its concentration; 0: 10 / the number of legal pairs
     explore: int = 0  # candidates added beyond `candidates`, drawn uniformly from the other legal pairs
     explore_replies: int = 0  # the same for the other side's replies, in each world
+    # piKL: how strongly each side's equilibrium strategy is held to its policy's own odds (see `solve`).
+    # 0: not at all, the plain equilibrium. Larger trusts the policy more; 0.01 and up converge well.
+    anchor: float = 0.0
 
     def __post_init__(self):
         if min(self.candidates, self.replies, self.worlds, self.dice, self.iterations) < 1:
@@ -67,12 +70,14 @@ class Config:
             raise ValueError('pick is "sample" or "best"')
         if not 0 <= self.noise <= 1 or self.noise_alpha < 0 or min(self.explore, self.explore_replies) < 0:
             raise ValueError("noise is a share in [0, 1]; noise_alpha, explore and explore_replies are not negative")
+        if self.anchor < 0:
+            raise ValueError("anchor is not negative")
 
 
 # ---------------------------------------------------------------- the solver
 
 
-def solve(payoffs, iterations=1000):
+def solve(payoffs, iterations=1000, anchor=0.0, prior=None, priors=None):
     """Equilibrium of a zero-sum game in which the row player does not know
     which of several equally likely worlds it is in and the column player does.
 
@@ -80,8 +85,22 @@ def solve(payoffs, iterations=1000):
     player gets (the column player gets the negative). Returns the row
     player's mixed strategy, each world's column strategy, the value, and the
     gap: how much either player could still gain by deviating (0 at an
-    equilibrium). Regret matching+ with linear averaging, which converges on
-    zero-sum games; the grids here are at most a few dozen a side.
+    equilibrium).
+
+    With `anchor` 0: the plain equilibrium, by regret matching+ with linear
+    averaging, which converges on zero-sum games.
+
+    With `anchor` λ > 0 (piKL, as in Meta's Diplomacy work): each player
+    maximises what it gets less λ times how far its strategy strays from a prior
+    (KL divergence): the row player from `prior` (over its rows), the column
+    player in each world from `priors[w]`. The payoffs a search fills in are
+    noisy, and the more options it weighs the likelier one of them looks good by
+    luck alone (the optimiser's curse). Held to the policy's odds, a pair the
+    policy rates low gets weight only if it is found clearly better: at λ = 0.03,
+    three points of win probability buy a factor of e. Solved by magnetic mirror
+    descent with optimistic steps, whose last iterate converges to the unique
+    anchored equilibrium (to a gap of 1e-9 or less for λ ≥ 0.01 in 1000
+    iterations on grids of this size). The gap reported includes the penalty.
     """
     worlds = len(payoffs)
     rows = payoffs[0].shape[0]
@@ -93,6 +112,8 @@ def solve(payoffs, iterations=1000):
             raise ValueError("every world must have the same rows")
         A[w, :, : a.shape[1]] = a
         valid[w, : a.shape[1]] = True
+    if anchor > 0:
+        return _anchored(A, valid, payoffs, iterations, anchor, prior, priors)
     regret_x, regret_y = np.zeros(rows), np.zeros((worlds, cols))
     sum_x, sum_y = np.zeros(rows), np.zeros((worlds, cols))
     uniform_y = valid / valid.sum(1, keepdims=True)
@@ -119,6 +140,59 @@ def solve(payoffs, iterations=1000):
     best_cols = np.where(valid, against_x, np.inf).min(1).mean()
     value = float(np.einsum("k,wkm,wm->", x, A, y) / worlds)
     return x, [y[w, : a.shape[1]] for w, a in enumerate(payoffs)], value, float(best_row - best_cols)
+
+
+def _logsumexp(a, axis=-1):
+    top = np.max(a, axis, keepdims=True)
+    top = np.where(np.isfinite(top), top, 0)
+    return (top + np.log(np.exp(a - top).sum(axis, keepdims=True))).squeeze(axis)
+
+
+def _log_prior(p, valid):
+    """log of a prior, renormalised over what is valid, with a floor so that nothing valid is impossible."""
+    p = np.where(valid, np.asarray(p, float), 0)
+    p = p / p.sum(-1, keepdims=True) if (p.sum(-1) > 0).all() else valid / valid.sum(-1, keepdims=True)
+    p = np.where(valid, 0.999 * p + 0.001 / valid.sum(-1, keepdims=True), 0)
+    with np.errstate(divide="ignore"):
+        return np.where(valid, np.log(p), -np.inf)
+
+
+def _anchored(A, valid, payoffs, iterations, lam, prior, priors):
+    worlds, rows, cols = A.shape
+    prior = np.full(rows, 1 / rows) if prior is None else prior
+    padded = np.zeros((worlds, cols))
+    for w in range(worlds):
+        padded[w, : payoffs[w].shape[1]] = 1 if priors is None else priors[w]
+    log_px = _log_prior(prior, np.ones(rows, bool))
+    log_py = _log_prior(padded, valid)
+    eta = 1.0 if lam < 0.1 else 0.5
+    lx, ly = log_px.copy(), log_py.copy()
+    last_ux, last_uy = np.zeros(rows), np.zeros((worlds, cols))
+    for _ in range(iterations):
+        x, y = np.exp(lx), np.exp(ly)
+        u_x = np.einsum("wkm,wm->k", A, y) / worlds
+        u_y = -np.einsum("k,wkm->wm", x, A)
+        # Optimistic: step along twice this utility less the last, which damps the cycling of plain steps.
+        step_x, step_y = 2 * u_x - last_ux, 2 * u_y - last_uy
+        last_ux, last_uy = u_x, u_y
+        lx = (lx + eta * lam * log_px + eta * step_x) / (1 + eta * lam)
+        lx -= _logsumexp(lx)
+        ly = np.where(valid, (ly + eta * lam * log_py + eta * step_y) / (1 + eta * lam), -np.inf)
+        ly -= _logsumexp(ly)[:, None]
+    x, y = np.exp(lx), np.exp(ly)
+
+    def kl(p, log_q):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(p > 0, p * (np.log(np.where(p > 0, p, 1)) - np.where(p > 0, log_q, 0)), 0).sum(-1)
+
+    u_x = np.einsum("wkm,wm->k", A, y) / worlds
+    u_y = -np.einsum("k,wkm->wm", x, A)
+    # Each side's best anchored answer to the other is worth λ·logsumexp(log prior + u/λ).
+    gap_x = lam * _logsumexp(log_px + u_x / lam) - (x @ u_x - lam * kl(x, log_px))
+    own_y = np.where(valid, y * u_y, 0).sum(1) - lam * kl(y, log_py)
+    gap_y = lam * _logsumexp(np.where(valid, log_py + u_y / lam, -np.inf)) - own_y
+    value = float(np.einsum("k,wkm,wm->", x, A, y) / worlds)
+    return x, [y[w, : a.shape[1]] for w, a in enumerate(payoffs)], value, float(gap_x + gap_y.mean())
 
 
 # ------------------------------------------------------------ the network
@@ -219,13 +293,14 @@ def search(model, env, game, view, f, i, mask, config, seed, rng, device):
     mo = np.zeros((worlds.count, OBS_M), np.uint8)
     worlds.observe(1 - view, fo, io, mo)
     theirs_logp = joint_log_policy(model, t(fo), t(io), t(mo)).cpu().numpy()
-    replies = [
+    chosen = [
         choose(
             theirs_logp[w], worlds.legal(w, 1 - view), config.replies,
             config.explore_replies, config.noise, config.noise_alpha, rng,
-        )[0]
+        )
         for w in range(worlds.count)
     ]
+    replies = [c[0] for c in chosen]
 
     sizes = [len(own) * len(r) * config.dice for r in replies]
     total = sum(sizes)
@@ -246,7 +321,11 @@ def search(model, env, game, view, f, i, mask, config, seed, rng, device):
     for r, n in zip(replies, sizes):
         payoffs.append(v[at : at + n].reshape(len(own), len(r), config.dice).mean(-1))
         at += n
-    x, _, value, gap = solve(payoffs, config.iterations)
+    odds = lambda logp: np.exp(logp - logp[np.isfinite(logp)].max()) if np.isfinite(logp).any() else np.ones(len(logp))
+    x, _, value, gap = solve(
+        payoffs, config.iterations, config.anchor,
+        prior=odds(own_logp), priors=[odds(c[1]) for c in chosen],
+    )
     k = int(np.argmax(x)) if config.pick == "best" else int(rng.choice(len(x), p=x))
     prior = np.exp(own_logp - own_logp.max())
     return own[k], dict(
@@ -361,6 +440,7 @@ def main(argv=None):
     p.add_argument("--noise-alpha", type=float, default=defaults.noise_alpha, help="Dirichlet concentration; 0: 10 / legal pairs")
     p.add_argument("--explore", type=int, default=defaults.explore, help="extra candidate pairs drawn at random")
     p.add_argument("--explore-replies", type=int, default=defaults.explore_replies, help="extra replies drawn at random")
+    p.add_argument("--anchor", type=float, default=defaults.anchor, help="piKL: hold the equilibrium to the policy's odds (0: off)")
     a = p.parse_args(argv)
     from .train import pick_device
     from .checkpoint import file_hash
@@ -369,6 +449,7 @@ def main(argv=None):
         candidates=a.candidates, replies=a.replies, worlds=a.worlds, dice=a.dice, iterations=a.iterations,
         pick=a.pick, privileged=a.privileged, closed_sheets=a.closed_sheets,
         noise=a.noise, noise_alpha=a.noise_alpha, explore=a.explore, explore_replies=a.explore_replies,
+        anchor=a.anchor,
     )
     device = pick_device(a.device)
     model = load(a.checkpoint, device)

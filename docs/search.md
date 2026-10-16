@@ -62,11 +62,26 @@ keep the policy's blind spots. Like AlphaZero, the search can explore
 | `--explore 2` | Adds 2 candidate pairs drawn uniformly from the legal pairs left out. | — |
 | `--explore-replies 2` | The same for the opponent's replies in each world, so the data also covers unexpected opponent moves. | — |
 
-Explored pairs are scored and solved like any other. A pair that turns out
-to be bad gets no weight in the equilibrium, so exploring costs compute,
-not strength. A pair the policy underrated gets the weight it earns, and
-that is how new moves reach a network trained on the search. The noise and
+Explored pairs are scored and solved like any other. The noise and
 `--noise-alpha` apply to the opponent's replies too.
+
+**Exploring costs strength, not just compute.** The first version of this
+section said a bad explored pair would simply get no weight. On Oscar,
+update 15342 with search against itself without search (seed 9502347,
+3,000 games each) said otherwise:
+
+| Search | Score | 95% interval | Weight on explored pairs |
+|---|---|---|---|
+| Plain (two seeds) | 64.5% | ≈63.3–65.7% | — |
+| `--noise 0.25 --explore 2 --explore-replies 2` | 58.5% | 56.8–60.3% | 19.6% |
+
+The equilibrium gave explored pairs about a fifth of its weight and lost six
+points. The likely cause is the optimiser's curse. The payoffs are value
+network estimates, and noisy ones. The more options the search weighs, the
+likelier one of them looks good by luck alone. The moves exploration brings
+in are the ones the policy rarely plays, and so the ones the value network
+has seen least. Do not generate training data with exploration on its own:
+pair it with `--anchor` (next section), and check its score first.
 
 The report adds:
 - `mean_explored_weight`: the equilibrium's average weight on pairs that
@@ -76,14 +91,57 @@ The report adds:
 If the weight is clearly above 0, the policy is missing moves the search
 finds.
 
-**All of it is off by default. Keep it off for evaluation and real games**,
-where it would only slow the search down. To measure how much the policy
-misses, run once with exploration on:
+**All of it is off by default. Keep it off for evaluation and real games.**
+
+## Holding the search to the policy (piKL)
+
+`--anchor λ` changes what the equilibrium maximises: payoff, less λ times how
+far each side's strategy strays from its policy's own odds over the pairs
+searched (KL divergence). This is piKL, from Meta's Diplomacy work. The
+searching side is held to its policy's odds. The opponent, in each world, is
+held to the opponent policy's odds.
+
+The effect is that a pair the policy rates low gets weight only if the value
+network finds it clearly better, not slightly better by luck. λ is in units
+of win probability:
+
+- At λ = 0.03, three points of extra value multiply a pair's odds by e.
+- λ = 0 is the plain equilibrium, and the default.
+- A very large λ plays the policy's own odds.
+
+The anchored game is solved by magnetic mirror descent with optimistic steps
+(`solve` in `search.py`). On grids of this size its gap reaches 1e-9 or less
+for λ ≥ 0.01 in 1,000 iterations. Below 0.01 it converges more slowly, and
+the gap in the report shows it.
+
+The tests check:
+- the closed-form answer against a single reply (prior × exp(payoff / λ));
+- convergence across λ;
+- the move from the plain equilibrium (small λ) to the policy (large λ);
+- that a one-point edge on a pair the policy doubts is resisted, while a
+  clear one is taken;
+- that a very strong anchor makes the search play the policy's own
+  favourite, which checks the policy's odds actually reach the solver.
+
+A sweep, without and with exploration:
 
 ```bash
-SEARCH_OUT=runs/search/15342-self-explore.json sbatch $SLURM_OPTS --time=02:00:00 \
-  scripts/oscar/search-eval.sbatch --seed 9502347 --noise 0.25 --explore 2 --explore-replies 2
+for lam in 0.01 0.03 0.1 0.3; do
+  SEARCH_OUT=runs/search/15342-self-anchor$lam.json \
+    sbatch $SLURM_OPTS --time=02:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 --anchor $lam
+done
+for lam in 0.03 0.1; do
+  SEARCH_OUT=runs/search/15342-self-anchor$lam-explore.json \
+    sbatch $SLURM_OPTS --time=02:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 \
+    --anchor $lam --noise 0.25 --explore 2 --explore-replies 2
+done
 ```
+
+What to look for:
+- **Some λ above 64.5% without exploration:** part of the plain search's
+  noise was costing it. Use that λ from then on.
+- **Exploration that no longer loses points at some λ:** that is the
+  setting to generate training data with.
 
 ## What is and is not hidden
 

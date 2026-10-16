@@ -54,12 +54,19 @@ class Config:
     pick: str = "sample"  # "sample" from the mixed strategy, or play its "best" pair
     privileged: bool = False  # search the real game instead of redrawn ones (a cheat, for comparison)
     closed_sheets: bool = False  # search with closed sheets too (sees their real sets: a cheat)
+    # Exploration, for games played to learn from (all off for evaluation and play). See `choose`.
+    noise: float = 0.0  # share of Dirichlet noise mixed into the policy's odds before picking pairs
+    noise_alpha: float = 0.0  # its concentration; 0: 10 / the number of legal pairs
+    explore: int = 0  # candidates added beyond `candidates`, drawn uniformly from the other legal pairs
+    explore_replies: int = 0  # the same for the other side's replies, in each world
 
     def __post_init__(self):
         if min(self.candidates, self.replies, self.worlds, self.dice, self.iterations) < 1:
             raise ValueError("candidates, replies, worlds, dice and iterations must be positive")
         if self.pick not in ("sample", "best"):
             raise ValueError('pick is "sample" or "best"')
+        if not 0 <= self.noise <= 1 or self.noise_alpha < 0 or min(self.explore, self.explore_replies) < 0:
+            raise ValueError("noise is a share in [0, 1]; noise_alpha, explore and explore_replies are not negative")
 
 
 # ---------------------------------------------------------------- the solver
@@ -144,6 +151,37 @@ def ranked(logp, legal, n):
     return legal[order], score[order]
 
 
+def choose(logp, legal, n, extra=0, noise=0.0, alpha=0.0, rng=None):
+    """The pairs to search among the `legal` ones, with AlphaZero's kind of exploration.
+
+    Without exploration, the `n` the policy (`logp`) finds most likely: a search can
+    then never try what the policy rates lower, and a network trained on the search
+    would never learn it. So, as AlphaZero adds Dirichlet noise to the policy's odds
+    at the root of its search, a share `noise` of Dirichlet noise (concentration
+    `alpha`; 0 for 10 over the number of legal pairs) is mixed into the odds before the
+    `n` are taken, and `extra` more are drawn uniformly from the pairs left out. The
+    equilibrium then weighs every pair on what it is found to be worth: one that is
+    no good gets no weight, one the policy underrated gets what it deserves.
+
+    Returns the pairs, the policy's log-probability of each, and which of them are
+    there by exploration only (not among the policy's own `n` most likely).
+    """
+    legal = np.asarray(legal, np.int64).reshape(-1, 2)
+    score = logp[legal[:, 0], legal[:, 1]]
+    top = np.argsort(-score, kind="stable")[:n]
+    order = top
+    if noise > 0 and len(legal) > 1:
+        odds = np.exp(score - score[np.isfinite(score)].max()) if np.isfinite(score).any() else np.ones(len(legal))
+        odds = odds / odds.sum()
+        eta = rng.dirichlet(np.full(len(legal), alpha or 10 / len(legal)))
+        order = np.argsort(-((1 - noise) * odds + noise * eta), kind="stable")[:n]
+    if extra > 0:
+        rest = np.setdiff1d(np.arange(len(legal)), order)
+        if len(rest):
+            order = np.concatenate([order, rng.choice(rest, min(extra, len(rest)), replace=False)])
+    return legal[order], score[order], ~np.isin(order, top)
+
+
 def values(model, f, i, outcome, device, batch=4096):
     """The value network's verdict on positions, [-1, 1], from the side they are observed from;
     a finished game's `outcome` instead."""
@@ -171,14 +209,23 @@ def search(model, env, game, view, f, i, mask, config, seed, rng, device):
     mine = joint_log_policy(model, t(f[None]), t(i[None]), t(mask[None]))[0].cpu().numpy()
     if len(legal) == 1:
         return np.asarray(legal[0]), dict(searched=False)
-    own, own_logp = ranked(mine, legal, config.candidates)
+    own, own_logp, explored = choose(
+        mine, legal, config.candidates, config.explore, config.noise, config.noise_alpha, rng
+    )
+    policy_top = ranked(mine, legal, 1)[0][0]
 
     fo = np.zeros((worlds.count, OBS_F), np.float32)
     io = np.zeros((worlds.count, OBS_I), np.int16)
     mo = np.zeros((worlds.count, OBS_M), np.uint8)
     worlds.observe(1 - view, fo, io, mo)
     theirs_logp = joint_log_policy(model, t(fo), t(io), t(mo)).cpu().numpy()
-    replies = [ranked(theirs_logp[w], worlds.legal(w, 1 - view), config.replies)[0] for w in range(worlds.count)]
+    replies = [
+        choose(
+            theirs_logp[w], worlds.legal(w, 1 - view), config.replies,
+            config.explore_replies, config.noise, config.noise_alpha, rng,
+        )[0]
+        for w in range(worlds.count)
+    ]
 
     sizes = [len(own) * len(r) * config.dice for r in replies]
     total = sum(sizes)
@@ -207,8 +254,11 @@ def search(model, env, game, view, f, i, mask, config, seed, rng, device):
         value=value,
         gap=gap,
         candidates=len(own),
-        policy_top=bool(k == 0),
+        policy_top=bool((own[k] == policy_top).all()),
         mixed=float(1 - x.max()),
+        # What exploration brought in: the equilibrium's weight on such pairs, and whether one was played.
+        explored_weight=float(x[explored].sum()),
+        played_explored=bool(explored[k]),
         # How far the equilibrium moved off the policy's own (renormalised) odds over the candidates.
         shift=float(0.5 * np.abs(x - prior / prior.sum()).sum()),
         cells=total,
@@ -279,6 +329,8 @@ def duel(env, model, opponent, games, config, device, seed=0):
         "mean_mixed": mean("mixed"),
         "mean_shift_from_policy": mean("shift"),
         "mean_cells": mean("cells"),
+        "mean_explored_weight": mean("explored_weight"),
+        "played_explored_pair": mean("played_explored"),
     }
 
 
@@ -305,12 +357,18 @@ def main(argv=None):
     p.add_argument("--pick", choices=("sample", "best"), default=defaults.pick)
     p.add_argument("--privileged", action="store_true", help="search the real game (sees hidden information)")
     p.add_argument("--closed-sheets", action="store_true", help="search closed-sheet games too (sees their sets)")
+    p.add_argument("--noise", type=float, default=defaults.noise, help="share of Dirichlet noise in the policy's odds (AlphaZero: 0.25)")
+    p.add_argument("--noise-alpha", type=float, default=defaults.noise_alpha, help="Dirichlet concentration; 0: 10 / legal pairs")
+    p.add_argument("--explore", type=int, default=defaults.explore, help="extra candidate pairs drawn at random")
+    p.add_argument("--explore-replies", type=int, default=defaults.explore_replies, help="extra replies drawn at random")
     a = p.parse_args(argv)
     from .train import pick_device
     from .checkpoint import file_hash
 
     config = Config(
-        a.candidates, a.replies, a.worlds, a.dice, a.iterations, a.pick, a.privileged, a.closed_sheets
+        candidates=a.candidates, replies=a.replies, worlds=a.worlds, dice=a.dice, iterations=a.iterations,
+        pick=a.pick, privileged=a.privileged, closed_sheets=a.closed_sheets,
+        noise=a.noise, noise_alpha=a.noise_alpha, explore=a.explore, explore_replies=a.explore_replies,
     )
     device = pick_device(a.device)
     model = load(a.checkpoint, device)

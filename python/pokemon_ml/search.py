@@ -33,7 +33,7 @@ searched yet: the positions a turn ahead have no history of their own.
 import argparse
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -469,10 +469,15 @@ def search_batch(model, env, requests, config, rng, device):
 
 
 @torch.no_grad()
-def duel(env, model, opponent, games, config, device, seed=0, batched=True):
+def duel(env, model, opponent, games, config, device, seed=0, batched=True, opponent_search=False):
     """`model` with search against `opponent` (a model, played straight from its policy, or a
     scripted player's name), each game's first episode only, sides alternating. With
-    `batched` (the default) every game waiting on a search is searched together."""
+    `batched` (the default) every game waiting on a search is searched together. With
+    `opponent_search`, a model opponent searches too, with the same settings less exploration:
+    how a network trained by expert iteration is judged against the one it came from."""
+    if opponent_search and isinstance(opponent, str):
+        raise ValueError("a scripted opponent cannot search")
+    theirs_config = replace(config, explore=0, explore_replies=0, noise=0.0)
     if model.config.history or (not isinstance(opponent, str) and opponent.config.history):
         raise ValueError("search does not support models that read decision history")
     model.eval()
@@ -496,6 +501,19 @@ def duel(env, model, opponent, games, config, device, seed=0, batched=True):
         actions[mine] = model.act(f[mine], i[mine], mask[mine])[0].cpu().numpy()
         info = part(env.i, "i", "info")
         sheets = env.raw.open_sheets()
+        if opponent_search:
+            their_rows, their_requests = [], []
+            for g in np.flatnonzero(active):
+                row = theirs[g]
+                if info[row, 0] == PREVIEW or info[row, 3] != 1 or not (sheets[g] or config.closed_sheets):
+                    continue
+                decisions += 1
+                their_rows.append(row)
+                their_requests.append(
+                    (int(g), int(1 - side[g]), env.f[row], env.i[row], env.mask[row], seed * 1_000_003 + decisions)
+                )
+            for row, (pair, _) in zip(their_rows, search_batch(opponent, env, their_requests, theirs_config, rng, device)):
+                actions[row] = pair
         waiting, requests = [], []
         for g in np.flatnonzero(active):
             row = mine[g]
@@ -567,6 +585,8 @@ def main(argv=None):
     p.add_argument("--explore", type=int, default=defaults.explore, help="extra candidate pairs drawn at random")
     p.add_argument("--explore-replies", type=int, default=defaults.explore_replies, help="extra replies drawn at random")
     p.add_argument("--anchor", type=float, default=defaults.anchor, help="piKL: hold the equilibrium to the policy's odds (0: off)")
+    p.add_argument("--opponent-search", action="store_true",
+                   help="the opponent network searches too (same settings, no exploration)")
     p.add_argument("--chunk", type=int, default=defaults.chunk, help="positions scored at a time when searching games together (0: 1024 on CPU, 8192 on GPU)")
     a = p.parse_args(argv)
     from .train import pick_device
@@ -587,12 +607,15 @@ def main(argv=None):
     else:
         opponent = load(a.opponent, device)
     env = Env(a.pool, a.envs, a.seed, a.open_sheets, False, max_turns=a.max_turns, threads=a.threads)
-    report = duel(env, model, opponent, a.games, config, device, seed=a.seed)
+    if a.opponent_search and isinstance(opponent, str):
+        p.error("--opponent-search needs a network opponent: self or a checkpoint")
+    report = duel(env, model, opponent, a.games, config, device, seed=a.seed, opponent_search=a.opponent_search)
     report.update(
         search=asdict(config),
         seed=a.seed,
         open_sheets=a.open_sheets,
         opponent=a.opponent,
+        opponent_search=a.opponent_search,
         pool_sha256=file_hash(a.pool),
         checkpoint_sha256=file_hash(a.checkpoint),
         opponent_sha256=None if a.opponent in ("self", "random", "greedy", "lookahead") else file_hash(a.opponent),

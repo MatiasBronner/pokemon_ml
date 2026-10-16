@@ -62,6 +62,9 @@ class Config:
     # piKL: how strongly each side's equilibrium strategy is held to its policy's own odds (see `solve`).
     # 0: not at all, the plain equilibrium. Larger trusts the policy more; 0.01 and up converge well.
     anchor: float = 0.0
+    # Positions played out and scored at a time when games are searched together; 0: 1024 on a
+    # CPU (larger batches run slower there), 8192 on a GPU (which wants large ones).
+    chunk: int = 0
 
     def __post_init__(self):
         if min(self.candidates, self.replies, self.worlds, self.dice, self.iterations) < 1:
@@ -72,6 +75,8 @@ class Config:
             raise ValueError("noise is a share in [0, 1]; noise_alpha, explore and explore_replies are not negative")
         if self.anchor < 0:
             raise ValueError("anchor is not negative")
+        if self.chunk < 0:
+            raise ValueError("chunk is not negative")
         if self.noise > 0 and not (self.explore or self.explore_replies):
             raise ValueError("noise only chooses which extra pairs to explore: give explore or explore_replies too")
 
@@ -103,45 +108,81 @@ def solve(payoffs, iterations=1000, anchor=0.0, prior=None, priors=None):
     descent with optimistic steps, whose last iterate converges to the unique
     anchored equilibrium (to a gap of 1e-9 or less for λ ≥ 0.01 in 1000
     iterations on grids of this size). The gap reported includes the penalty.
+
+    One game of `solve_batch`, which does the work.
     """
-    worlds = len(payoffs)
-    rows = payoffs[0].shape[0]
-    cols = max(a.shape[1] for a in payoffs)
-    A = np.zeros((worlds, rows, cols))
-    valid = np.zeros((worlds, cols), bool)
-    for w, a in enumerate(payoffs):
-        if a.shape[0] != rows:
-            raise ValueError("every world must have the same rows")
-        A[w, :, : a.shape[1]] = a
-        valid[w, : a.shape[1]] = True
+    return solve_batch([(payoffs, prior, priors)], iterations, anchor)[0]
+
+
+def solve_batch(games, iterations=1000, anchor=0.0):
+    """`solve` for many games at once, in one run of vectorised iterations: the
+    games' grids are padded to a common size and masked. `games`: a list of
+    (payoffs, prior, priors) as `solve` takes them, each with the same number of
+    worlds. Returns a list of what `solve` returns, one per game. A search spends
+    most of its time here when games are solved one by one (1000 iterations of
+    small array operations each); together, the cost is shared.
+    """
+    if not games:
+        return []
+    worlds = len(games[0][0])
+    if any(len(g[0]) != worlds for g in games):
+        raise ValueError("every game in a batch must have the same number of worlds")
+    batch = len(games)
+    rows = max(g[0][0].shape[0] for g in games)
+    cols = max(a.shape[1] for g in games for a in g[0])
+    A = np.zeros((batch, worlds, rows, cols))
+    row_valid = np.zeros((batch, rows), bool)
+    col_valid = np.zeros((batch, worlds, cols), bool)
+    for b, (payoffs, _, _) in enumerate(games):
+        k = payoffs[0].shape[0]
+        row_valid[b, :k] = True
+        for w, a in enumerate(payoffs):
+            if a.shape[0] != k:
+                raise ValueError("every world must have the same rows")
+            A[b, w, :k, : a.shape[1]] = a
+            col_valid[b, w, : a.shape[1]] = True
     if anchor > 0:
-        return _anchored(A, valid, payoffs, iterations, anchor, prior, priors)
-    regret_x, regret_y = np.zeros(rows), np.zeros((worlds, cols))
-    sum_x, sum_y = np.zeros(rows), np.zeros((worlds, cols))
-    uniform_y = valid / valid.sum(1, keepdims=True)
+        x, y, value, gap = _anchored(A, row_valid, col_valid, games, iterations, anchor)
+    else:
+        x, y, value, gap = _plain(A, row_valid, col_valid, iterations)
+    out = []
+    for b, (payoffs, _, _) in enumerate(games):
+        k = payoffs[0].shape[0]
+        out.append((x[b, :k], [y[b, w, : a.shape[1]] for w, a in enumerate(payoffs)], float(value[b]), float(gap[b])))
+    return out
+
+
+def _plain(A, row_valid, col_valid, iterations):
+    """Regret matching+ with linear averaging, alternating, over a batch of padded games."""
+    batch, worlds, rows, cols = A.shape
+    regret_x, regret_y = np.zeros((batch, rows)), np.zeros((batch, worlds, cols))
+    sum_x, sum_y = np.zeros((batch, rows)), np.zeros((batch, worlds, cols))
+    uniform_x = row_valid / row_valid.sum(-1, keepdims=True)
+    uniform_y = col_valid / col_valid.sum(-1, keepdims=True)
 
     def strategy(regret, fallback):
         total = regret.sum(-1, keepdims=True)
         return np.where(total > 0, regret / np.where(total > 0, total, 1), fallback)
 
     for t in range(1, iterations + 1):
-        x = strategy(regret_x, np.full(rows, 1 / rows))
+        x = strategy(regret_x, uniform_x)
         y = strategy(regret_y, uniform_y)
         # Alternating updates: the rows answer the columns, then the columns the new rows.
-        u_x = np.einsum("wkm,wm->k", A, y) / worlds
-        regret_x = np.maximum(regret_x + u_x - x @ u_x, 0)
-        x = strategy(regret_x, np.full(rows, 1 / rows))
-        u_y = -np.einsum("k,wkm->wm", x, A)
-        regret_y = np.maximum(regret_y + u_y - (y * u_y).sum(1, keepdims=True), 0) * valid
+        u_x = np.einsum("bwkm,bwm->bk", A, y) / worlds
+        regret_x = np.maximum(regret_x + u_x - (x * u_x).sum(-1, keepdims=True), 0) * row_valid
+        x = strategy(regret_x, uniform_x)
+        u_y = -np.einsum("bk,bwkm->bwm", x, A)
+        regret_y = np.maximum(regret_y + u_y - (y * u_y).sum(-1, keepdims=True), 0) * col_valid
         sum_x += t * x
         sum_y += t * strategy(regret_y, uniform_y)
-    x = sum_x / sum_x.sum()
-    y = sum_y / sum_y.sum(1, keepdims=True)
-    best_row = (np.einsum("wkm,wm->k", A, y) / worlds).max()
-    against_x = np.einsum("k,wkm->wm", x, A)
-    best_cols = np.where(valid, against_x, np.inf).min(1).mean()
-    value = float(np.einsum("k,wkm,wm->", x, A, y) / worlds)
-    return x, [y[w, : a.shape[1]] for w, a in enumerate(payoffs)], value, float(best_row - best_cols)
+    x = sum_x / sum_x.sum(-1, keepdims=True)
+    y = sum_y / sum_y.sum(-1, keepdims=True)
+    against_y = np.einsum("bwkm,bwm->bk", A, y) / worlds
+    best_row = np.where(row_valid, against_y, -np.inf).max(-1)
+    against_x = np.einsum("bk,bwkm->bwm", x, A)
+    best_cols = np.where(col_valid, against_x, np.inf).min(-1).mean(-1)
+    value = np.einsum("bk,bwkm,bwm->b", x, A, y) / worlds
+    return x, y, value, best_row - best_cols
 
 
 def _logsumexp(a, axis=-1):
@@ -153,48 +194,54 @@ def _logsumexp(a, axis=-1):
 def _log_prior(p, valid):
     """log of a prior, renormalised over what is valid, with a floor so that nothing valid is impossible."""
     p = np.where(valid, np.asarray(p, float), 0)
-    p = p / p.sum(-1, keepdims=True) if (p.sum(-1) > 0).all() else valid / valid.sum(-1, keepdims=True)
+    total = p.sum(-1, keepdims=True)
+    p = np.where(total > 0, p / np.where(total > 0, total, 1), valid / valid.sum(-1, keepdims=True))
     p = np.where(valid, 0.999 * p + 0.001 / valid.sum(-1, keepdims=True), 0)
     with np.errstate(divide="ignore"):
         return np.where(valid, np.log(p), -np.inf)
 
 
-def _anchored(A, valid, payoffs, iterations, lam, prior, priors):
-    worlds, rows, cols = A.shape
-    prior = np.full(rows, 1 / rows) if prior is None else prior
-    padded = np.zeros((worlds, cols))
-    for w in range(worlds):
-        padded[w, : payoffs[w].shape[1]] = 1 if priors is None else priors[w]
-    log_px = _log_prior(prior, np.ones(rows, bool))
-    log_py = _log_prior(padded, valid)
+def _anchored(A, row_valid, col_valid, games, iterations, lam):
+    """Magnetic mirror descent with optimistic steps, over a batch of padded games (see `solve`)."""
+    batch, worlds, rows, cols = A.shape
+    px, py = np.zeros((batch, rows)), np.zeros((batch, worlds, cols))
+    for b, (payoffs, prior, priors) in enumerate(games):
+        k = payoffs[0].shape[0]
+        px[b, :k] = 1 if prior is None else prior
+        for w, a in enumerate(payoffs):
+            py[b, w, : a.shape[1]] = 1 if priors is None else priors[w]
+    log_px = _log_prior(px, row_valid)
+    log_py = _log_prior(py, col_valid)
     eta = 1.0 if lam < 0.1 else 0.5
     lx, ly = log_px.copy(), log_py.copy()
-    last_ux, last_uy = np.zeros(rows), np.zeros((worlds, cols))
+    last_ux, last_uy = np.zeros((batch, rows)), np.zeros((batch, worlds, cols))
     for _ in range(iterations):
         x, y = np.exp(lx), np.exp(ly)
-        u_x = np.einsum("wkm,wm->k", A, y) / worlds
-        u_y = -np.einsum("k,wkm->wm", x, A)
+        u_x = np.einsum("bwkm,bwm->bk", A, y) / worlds
+        u_y = -np.einsum("bk,bwkm->bwm", x, A)
         # Optimistic: step along twice this utility less the last, which damps the cycling of plain steps.
         step_x, step_y = 2 * u_x - last_ux, 2 * u_y - last_uy
         last_ux, last_uy = u_x, u_y
-        lx = (lx + eta * lam * log_px + eta * step_x) / (1 + eta * lam)
-        lx -= _logsumexp(lx)
-        ly = np.where(valid, (ly + eta * lam * log_py + eta * step_y) / (1 + eta * lam), -np.inf)
-        ly -= _logsumexp(ly)[:, None]
+        lx = np.where(row_valid, (lx + eta * lam * log_px + eta * step_x) / (1 + eta * lam), -np.inf)
+        lx -= _logsumexp(lx)[..., None]
+        ly = np.where(col_valid, (ly + eta * lam * log_py + eta * step_y) / (1 + eta * lam), -np.inf)
+        ly -= _logsumexp(ly)[..., None]
     x, y = np.exp(lx), np.exp(ly)
 
     def kl(p, log_q):
         with np.errstate(divide="ignore", invalid="ignore"):
             return np.where(p > 0, p * (np.log(np.where(p > 0, p, 1)) - np.where(p > 0, log_q, 0)), 0).sum(-1)
 
-    u_x = np.einsum("wkm,wm->k", A, y) / worlds
-    u_y = -np.einsum("k,wkm->wm", x, A)
+    u_x = np.einsum("bwkm,bwm->bk", A, y) / worlds
+    u_y = -np.einsum("bk,bwkm->bwm", x, A)
     # Each side's best anchored answer to the other is worth λ·logsumexp(log prior + u/λ).
-    gap_x = lam * _logsumexp(log_px + u_x / lam) - (x @ u_x - lam * kl(x, log_px))
-    own_y = np.where(valid, y * u_y, 0).sum(1) - lam * kl(y, log_py)
-    gap_y = lam * _logsumexp(np.where(valid, log_py + u_y / lam, -np.inf)) - own_y
-    value = float(np.einsum("k,wkm,wm->", x, A, y) / worlds)
-    return x, [y[w, : a.shape[1]] for w, a in enumerate(payoffs)], value, float(gap_x + gap_y.mean())
+    gap_x = lam * _logsumexp(np.where(row_valid, log_px + u_x / lam, -np.inf)) - (
+        np.where(row_valid, x * u_x, 0).sum(-1) - lam * kl(x, log_px)
+    )
+    own_y = np.where(col_valid, y * u_y, 0).sum(-1) - lam * kl(y, log_py)
+    gap_y = lam * _logsumexp(np.where(col_valid, log_py + u_y / lam, -np.inf)) - own_y
+    value = np.einsum("bk,bwkm,bwm->b", x, A, y) / worlds
+    return x, y, value, gap_x + gap_y.mean(-1)
 
 
 # ------------------------------------------------------------ the network
@@ -285,82 +332,140 @@ def values(model, f, i, outcome, device, batch=4096):
 @torch.no_grad()
 def search(model, env, game, view, f, i, mask, config, seed, rng, device):
     """The pair of actions the searching side `view` plays in game `game` of `env`,
-    given its observation (`f`, `i`, `mask`: one row each), and what the search found."""
-    worlds = env.raw.worlds(game, view, config.worlds, seed, redraw=not config.privileged)
-    own_legal = [set(map(tuple, worlds.legal(w, view))) for w in range(worlds.count)]
-    legal = sorted(set.intersection(*own_legal))
-    t = lambda x: torch.as_tensor(x, device=device)
-    mine = joint_log_policy(model, t(f[None]), t(i[None]), t(mask[None]))[0].cpu().numpy()
-    if len(legal) == 1:
-        return np.asarray(legal[0]), dict(searched=False)
-    own, own_logp, explored = choose(
-        mine, legal, config.candidates, config.explore, config.noise, config.noise_alpha, rng
-    )
-    policy_top = ranked(mine, legal, 1)[0][0]
+    given its observation (`f`, `i`, `mask`: one row each), and what the search found.
+    One request of `search_batch`."""
+    return search_batch(model, env, [(game, view, f, i, mask, seed)], config, rng, device)[0]
 
-    fo = np.zeros((worlds.count, OBS_F), np.float32)
-    io = np.zeros((worlds.count, OBS_I), np.int16)
-    mo = np.zeros((worlds.count, OBS_M), np.uint8)
-    worlds.observe(1 - view, fo, io, mo)
-    theirs_logp = joint_log_policy(model, t(fo), t(io), t(mo)).cpu().numpy()
-    chosen = [
-        choose(
-            theirs_logp[w], worlds.legal(w, 1 - view), config.replies,
-            config.explore_replies, config.noise, config.noise_alpha, rng,
+
+@torch.no_grad()
+def search_batch(model, env, requests, config, rng, device):
+    """`search` for many games of `env` at once. `requests`: (game, view, f, i, mask, seed)
+    per game, the observation one row each. Returns (pair, what was found) per request.
+
+    The games are searched together: the policy reads every searching side's
+    observation in one pass and every opponent's view of every world in another,
+    the value network scores every position a turn ahead in one more, and the
+    equilibria are solved in one vectorised run (`solve_batch`). Seeds go per
+    request, so a game is searched the same whatever else is searched with it;
+    only the order in which random numbers are drawn for exploration and for
+    sampling the pair played differs.
+    """
+    t = lambda x: torch.as_tensor(np.ascontiguousarray(x), device=device)
+    out = [None] * len(requests)
+    live = []  # requests with more than one pair to choose from
+    all_worlds = []
+    for n, (game, view, f, i, mask, seed) in enumerate(requests):
+        worlds = env.raw.worlds(game, view, config.worlds, seed, redraw=not config.privileged)
+        own_legal = [set(map(tuple, worlds.legal(w, view))) for w in range(worlds.count)]
+        legal = sorted(set.intersection(*own_legal))
+        all_worlds.append((worlds, legal))
+        if len(legal) == 1:
+            out[n] = (np.asarray(legal[0]), dict(searched=False))
+        else:
+            live.append(n)
+    if not live:
+        return out
+
+    # The searching sides' policy, all at once.
+    mine = joint_log_policy(
+        model, t(np.stack([requests[n][2] for n in live])), t(np.stack([requests[n][3] for n in live])),
+        t(np.stack([requests[n][4] for n in live])),
+    ).cpu().numpy()
+    # Every opponent's view of every world, all at once.
+    count = config.worlds
+    fo = np.zeros((len(live) * count, OBS_F), np.float32)
+    io = np.zeros((len(live) * count, OBS_I), np.int16)
+    mo = np.zeros((len(live) * count, OBS_M), np.uint8)
+    for a, n in enumerate(live):
+        view = requests[n][1]
+        all_worlds[n][0].observe(1 - view, fo[a * count : (a + 1) * count], io[a * count : (a + 1) * count],
+                                 mo[a * count : (a + 1) * count])
+    theirs_logp = joint_log_policy(model, t(fo), t(io), t(mo)).cpu().numpy().reshape(len(live), count, N_ACTIONS, N_ACTIONS)
+
+    plans = []
+    for a, n in enumerate(live):
+        game, view, _, _, _, seed = requests[n]
+        worlds, legal = all_worlds[n]
+        own, own_logp, explored = choose(
+            mine[a], legal, config.candidates, config.explore, config.noise, config.noise_alpha, rng
         )
-        for w in range(worlds.count)
-    ]
-    replies = [c[0] for c in chosen]
+        chosen = [
+            choose(
+                theirs_logp[a, w], worlds.legal(w, 1 - view), config.replies,
+                config.explore_replies, config.noise, config.noise_alpha, rng,
+            )
+            for w in range(count)
+        ]
+        plans.append((n, worlds, seed, own, own_logp, explored, ranked(mine[a], legal, 1)[0][0], chosen))
 
-    sizes = [len(own) * len(r) * config.dice for r in replies]
-    total = sum(sizes)
-    cf = np.zeros((total, OBS_F), np.float32)
-    ci = np.zeros((total, OBS_I), np.int16)
-    cm = np.zeros((total, OBS_M), np.uint8)
-    outcome = np.zeros(total, np.float32)
+    # Every position a turn ahead, in every game, every world: played out and scored in
+    # chunks of about `config.chunk` positions through one buffer, which keeps memory
+    # bounded and the value network's batches a size it runs well at.
+    sizes = [[len(p[3]) * len(c[0]) * config.dice for c in p[7]] for p in plans]
+    chunk = config.chunk or (8192 if str(device).startswith("cuda") else 1024)
+    cap = max(chunk, max(map(sum, sizes)))
+    cf = np.empty((cap, OBS_F), np.float32)
+    ci = np.empty((cap, OBS_I), np.int16)
+    cm = np.empty((cap, OBS_M), np.uint8)
+    outcome = np.empty(cap, np.float32)
+    scored = []
     at = 0
-    own32 = np.ascontiguousarray(own, np.int32)
-    for w, (r, n) in enumerate(zip(replies, sizes)):
-        worlds.expand(
-            w, own32, np.ascontiguousarray(r, np.int32), config.dice, seed * 1000 + w,
-            cf[at : at + n], ci[at : at + n], cm[at : at + n], outcome[at : at + n],
-        )
-        at += n
-    v = values(model, cf, ci, outcome, device)
-    payoffs, at = [], 0
-    for r, n in zip(replies, sizes):
-        payoffs.append(v[at : at + n].reshape(len(own), len(r), config.dice).mean(-1))
-        at += n
+
+    def score():
+        scored.append(values(model, cf[:at], ci[:at], outcome[:at], device))
+
+    for (n, worlds, seed, own, *_, chosen), game_sizes in zip(plans, sizes):
+        if at + sum(game_sizes) > cap:
+            score()
+            at = 0
+        own32 = np.ascontiguousarray(own, np.int32)
+        for w, (c, size) in enumerate(zip(chosen, game_sizes)):
+            worlds.expand(
+                w, own32, np.ascontiguousarray(c[0], np.int32), config.dice, seed * 1000 + w,
+                cf[at : at + size], ci[at : at + size], cm[at : at + size], outcome[at : at + size],
+            )
+            at += size
+    score()
+    v = np.concatenate(scored)
+
     odds = lambda logp: np.exp(logp - logp[np.isfinite(logp)].max()) if np.isfinite(logp).any() else np.ones(len(logp))
-    x, _, value, gap = solve(
-        payoffs, config.iterations, config.anchor,
-        prior=odds(own_logp), priors=[odds(c[1]) for c in chosen],
-    )
-    k = int(np.argmax(x)) if config.pick == "best" else int(rng.choice(len(x), p=x))
-    prior = np.exp(own_logp - own_logp.max())
-    return own[k], dict(
-        searched=True,
-        value=value,
-        gap=gap,
-        candidates=len(own),
-        policy_top=bool((own[k] == policy_top).all()),
-        mixed=float(1 - x.max()),
-        # What exploration brought in: the equilibrium's weight on such pairs, and whether one was played.
-        explored_weight=float(x[explored].sum()),
-        played_explored=bool(explored[k]),
-        # How far the equilibrium moved off the policy's own (renormalised) odds over the candidates.
-        shift=float(0.5 * np.abs(x - prior / prior.sum()).sum()),
-        cells=total,
-    )
+    games, at = [], 0
+    for (n, worlds, seed, own, own_logp, explored, top, chosen), game_sizes in zip(plans, sizes):
+        payoffs = []
+        for c, size in zip(chosen, game_sizes):
+            payoffs.append(v[at : at + size].reshape(len(own), len(c[0]), config.dice).mean(-1))
+            at += size
+        games.append((payoffs, odds(own_logp), [odds(c[1]) for c in chosen]))
+    solved = solve_batch(games, config.iterations, config.anchor)
+
+    for (n, worlds, seed, own, own_logp, explored, top, chosen), game_sizes, (x, _, value, gap) in zip(plans, sizes, solved):
+        k = int(np.argmax(x)) if config.pick == "best" else int(rng.choice(len(x), p=x / x.sum()))
+        prior = np.exp(own_logp - own_logp.max())
+        out[n] = (own[k], dict(
+            searched=True,
+            value=value,
+            gap=gap,
+            candidates=len(own),
+            policy_top=bool((own[k] == top).all()),
+            mixed=float(1 - x.max()),
+            # What exploration brought in: the equilibrium's weight on such pairs, and whether one was played.
+            explored_weight=float(x[explored].sum()),
+            played_explored=bool(explored[k]),
+            # How far the equilibrium moved off the policy's own (renormalised) odds over the candidates.
+            shift=float(0.5 * np.abs(x - prior / prior.sum()).sum()),
+            cells=sum(game_sizes),
+        ))
+    return out
 
 
 # ------------------------------------------------------------ evaluation
 
 
 @torch.no_grad()
-def duel(env, model, opponent, games, config, device, seed=0):
+def duel(env, model, opponent, games, config, device, seed=0, batched=True):
     """`model` with search against `opponent` (a model, played straight from its policy, or a
-    scripted player's name), each game's first episode only, sides alternating."""
+    scripted player's name), each game's first episode only, sides alternating. With
+    `batched` (the default) every game waiting on a search is searched together."""
     if model.config.history or (not isinstance(opponent, str) and opponent.config.history):
         raise ValueError("search does not support models that read decision history")
     model.eval()
@@ -384,6 +489,7 @@ def duel(env, model, opponent, games, config, device, seed=0):
         actions[mine] = model.act(f[mine], i[mine], mask[mine])[0].cpu().numpy()
         info = part(env.i, "i", "info")
         sheets = env.raw.open_sheets()
+        waiting, requests = [], []
         for g in np.flatnonzero(active):
             row = mine[g]
             if info[row, 0] == PREVIEW or info[row, 3] != 1:
@@ -391,10 +497,13 @@ def duel(env, model, opponent, games, config, device, seed=0):
             if not (sheets[g] or config.closed_sheets):
                 continue
             decisions += 1
-            pair, found = search(
-                model, env, int(g), int(side[g]), env.f[row], env.i[row], env.mask[row],
-                config, seed * 1_000_003 + decisions, rng, device,
-            )
+            waiting.append(row)
+            requests.append((int(g), int(side[g]), env.f[row], env.i[row], env.mask[row], seed * 1_000_003 + decisions))
+        # Every game waiting on a search this step, searched together.
+        found_all = search_batch(model, env, requests, config, rng, device) if batched else [
+            search(model, env, *r[:5], config, r[5], rng, device) for r in requests
+        ]
+        for row, (pair, found) in zip(waiting, found_all):
             actions[row] = pair
             if found.get("searched"):
                 stats.append(found)
@@ -451,6 +560,7 @@ def main(argv=None):
     p.add_argument("--explore", type=int, default=defaults.explore, help="extra candidate pairs drawn at random")
     p.add_argument("--explore-replies", type=int, default=defaults.explore_replies, help="extra replies drawn at random")
     p.add_argument("--anchor", type=float, default=defaults.anchor, help="piKL: hold the equilibrium to the policy's odds (0: off)")
+    p.add_argument("--chunk", type=int, default=defaults.chunk, help="positions scored at a time when searching games together (0: 1024 on CPU, 8192 on GPU)")
     a = p.parse_args(argv)
     from .train import pick_device
     from .checkpoint import file_hash
@@ -459,7 +569,7 @@ def main(argv=None):
         candidates=a.candidates, replies=a.replies, worlds=a.worlds, dice=a.dice, iterations=a.iterations,
         pick=a.pick, privileged=a.privileged, closed_sheets=a.closed_sheets,
         noise=a.noise, noise_alpha=a.noise_alpha, explore=a.explore, explore_replies=a.explore_replies,
-        anchor=a.anchor,
+        anchor=a.anchor, chunk=a.chunk,
     )
     device = pick_device(a.device)
     model = load(a.checkpoint, device)

@@ -126,30 +126,35 @@ def test_without_exploration_the_policy_s_favourites_are_searched():
     assert (pairs == top).all() and np.allclose(score, top_score) and not explored.any()
 
 
-def test_exploration_brings_in_pairs_the_policy_rates_low():
+def test_exploration_adds_to_the_policy_s_favourites_and_never_displaces_them():
     rng = np.random.default_rng(1)
     logp = np.full((N_ACTIONS, N_ACTIONS), -np.inf)
     legal = [(a, b) for a in range(0, 40, 3) for b in range(1, 40, 5)]
     # A policy sure of a few pairs and nearly sure the rest are worthless.
     for k, (a, b) in enumerate(legal):
         logp[a, b] = -0.1 * k if k < 8 else -30.0 - k
-    favourites = {tuple(p) for p in ranked(logp, legal, 8)[0]}
-    outsiders = 0
+    favourites = [tuple(p) for p in ranked(logp, legal, 8)[0]]
+    picked_with_noise, picked_uniformly = set(), set()
     for _ in range(200):
-        pairs, _, explored = choose(logp, legal, 8, extra=2, noise=0.25, rng=rng)
-        as_tuples = [tuple(p) for p in pairs]
-        assert len(set(as_tuples)) == len(as_tuples) == 10 and set(as_tuples) <= set(legal)
-        # What is marked explored is exactly what the policy's own eight leave out.
-        assert [t not in favourites for t in as_tuples] == list(explored)
-        assert explored.sum() >= 2
-        outsiders += explored.sum()
-    # The noise, not only the two random extras, lets outsiders in now and then.
-    assert outsiders > 200 * 2
+        for noise, seen in ((0.25, picked_with_noise), (0.0, picked_uniformly)):
+            pairs, _, explored = choose(logp, legal, 8, extra=2, noise=noise, rng=rng)
+            as_tuples = [tuple(p) for p in pairs]
+            # The policy's eight, in order, then two more: nothing taken away.
+            assert as_tuples[:8] == favourites and len(set(as_tuples)) == 10 and set(as_tuples) <= set(legal)
+            assert list(explored) == [False] * 8 + [True] * 2
+            seen.update(as_tuples[8:])
+    # Both ways reach well beyond the favourites, the noise included.
+    assert len(picked_with_noise) > 20 and len(picked_uniformly) > 20
+    # Noise with nothing extra to choose changes nothing.
+    pairs, _, explored = choose(logp, legal, 8, extra=0, noise=0.25, rng=rng)
+    assert [tuple(p) for p in pairs] == favourites and not explored.any()
     # More extras than there are pairs left: every legal pair, once.
     pairs, _, _ = choose(logp, legal[:5], 3, extra=10, rng=rng)
     assert sorted(map(tuple, pairs)) == sorted(legal[:5])
     with pytest.raises(ValueError):
-        Config(noise=1.5)
+        Config(noise=1.5, explore=2)
+    with pytest.raises(ValueError):
+        Config(noise=0.25)
 
 
 def test_search_and_whole_games_with_exploration(pool):

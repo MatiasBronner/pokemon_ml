@@ -57,13 +57,14 @@ keep the policy's blind spots. Like AlphaZero, the search can explore
 
 | Setting | What it does | AlphaZero's equivalent |
 |---|---|---|
-| `--noise 0.25` | Mixes 25% Dirichlet noise into the policy's odds before the candidate pairs are picked, so lower-ranked pairs sometimes make the cut. | Dirichlet noise on the root priors (ε = 0.25) |
-| `--noise-alpha` | The noise's concentration. The default, 0, means 10 divided by the number of legal pairs: lower values put the noise on fewer pairs. | α scaled to the typical number of legal moves |
-| `--explore 2` | Adds 2 candidate pairs drawn uniformly from the legal pairs left out. | — |
+| `--explore 2` | Adds 2 candidate pairs, on top of the policy's 8, drawn uniformly from the legal pairs left out. | — |
 | `--explore-replies 2` | The same for the opponent's replies in each world, so the data also covers unexpected opponent moves. | — |
+| `--noise 0.25` | Chooses those extra pairs by the policy's odds mixed with 25% Dirichlet noise, instead of uniformly. Needs `--explore` or `--explore-replies`. | Dirichlet noise on the root priors (ε = 0.25) |
+| `--noise-alpha` | The noise's concentration. The default, 0, means 10 divided by the number of legal pairs: lower values put the noise on fewer pairs. | α scaled to the typical number of legal moves |
 
-Explored pairs are scored and solved like any other. The noise and
-`--noise-alpha` apply to the opponent's replies too.
+Exploration only ever **adds** pairs. The policy's own top pairs, and the
+opponent's, are always searched. Explored pairs are scored and solved like
+any other.
 
 **Exploring costs strength, not just compute.** The first version of this
 section said a bad explored pair would simply get no weight. On Oscar,
@@ -73,15 +74,35 @@ update 15342 with search against itself without search (seed 9502347,
 | Search | Score | 95% interval | Weight on explored pairs |
 |---|---|---|---|
 | Plain (two seeds) | 64.5% | ≈63.3–65.7% | — |
-| `--noise 0.25 --explore 2 --explore-replies 2` | 58.5% | 56.8–60.3% | 19.6% |
+| `--dice 4` | 65.1% | 63.4–66.8% | — |
+| `--explore 2` | 63.7% | 61.9–65.4% | 5.8% |
+| `--explore-replies 2` | 62.8% | 61.0–64.5% | — |
+| `--noise 0.25`, first version (see below) | 60.0% | 58.3–61.8% | 16.8% |
+| All three, first version | 58.5% | 56.8–60.3% | 19.6% |
 
-The equilibrium gave explored pairs about a fifth of its weight and lost six
-points. The likely cause is the optimiser's curse. The payoffs are value
-network estimates, and noisy ones. The more options the search weighs, the
-likelier one of them looks good by luck alone. The moves exploration brings
-in are the ones the policy rarely plays, and so the ones the value network
-has seen least. Do not generate training data with exploration on its own:
-pair it with `--anchor` (next section), and check its score first.
+**What the noise did wrong.** In the first version, the noise re-ranked
+*which* 8 pairs were searched. That pushed some of the policy's own
+favourites out, on the opponent's side too, so the search both lost strong
+options and modelled a weaker opponent than it faced. That alone cost 4.5
+points. AlphaZero's noise never takes a move away, and now neither does this
+one: it only chooses which extra pairs to add. The rows marked "first
+version" were measured before that fix.
+
+**What the other rows say:**
+- **Uniform extras on top of the 8 are cheap.** `--explore 2` cost under a
+  point, which is within noise, and took about 6% of the weight. That is
+  the kind of exploration expert iteration needs.
+- **Extra opponent replies cost a little**, about 1.7 points, and the
+  result is borderline.
+- **More dice is free and may help.** `--dice 4` took the same 0.10 s per
+  search as 2 dice, because the cost is overhead per search, not the turns
+  played. Its +0.6 points is within noise.
+
+Even so, each extra option gives the optimiser's curse another chance. The
+payoffs are noisy value-network estimates, so the more options the search
+weighs, the likelier one looks good by luck alone. Before generating
+training data with exploration, measure its score, ideally with `--anchor`
+(next section).
 
 The report adds:
 - `mean_explored_weight`: the equilibrium's average weight on pairs that
@@ -123,24 +144,25 @@ The tests check:
 - that a very strong anchor makes the search play the policy's own
   favourite, which checks the policy's odds actually reach the solver.
 
-A sweep, without and with exploration:
+A sweep, with 4 dice since that is free, without and with exploration:
 
 ```bash
 for lam in 0.01 0.03 0.1 0.3; do
-  SEARCH_OUT=runs/search/15342-self-anchor$lam.json \
-    sbatch $SLURM_OPTS --time=02:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 --anchor $lam
+  SEARCH_OUT=runs/search/15342-self-dice4-anchor$lam.json \
+    sbatch $SLURM_OPTS --time=02:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 \
+    --dice 4 --anchor $lam
 done
 for lam in 0.03 0.1; do
-  SEARCH_OUT=runs/search/15342-self-anchor$lam-explore.json \
+  SEARCH_OUT=runs/search/15342-self-dice4-anchor$lam-explore.json \
     sbatch $SLURM_OPTS --time=02:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 \
-    --anchor $lam --noise 0.25 --explore 2 --explore-replies 2
+    --dice 4 --anchor $lam --explore 2 --noise 0.25
 done
 ```
 
-What to look for:
-- **Some λ above 64.5% without exploration:** part of the plain search's
-  noise was costing it. Use that λ from then on.
-- **Exploration that no longer loses points at some λ:** that is the
+Compare against `--dice 4` with no anchor (65.1%):
+- **Some λ clearly above it without exploration:** noise in the payoffs was
+  costing the plain search. Use that λ from then on.
+- **With exploration, some λ at least as good as without it:** that is the
   setting to generate training data with.
 
 ## What is and is not hidden

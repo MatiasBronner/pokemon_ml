@@ -55,7 +55,7 @@ class Config:
     privileged: bool = False  # search the real game instead of redrawn ones (a cheat, for comparison)
     closed_sheets: bool = False  # search with closed sheets too (sees their real sets: a cheat)
     # Exploration, for games played to learn from (all off for evaluation and play). See `choose`.
-    noise: float = 0.0  # share of Dirichlet noise mixed into the policy's odds before picking pairs
+    noise: float = 0.0  # share of Dirichlet noise in the odds that pick the extra pairs (with explore)
     noise_alpha: float = 0.0  # its concentration; 0: 10 / the number of legal pairs
     explore: int = 0  # candidates added beyond `candidates`, drawn uniformly from the other legal pairs
     explore_replies: int = 0  # the same for the other side's replies, in each world
@@ -72,6 +72,8 @@ class Config:
             raise ValueError("noise is a share in [0, 1]; noise_alpha, explore and explore_replies are not negative")
         if self.anchor < 0:
             raise ValueError("anchor is not negative")
+        if self.noise > 0 and not (self.explore or self.explore_replies):
+            raise ValueError("noise only chooses which extra pairs to explore: give explore or explore_replies too")
 
 
 # ---------------------------------------------------------------- the solver
@@ -226,33 +228,41 @@ def ranked(logp, legal, n):
 
 
 def choose(logp, legal, n, extra=0, noise=0.0, alpha=0.0, rng=None):
-    """The pairs to search among the `legal` ones, with AlphaZero's kind of exploration.
+    """The pairs to search among the `legal` ones: the `n` the policy (`logp`) finds
+    most likely, always, and `extra` more from the rest to explore.
 
-    Without exploration, the `n` the policy (`logp`) finds most likely: a search can
-    then never try what the policy rates lower, and a network trained on the search
-    would never learn it. So, as AlphaZero adds Dirichlet noise to the policy's odds
-    at the root of its search, a share `noise` of Dirichlet noise (concentration
-    `alpha`; 0 for 10 over the number of legal pairs) is mixed into the odds before the
-    `n` are taken, and `extra` more are drawn uniformly from the pairs left out. The
-    equilibrium then weighs every pair on what it is found to be worth: one that is
-    no good gets no weight, one the policy underrated gets what it deserves.
+    Without exploration a search can never try what the policy rates lower, and a
+    network trained on the search would never learn it. The extras are drawn
+    uniformly from the pairs left out or, with `noise`, are the rest's best under
+    the policy's odds mixed with a share `noise` of Dirichlet noise (concentration
+    `alpha`; 0 for 10 over the number of legal pairs), AlphaZero's noise at the root
+    of its search.
+
+    Exploration only adds. A first version let the noise re-rank which `n` were
+    taken, which pushed the policy's own favourites out, for the other side too.
+    On Oscar that cost 4.5 points (60.0% against 64.5%), while two uniform extras
+    on top of the eight cost under one. AlphaZero's noise never takes a move away.
 
     Returns the pairs, the policy's log-probability of each, and which of them are
-    there by exploration only (not among the policy's own `n` most likely).
+    there by exploration only.
     """
     legal = np.asarray(legal, np.int64).reshape(-1, 2)
     score = logp[legal[:, 0], legal[:, 1]]
     top = np.argsort(-score, kind="stable")[:n]
     order = top
-    if noise > 0 and len(legal) > 1:
-        odds = np.exp(score - score[np.isfinite(score)].max()) if np.isfinite(score).any() else np.ones(len(legal))
-        odds = odds / odds.sum()
-        eta = rng.dirichlet(np.full(len(legal), alpha or 10 / len(legal)))
-        order = np.argsort(-((1 - noise) * odds + noise * eta), kind="stable")[:n]
-    if extra > 0:
-        rest = np.setdiff1d(np.arange(len(legal)), order)
-        if len(rest):
-            order = np.concatenate([order, rng.choice(rest, min(extra, len(rest)), replace=False)])
+    rest = np.setdiff1d(np.arange(len(legal)), top)
+    if extra > 0 and len(rest):
+        k = min(extra, len(rest))
+        if noise > 0:
+            finite = np.isfinite(score)
+            odds = np.exp(score - score[finite].max()) if finite.any() else np.ones(len(legal))
+            odds = odds / odds.sum()
+            eta = rng.dirichlet(np.full(len(legal), alpha or 10 / len(legal)))
+            mixed = ((1 - noise) * odds + noise * eta)[rest]
+            picked = rest[np.argsort(-mixed, kind="stable")[:k]]
+        else:
+            picked = rng.choice(rest, k, replace=False)
+        order = np.concatenate([top, picked])
     return legal[order], score[order], ~np.isin(order, top)
 
 
@@ -436,7 +446,7 @@ def main(argv=None):
     p.add_argument("--pick", choices=("sample", "best"), default=defaults.pick)
     p.add_argument("--privileged", action="store_true", help="search the real game (sees hidden information)")
     p.add_argument("--closed-sheets", action="store_true", help="search closed-sheet games too (sees their sets)")
-    p.add_argument("--noise", type=float, default=defaults.noise, help="share of Dirichlet noise in the policy's odds (AlphaZero: 0.25)")
+    p.add_argument("--noise", type=float, default=defaults.noise, help="Dirichlet noise in the odds that choose the extra pairs (needs --explore); AlphaZero: 0.25")
     p.add_argument("--noise-alpha", type=float, default=defaults.noise_alpha, help="Dirichlet concentration; 0: 10 / legal pairs")
     p.add_argument("--explore", type=int, default=defaults.explore, help="extra candidate pairs drawn at random")
     p.add_argument("--explore-replies", type=int, default=defaults.explore_replies, help="extra replies drawn at random")

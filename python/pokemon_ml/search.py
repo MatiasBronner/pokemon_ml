@@ -456,6 +456,11 @@ def search_batch(model, env, requests, config, rng, device):
             # How far the equilibrium moved off the policy's own (renormalised) odds over the candidates.
             shift=float(0.5 * np.abs(x - prior / prior.sum()).sum()),
             cells=sum(game_sizes),
+            # The search itself, for learning from: the pairs, its mixed strategy over them, and
+            # which were there by exploration.
+            pairs=own,
+            strategy=x,
+            explored=explored,
         ))
     return out
 

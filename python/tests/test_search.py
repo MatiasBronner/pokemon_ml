@@ -126,30 +126,35 @@ def test_without_exploration_the_policy_s_favourites_are_searched():
     assert (pairs == top).all() and np.allclose(score, top_score) and not explored.any()
 
 
-def test_exploration_brings_in_pairs_the_policy_rates_low():
+def test_exploration_adds_to_the_policy_s_favourites_and_never_displaces_them():
     rng = np.random.default_rng(1)
     logp = np.full((N_ACTIONS, N_ACTIONS), -np.inf)
     legal = [(a, b) for a in range(0, 40, 3) for b in range(1, 40, 5)]
     # A policy sure of a few pairs and nearly sure the rest are worthless.
     for k, (a, b) in enumerate(legal):
         logp[a, b] = -0.1 * k if k < 8 else -30.0 - k
-    favourites = {tuple(p) for p in ranked(logp, legal, 8)[0]}
-    outsiders = 0
+    favourites = [tuple(p) for p in ranked(logp, legal, 8)[0]]
+    picked_with_noise, picked_uniformly = set(), set()
     for _ in range(200):
-        pairs, _, explored = choose(logp, legal, 8, extra=2, noise=0.25, rng=rng)
-        as_tuples = [tuple(p) for p in pairs]
-        assert len(set(as_tuples)) == len(as_tuples) == 10 and set(as_tuples) <= set(legal)
-        # What is marked explored is exactly what the policy's own eight leave out.
-        assert [t not in favourites for t in as_tuples] == list(explored)
-        assert explored.sum() >= 2
-        outsiders += explored.sum()
-    # The noise, not only the two random extras, lets outsiders in now and then.
-    assert outsiders > 200 * 2
+        for noise, seen in ((0.25, picked_with_noise), (0.0, picked_uniformly)):
+            pairs, _, explored = choose(logp, legal, 8, extra=2, noise=noise, rng=rng)
+            as_tuples = [tuple(p) for p in pairs]
+            # The policy's eight, in order, then two more: nothing taken away.
+            assert as_tuples[:8] == favourites and len(set(as_tuples)) == 10 and set(as_tuples) <= set(legal)
+            assert list(explored) == [False] * 8 + [True] * 2
+            seen.update(as_tuples[8:])
+    # Both ways reach well beyond the favourites, the noise included.
+    assert len(picked_with_noise) > 20 and len(picked_uniformly) > 20
+    # Noise with nothing extra to choose changes nothing.
+    pairs, _, explored = choose(logp, legal, 8, extra=0, noise=0.25, rng=rng)
+    assert [tuple(p) for p in pairs] == favourites and not explored.any()
     # More extras than there are pairs left: every legal pair, once.
     pairs, _, _ = choose(logp, legal[:5], 3, extra=10, rng=rng)
     assert sorted(map(tuple, pairs)) == sorted(legal[:5])
     with pytest.raises(ValueError):
-        Config(noise=1.5)
+        Config(noise=1.5, explore=2)
+    with pytest.raises(ValueError):
+        Config(noise=0.25)
 
 
 def test_search_and_whole_games_with_exploration(pool):
@@ -172,3 +177,100 @@ def test_search_and_whole_games_with_exploration(pool):
     assert searched > 0
     report = duel(Env(pool, envs=4, seed=17, open_sheets=1.0, threads=2, max_turns=30), model, tiny_model(5), 4, config, "cpu")
     assert report["games"] == 4 and report["mean_explored_weight"] is not None
+
+
+def random_game(rng, worlds=4, rows=10, cols=10):
+    payoffs = [rng.uniform(-1, 1, (rows, cols - int(rng.integers(0, 3)))) for _ in range(worlds)]
+    prior = rng.dirichlet(np.full(rows, 0.3))
+    priors = [rng.dirichlet(np.full(a.shape[1], 0.3)) for a in payoffs]
+    return payoffs, prior, priors
+
+
+def test_the_anchored_solution_is_the_policy_reweighted_by_payoff():
+    # Against a single reply per world, the anchored best answer has a closed form: prior · exp(u / λ).
+    rng = np.random.default_rng(5)
+    payoffs = [rng.uniform(-1, 1, (6, 1)) for _ in range(3)]
+    prior = rng.dirichlet(np.ones(6))
+    for lam in (0.03, 0.3, 3.0):
+        x, (y1, y2, y3), _, gap = solve(payoffs, 1000, lam, prior, [np.ones(1)] * 3)
+        u = np.mean([a[:, 0] for a in payoffs], 0)
+        floored = 0.999 * prior + 0.001 / 6
+        expected = floored * np.exp((u - u.max()) / lam)
+        assert np.allclose(x, expected / expected.sum(), atol=1e-6) and gap < 1e-6
+
+
+def test_the_anchored_solver_converges_across_strengths():
+    rng = np.random.default_rng(6)
+    for lam in (0.01, 0.03, 0.1, 0.3, 1.0):
+        for _ in range(10):
+            payoffs, prior, priors = random_game(rng)
+            x, ys, value, gap = solve(payoffs, 1000, lam, prior, priors)
+            assert -1e-12 <= gap < 1e-4, (lam, gap)
+            assert abs(x.sum() - 1) < 1e-9 and all(abs(y.sum() - 1) < 1e-9 for y in ys) and -1 <= value <= 1
+
+
+def test_the_anchor_runs_from_the_plain_equilibrium_to_the_policy():
+    rng = np.random.default_rng(7)
+    payoffs, prior, priors = random_game(rng)
+    plain = solve(payoffs, 3000)
+    weak = solve(payoffs, 1000, 0.01, prior, priors)
+    strong = solve(payoffs, 1000, 100.0, prior, priors)
+    assert abs(weak[2] - plain[2]) < 0.05
+    assert np.allclose(strong[0], 0.999 * prior + 0.001 / len(prior), atol=0.01)
+    # Off, it is the plain solver exactly.
+    assert all(np.array_equal(a, b) for a, b in zip(solve(payoffs, 500)[0], solve(payoffs, 500, 0.0, prior, priors)[0]))
+
+
+def test_the_anchor_does_not_chase_a_small_edge_the_policy_doubts():
+    # The policy is sure of row 0; row 3 looks one point better, which noise alone could do.
+    payoffs = [np.array([[0.0], [-0.2], [-0.2], [0.01]])]
+    prior = np.array([0.97, 0.01, 0.01, 0.01])
+    plain_x = solve(payoffs, 1000)[0]
+    anchored_x = solve(payoffs, 1000, 0.03, prior, [np.ones(1)])[0]
+    assert plain_x[3] > 0.99
+    assert anchored_x[0] > 0.9 and anchored_x[3] < 0.05
+    # A clear edge still wins it over.
+    payoffs = [np.array([[0.0], [-0.2], [-0.2], [0.3]])]
+    assert solve(payoffs, 1000, 0.03, prior, [np.ones(1)])[0][3] > 0.99
+
+
+def test_search_and_whole_games_with_the_anchor(pool):
+    model = tiny_model(6)
+    config = Config(candidates=3, replies=3, worlds=2, dice=1, iterations=200, anchor=0.03, explore=1, explore_replies=1)
+    env = to_battle(Env(pool, envs=8, seed=18, open_sheets=1.0, threads=2))
+    info = part(env.i, "i", "info")
+    rng = np.random.default_rng(4)
+    searched = 0
+    for g in range(env.envs):
+        row = 2 * g
+        if info[row, 0] == PREVIEW or info[row, 3] != 1:
+            continue
+        pair, found = search(model, env, g, 0, env.f[row], env.i[row], env.mask[row], config, 11, rng, "cpu")
+        assert tuple(int(a) for a in pair) in {tuple(p) for p in env.raw.worlds(g, 0, 1, 0).legal(0, 0)}
+        if found["searched"]:
+            searched += 1
+            assert -1e-9 <= found["gap"] < 1e-3
+    assert searched > 0
+    report = duel(Env(pool, envs=4, seed=19, open_sheets=1.0, threads=2, max_turns=30), model, tiny_model(7), 4, config, "cpu")
+    assert report["games"] == 4
+    with pytest.raises(ValueError):
+        Config(anchor=-1)
+
+
+def test_a_strong_anchor_plays_what_the_policy_would(pool):
+    # The search hands the solver the policy's odds: held hard enough to them, it plays the policy's favourite.
+    model = tiny_model(8)
+    config = Config(candidates=4, replies=3, worlds=2, dice=1, iterations=300, anchor=1000.0, pick="best", explore=2)
+    env = to_battle(Env(pool, envs=8, seed=20, open_sheets=1.0, threads=2))
+    info = part(env.i, "i", "info")
+    rng = np.random.default_rng(5)
+    searched = 0
+    for g in range(env.envs):
+        row = 2 * g
+        if info[row, 0] == PREVIEW or info[row, 3] != 1:
+            continue
+        _, found = search(model, env, g, 0, env.f[row], env.i[row], env.mask[row], config, 12, rng, "cpu")
+        if found["searched"]:
+            searched += 1
+            assert found["policy_top"] and not found["played_explored"]
+    assert searched > 0

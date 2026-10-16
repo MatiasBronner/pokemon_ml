@@ -11,7 +11,7 @@ It runs in rounds:
 1. **Generate data** (`pokemon_ml.expert_data`, this page). The current
    network plays with search, against a league, and its decisions are
    recorded.
-2. **Train** a network on that data. Not built yet.
+2. **Train** a network on that data (`pokemon_ml.expert_train`, below).
 3. **Check:** the new network with search against the old one with search.
    If that is clearly above 50%, the round worked, and the new network is
    the next round's learner.
@@ -107,3 +107,84 @@ searched decisions.
 **Speed and size are not measured on a GPU yet.** Opponents that search
 cost about as much as the learner's own searches, so a league weighted
 towards `+search` opponents runs slower.
+
+## Training
+
+`pokemon_ml.expert_train` reads the shards and trains a network on them:
+
+| Head | Target | Loss | Rows |
+|---|---|---|---|
+| Policy | the search's mixed strategy over the pairs it searched | cross-entropy, −Σ target · log p(pair) | searched rows |
+| Value | how the game ended for the learner | 0.5 · (value − outcome)², as in PPO | every row |
+
+The network starts from `--init`, normally the checkpoint that generated the
+data. With `--model-size medium`, it starts fresh at that size instead, to
+test whether size helps. A fresh network has only this data to learn from,
+so it needs more of it.
+
+A held-out set of whole games (`--holdout`, 5%) is never trained on.
+`log.jsonl` records, on those games, at the start (the baseline) and every
+`--eval-every` steps:
+
+- **`policy_kl`:** how far the policy is from the search's strategy. 0 means
+  it matches the search exactly. Watch this one, not `policy_ce`: the
+  search mixes, so cross-entropy can't fall below the strategy's own
+  entropy, and the KL is what's left above it.
+- **`agreement`:** how often the policy's likeliest searched pair is the
+  search's likeliest.
+- **`value_mse`** and **`value_explained`:** how well the value predicts
+  outcomes. `value_explained` is the share of the outcomes' variance
+  explained. PPO left it around 0.42.
+
+`checkpoint.pt` is the network at the end, `best.pt` the one with the lowest
+held-out loss, and `summary.json` compares the baseline with the end. Both
+checkpoints load wherever a checkpoint does.
+
+### On Oscar
+
+`scripts/oscar/expert-train.sbatch` is an array over learning rates: by
+default 3e-5, 1e-4 and 3e-4, one job each, starting from update 15342.
+
+```bash
+EXPERT_DATA=runs/expert/round1 EXPERT_TRAIN_OUT=runs/expert/round1-train \
+  sbatch $SLURM_OPTS scripts/oscar/expert-train.sbatch
+```
+
+`EXPERT_LRS` changes the rates. `EXPERT_SIZE=medium` trains fresh networks
+of that size instead. Several data directories can be given, separated by
+spaces.
+
+Compare the runs' held-out numbers:
+
+```bash
+python - <<'PY'
+import json, glob
+for f in sorted(glob.glob("runs/expert/round1-train/*/summary.json")):
+    s = json.load(open(f)); b, e = s["baseline"], s["final"]
+    print(f.split("/")[-2], "KL", round(b["policy_kl"], 3), "->", round(e["policy_kl"], 3),
+          "| agree", round(b["agreement"], 3), "->", round(e["agreement"], 3),
+          "| value explained", round(b["value_explained"], 3), "->", round(e["value_explained"], 3))
+PY
+```
+
+### Did the round work?
+
+Held-out numbers only show the network learned the data. What counts is
+play: **the new network with search against the old one with search.**
+
+```bash
+for lr in 3e-5 1e-4 3e-4; do
+  SEARCH_CHECKPOINT=runs/expert/round1-train/lr$lr/best.pt \
+  SEARCH_OPPONENT=runs/plateau-comparison-15342/source-checkpoint.pt \
+  SEARCH_OUT=runs/expert/round1-eval-lr$lr.json \
+    sbatch $SLURM_OPTS --time=03:00:00 scripts/oscar/search-eval.sbatch --seed 9502347 --opponent-search
+done
+```
+
+`--opponent-search` makes the old network search too, with the same
+settings and no exploration. Above 50% with the interval clear of it means
+the round worked: the new network becomes the next round's learner. Confirm
+the best one on a second seed first, since it is the best of three.
+
+Run these evaluations on the **evaluation** pool (the default), never on the
+training one.

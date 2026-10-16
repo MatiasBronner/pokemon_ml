@@ -340,13 +340,39 @@ The report (`SEARCH_OUT`) contains:
 - `mean_shift_from_policy`: the total-variation distance between the
   equilibrium and the policy's own odds over the candidates.
 
-**Speed has not been measured on a GPU.** On two CPU threads in a container,
-a 260k-parameter network took about 0.34 s per decision at the default
-settings (512 positions) and 0.14 s with
-`--candidates 6 --replies 6 --worlds 2 --dice 1`. The engine part is cheap,
-about 22 µs a decision per core. Most of the cost is the value network's
-batch, which a GPU should make much smaller. Check `seconds_per_search` in
-the first report before sizing `--time`. The 8-hour default is a guess.
+**Speed.** One game at a time, a search took about 0.10 s on a 3090, and 4
+dice cost the same as 2. Most of that was not the GPU. A local profile with
+a small network shows where the time goes:
+
+| Part | One game at a time | All waiting games together |
+|---|---|---|
+| Equilibrium solver (numpy, always on the CPU) | ≈ 60 ms | ≈ 4 ms |
+| Policy for both sides | ≈ 18 ms | ≈ 5 ms |
+| Playing turns in the engine | ≈ 6 ms | ≈ 8 ms |
+| Value network (CPU here; much cheaper on a GPU) | ≈ 160 ms | ≈ 146 ms |
+
+So `duel` now searches every game waiting on a decision together
+(`search_batch`):
+- one policy pass for every searching side, and one for every opponent view
+  of every world;
+- one vectorised solver run for all the grids (`solve_batch`), 15–22×
+  cheaper per game at 64 games;
+- the positions a turn ahead played out and scored in chunks through one
+  reusable buffer. `--chunk` sets the chunk size; the default 0 picks 1,024
+  positions on a CPU and 8,192 on a GPU.
+
+On this CPU the whole search went from about 240 ms to 165 ms, because the
+value network's arithmetic is what remains there. On a GPU the solver was
+most of the 0.10 s, so the gain should be larger, but **it has not been
+measured on a GPU**. Check `seconds_per_search` in the first report after
+updating.
+
+Batching does not change results: tests check that the batched solver
+matches the old one, that a game is searched the same alone or with others,
+that whole duels come out the same, and that chunk size changes nothing.
+Only the order of random draws differs, so runs with sampling or
+exploration are not move-for-move identical to unbatched runs.
+`duel(..., batched=False)` still searches one game at a time.
 
 ## What would be worth doing next
 

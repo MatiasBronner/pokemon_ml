@@ -29,10 +29,10 @@ of actions and the team sheets are open:
 3. **Replies.** In each world, the other side's `--replies` most likely pairs
    (default 8), from the same network looking from that side of that world.
 4. **Payoffs.** Every (candidate, reply) pair is played one turn in the
-   engine, `--dice` times (default 2). The value network scores each
+   engine, `--dice` times (default 4). The value network scores each
    resulting position from the searching side's view; a finished game
-   scores its result (+1, 0 or −1). The default settings give 8 × 8 × 4 × 2
-   = 512 positions per decision, evaluated in one batch.
+   scores its result (+1, 0 or −1). The default settings give 8 × 8 × 4 × 4
+   = 1,024 positions per decision.
 5. **Equilibrium.** The grids are solved as one zero-sum game (`solve`):
    - The searching side picks one mixed strategy, because it does not know
      which world is real.
@@ -127,7 +127,8 @@ network finds it clearly better, not slightly better by luck. λ is in units
 of win probability:
 
 - At λ = 0.03, three points of extra value multiply a pair's odds by e.
-- λ = 0 is the plain equilibrium, and the default.
+- λ = 0 is the plain equilibrium. **The default is 0.03** (see the results
+  below).
 - A very large λ plays the policy's own odds.
 
 The anchored game is solved by magnetic mirror descent with optimistic steps
@@ -164,6 +165,33 @@ Compare against `--dice 4` with no anchor (65.1%):
   costing the plain search. Use that λ from then on.
 - **With exploration, some λ at least as good as without it:** that is the
   setting to generate training data with.
+
+### Results, and the defaults
+
+All runs are update 15342 with search against itself without search, 3,000
+games each:
+
+| Setting (all `--dice 4`) | Seed 9502347 | Seed 9602347 | Both |
+|---|---|---|---|
+| No anchor | 65.1% | — | — |
+| λ = 0.01 | 68.6% | — | — |
+| **λ = 0.03** | 70.4% | 71.6% | **≈71.0%** |
+| λ = 0.1 | 68.3% | — | — |
+| λ = 0.3 | 60.0% | — | — |
+| **λ = 0.03 + `--explore 2 --noise 0.25`** | 71.4% | 71.1% | **≈71.2%** |
+| λ = 0.1 + exploration | 67.9% | — | — |
+
+- **λ = 0.03 is best, and the second seed confirms it.** Too weak (0.01)
+  leaves some of the optimiser's curse; too strong (0.3) gives back most of
+  what search adds.
+- **The anchored honest search beats the unanchored privileged one**
+  (68.0%), which saw the hidden information. Handling noisy estimates
+  mattered more than knowing what's hidden.
+- **At λ = 0.03, exploration is free:** it got about 2% of the weight and
+  cost nothing in score. Generate training data with it.
+
+So **`--dice 4 --anchor 0.03` are the defaults.** To run the earlier
+search, give `--dice 2 --anchor 0`.
 
 ## What is and is not hidden
 

@@ -49,7 +49,7 @@ class Config:
     candidates: int = 8  # the searching side's pairs of actions considered
     replies: int = 8  # the other side's, in each world
     worlds: int = 4  # redrawn copies of what has not been shown
-    dice: int = 2  # times each cell is played out
+    dice: int = 4  # times each cell is played out (4 took no longer than 2 on a 3090)
     iterations: int = 1000  # of the equilibrium solver
     pick: str = "sample"  # "sample" from the mixed strategy, or play its "best" pair
     privileged: bool = False  # search the real game instead of redrawn ones (a cheat, for comparison)
@@ -61,7 +61,9 @@ class Config:
     explore_replies: int = 0  # the same for the other side's replies, in each world
     # piKL: how strongly each side's equilibrium strategy is held to its policy's own odds (see `solve`).
     # 0: not at all, the plain equilibrium. Larger trusts the policy more; 0.01 and up converge well.
-    anchor: float = 0.0
+    # 0.03 was best of 0.01-0.3 on Oscar: about 71% against the same network without search, over two
+    # seeds, where the plain equilibrium (0) scored 64.5%.
+    anchor: float = 0.03
 
     def __post_init__(self):
         if min(self.candidates, self.replies, self.worlds, self.dice, self.iterations) < 1:

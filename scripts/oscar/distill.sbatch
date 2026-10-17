@@ -26,6 +26,8 @@ esac
 [[ -f "$DISTILL_TEACHER" ]] || { echo "teacher not found: $DISTILL_TEACHER" >&2; exit 2; }
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
+# The learning rate anneals over --steps, so the steps should be what the hours
+# allow: a large student on an A5000 takes about 4 a second, 45,000 in 3.1 hours.
 python -m pokemon_ml.distill --teacher "$DISTILL_TEACHER" --model-size "${DISTILL_SIZE:-large}" \
   --pool "$DISTILL_POOL" --out "$DISTILL_OUT" --hours "${DISTILL_HOURS:-3.5}" \
-  --steps "${DISTILL_STEPS:-200000}" --threads "${SLURM_CPUS_PER_TASK:-8}" --device cuda "$@"
+  --steps "${DISTILL_STEPS:-45000}" --threads "${SLURM_CPUS_PER_TASK:-8}" --device cuda "$@"

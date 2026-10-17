@@ -40,9 +40,9 @@ Defaults:
 - teacher `runs/plateau-comparison-15342/source-checkpoint.pt`;
 - student `large`;
 - pool `teams/multi-tournament-warmstart/train.json`;
-- 3.5 hours.
+- 45,000 steps, with 3.5 hours as the time limit.
 
-`DISTILL_SIZE`, `DISTILL_HOURS` and `DISTILL_TEACHER` change these. Progress is in
+`DISTILL_SIZE`, `DISTILL_STEPS`, `DISTILL_HOURS` and `DISTILL_TEACHER` change these. The learning rate is lowered gradually over `DISTILL_STEPS`, so set it to what the time allows: a large student on an A5000 runs about 4 steps a second. Set too high, the run stops before the learning rate has come down. Progress is in
 `runs/distill/large/log.jsonl`: `held_out.policy_kl` should fall towards 0 and
 `held_out.agreement` should rise. The summary is in `summary.json`.
 

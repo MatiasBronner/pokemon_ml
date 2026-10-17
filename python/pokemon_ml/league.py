@@ -303,7 +303,13 @@ def main(argv=None):
 
 
 class TrainingLeague:
-    """Episode-stable opponents. Frozen/scripted rows never enter PPO updates."""
+    """Episode-stable opponents. Frozen/scripted rows never enter PPO updates.
+
+    `weights` share games between the current network, the run's own snapshots and
+    the scripted players; `fixed` adds checkpoints from outside the run, as (path,
+    weight) pairs, each drawn with its own weight (all the weights sum to one). A
+    fixed opponent is a benchmark the learner always meets: a smaller network it was
+    distilled from, say, which its own snapshots will soon outgrow."""
 
     def __init__(
         self,
@@ -316,11 +322,16 @@ class TrainingLeague:
         state=None,
         selection=None,
         pool_size=None,
+        fixed=(),
     ):
         from collections import OrderedDict
 
-        if any(w < 0 for w in weights) or abs(sum(weights) - 1) > 1e-6:
-            raise ValueError("league weights must be nonnegative and sum to one")
+        self.fixed = [(str(path), float(weight)) for path, weight in fixed]
+        every = tuple(weights) + tuple(w for _, w in self.fixed)
+        if any(w < 0 for w in every) or abs(sum(every) - 1) > 1e-6:
+            raise ValueError(
+                "league weights (current, frozen, scripted and fixed) must be nonnegative and sum to one"
+            )
         if cache_size < 1:
             raise ValueError("league cache size must be positive")
         self.selection = selection or (state or {}).get("selection", "legacy")
@@ -340,6 +351,8 @@ class TrainingLeague:
             self.rng.bit_generator.state = state["rng"]
             if tuple(state["weights"]) != self.weights:
                 raise ValueError("league weights changed on resume")
+            if [tuple(x) for x in state.get("fixed", [])] != self.fixed:
+                raise ValueError("fixed league opponents changed on resume")
         self.assigned = ["current"] * envs
         self.side = np.arange(envs) % 2
         if state and not set(state["snapshots"]).issubset(set(snapshots(run))):
@@ -353,6 +366,8 @@ class TrainingLeague:
             if state
             else {"current": 0, "frozen": 0, "scripted": 0}
         )
+        self.counts.setdefault("fixed", 0)
+        self.fixed_nets = {}
 
     def assign(self, done):
         names = [
@@ -395,10 +410,13 @@ class TrainingLeague:
                 scores.append(win * (1 - win))
             scores = np.asarray(scores)
             probabilities = 0.2 / len(candidates) + 0.8 * scores / scores.sum()
+        every = self.weights + tuple(w for _, w in self.fixed)
         for game in np.flatnonzero(done):
-            kind = int(self.rng.choice(3, p=self.weights))
+            kind = int(self.rng.choice(len(every), p=every))
             opponent = (
-                "current"
+                "fixed:" + self.fixed[kind - 3][0]
+                if kind >= 3
+                else "current"
                 if kind == 0 or (kind == 1 and not candidates)
                 else "snapshot:" + str(self.rng.choice(candidates, p=probabilities))
                 if kind == 1
@@ -411,6 +429,8 @@ class TrainingLeague:
                 if opponent == "current"
                 else "frozen"
                 if opponent.startswith("snapshot:")
+                else "fixed"
+                if opponent.startswith("fixed:")
                 else "scripted"
             ] += 1
         self.initialized = True
@@ -448,7 +468,19 @@ class TrainingLeague:
         for name in sorted(set(self.assigned) - {"current"}):
             games = np.array([g for g, n in enumerate(self.assigned) if n == name])
             rows = torch.as_tensor(2 * games + 1 - self.side[games], device=self.device)
-            if name.startswith("snapshot:"):
+            if name.startswith("fixed:"):
+                if name not in self.fixed_nets:
+                    from .evaluation import load
+
+                    self.fixed_nets[name] = load(name.split(":", 1)[1], self.device).requires_grad_(False)
+                net = self.fixed_nets[name]
+                hist = (
+                    None
+                    if history is None or not net.config.history
+                    else tuple(h[rows] for h in history)
+                )
+                actions[rows] = net.act(f[rows], i[rows], mask[rows], history=hist)[0]
+            elif name.startswith("snapshot:"):
                 if name not in self.cache:
                     net = load_snapshot(self.run, name.split(":", 1)[1], self.device)
                     net.requires_grad_(False)
@@ -484,6 +516,7 @@ class TrainingLeague:
             "results": self.results,
             "rng": self.rng.bit_generator.state,
             "weights": self.weights,
+            "fixed": [list(x) for x in self.fixed],
             "snapshots": [
                 n
                 for n in snapshots(self.run)

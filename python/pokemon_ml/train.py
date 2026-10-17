@@ -99,6 +99,14 @@ def parser():
     p.add_argument("--league-current", type=float, default=0.5)
     p.add_argument("--league-frozen", type=float, default=0.4)
     p.add_argument("--league-scripted", type=float, default=0.1)
+    p.add_argument(
+        "--league-fixed",
+        action="append",
+        default=[],
+        metavar="PATH:WEIGHT",
+        help="a checkpoint from outside the run, always in the league with this weight (repeatable); "
+        "all league weights must sum to one",
+    )
     p.add_argument("--max-turns", type=int, default=100)
     for name, value in {**asdict(model_lib.Config()), **asdict(ppo.Config())}.items():
         if isinstance(value, bool):
@@ -258,6 +266,18 @@ def main(argv=None):
         net_config.opponent_prediction or net_config.hidden_prediction,
     )
     weights = (args.league_current, args.league_frozen, args.league_scripted)
+    fixed = []
+    for spec in args.league_fixed:
+        target, _, weight = spec.rpartition(":")
+        try:
+            fixed.append((target, float(weight)))
+        except ValueError:
+            p.error(f"--league-fixed takes PATH:WEIGHT, not {spec!r}")
+        if not target or not Path(target).is_file():
+            p.error(f"--league-fixed checkpoint not found: {target!r}")
+        checkpoint.verify_contract(torch.load(target, map_location="cpu", weights_only=False))
+    if abs(sum(weights) + sum(w for _, w in fixed) - 1) > 1e-6:
+        p.error("league weights (current, frozen, scripted and every --league-fixed) must sum to one")
     training_league = league.TrainingLeague(
         args.run,
         args.envs,
@@ -268,12 +288,13 @@ def main(argv=None):
         selection=args.league_selection,
         pool_size=args.league_pool_size,
         cache_size=args.league_cache_size,
+        fixed=fixed,
     )
     if saved and "rng" in saved:
         checkpoint.restore_rng(saved["rng"])
     print(
         f"{sum(p.numel() for p in model.parameters()):,} parameters on {device}; Speed={net_config.use_speed}; "
-        f"{args.envs} games; league weights={weights}; update={totals['update']}",
+        f"{args.envs} games; league weights={weights}; fixed={fixed}; update={totals['update']}",
         flush=True,
     )
     initialization = saved.get("initialization") if saved else None
